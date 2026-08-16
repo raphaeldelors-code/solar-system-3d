@@ -14,12 +14,13 @@ No other test/build tooling is configured. Do not add it casually.
 ## Architecture invariants
 - `src/sim/` and `src/data/` are **pure TS**: no `three`, no DOM. Everything in
   `tests/` relies on this. If you find DOM/three imports there, refactor out.
-- `src/render/scale.ts` is also pure (it's unit-tested).
-- All three.js / DOM code lives in `src/render/`, `src/ui/`, `src/main.ts`.
-- **One data table**: `src/data/solarSystem.ts` is the single source of truth
-  for bodies. Sim and render derive everything from `BodyDefinition`. Adding a
-  body (planet, moon, dwarf) = adding one object to `BODIES`. Nothing else
-  should need to change.
+- All three.js / DOM code lives in `src/render/` and `src/main.ts`.
+- **One data table**: `src/data/bodies.ts` is the single source of truth
+  for bodies (`SUN`, `PLANETS`, `DWARF_PLANETS`, `MOONS` → `ALL_BODIES`).
+  Sim and render derive everything from `BodyDefinition`. Adding a body
+  (planet, dwarf, moon) = adding one object to the right array. Nothing
+  else should need to change (scene, orbit lines, and follow dropdown
+  all derive from `ALL_BODIES`).
 - Orbital math: heliocentric ecliptic J2000 frame. `positionAt(elements, daysSinceJ2000)`
   returns AU. Moons use the same math relative to their parent (`parent` id).
 

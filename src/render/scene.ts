@@ -261,7 +261,7 @@ export function updatePositions(
     if (def.kind === 'star') {
       pivot.position.set(0, 0, 0);
       entry.worldPos.set(0, 0, 0);
-    } else if (def.kind === 'planet' && def.elements) {
+    } else if ((def.kind === 'planet' || def.kind === 'dwarf') && def.elements) {
       const p = positionAt(def.elements, tDays); // AU, ecliptic frame
       const s = eclipticToScene(p);
       const d = Math.hypot(p.x, p.y, p.z);

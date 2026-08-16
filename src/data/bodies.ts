@@ -153,6 +153,83 @@ export const PLANETS: BodyDefinition[] = [
 ];
 
 /**
+ * Dwarf planets (JPL/Standish-style J2000 mean elements). a in AU.
+ * Pluto's large eccentricity and 17° inclination are what make it interesting.
+ */
+export const DWARF_PLANETS: BodyDefinition[] = [
+  {
+    id: 'pluto', name: 'Pluto', kind: 'dwarf', parent: 'sun',
+    elements: {
+      a: 39.48211675, e: 0.2488273, i: 17.14,
+      node: 110.299, peri: 113.834, M0: 14.53,
+      n: 0.003964,
+    },
+    radiusKm: 1188.3,
+    rotationHours: -153.29, // retrograde spin
+    tiltDeg: 119.6,
+    color: rgb(0xb8a694),
+    color2: rgb(0x8f7f6e),
+    texture: 'rock',
+  },
+  {
+    id: 'ceres', name: 'Ceres', kind: 'dwarf', parent: 'sun',
+    elements: {
+      a: 2.7675, e: 0.0758, i: 10.594,
+      node: 80.305, peri: 73.597, M0: 32.84,
+      n: 0.21426,
+    },
+    radiusKm: 469.7,
+    rotationHours: 9.07,
+    tiltDeg: 3.8,
+    color: rgb(0x8c8c8c),
+    color2: rgb(0x6a6a6a),
+    texture: 'rock',
+  },
+  {
+    id: 'eris', name: 'Eris', kind: 'dwarf', parent: 'sun',
+    elements: {
+      a: 67.864, e: 0.4360, i: 44.04,
+      node: 35.95, peri: 151.61, M0: 235.7,
+      n: 0.001763,
+    },
+    radiusKm: 1163,
+    rotationHours: 25.9,
+    tiltDeg: 26.6,
+    color: rgb(0xc4c4c4),
+    color2: rgb(0x9a9a9a),
+    texture: 'ice',
+  },
+  {
+    id: 'haumea', name: 'Haumea', kind: 'dwarf', parent: 'sun',
+    elements: {
+      a: 43.11, e: 0.1948, i: 28.26,
+      node: 122.29, peri: 239.75, M0: 202.4,
+      n: 0.003482,
+    },
+    radiusKm: 745,
+    rotationHours: 15.94,
+    tiltDeg: 0,
+    color: rgb(0xd8d4cc),
+    color2: rgb(0xa8a49c),
+    texture: 'ice',
+  },
+  {
+    id: 'makemake', name: 'Makemake', kind: 'dwarf', parent: 'sun',
+    elements: {
+      a: 45.43, e: 0.1611, i: 29.0,
+      node: 79.35, peri: 294.2, M0: 16.2,
+      n: 0.003219,
+    },
+    radiusKm: 715,
+    rotationHours: 22.8,
+    tiltDeg: 0,
+    color: rgb(0xc49a78),
+    color2: rgb(0x9a7458),
+    texture: 'ice',
+  },
+];
+
+/**
  * Major moons. Elements are J2000 mean elements (GRE-2019 / JPL tables).
  * a in km from the parent planet; n in deg/day. Triton's retrograde orbit
  * is i = 156.74 deg (> 90 => orbits backwards).
@@ -163,7 +240,7 @@ export const MOONS: BodyDefinition[] = [
     elements: {
       a: 384400, e: 0.0549, i: 5.145,
       node: 125.08, peri: 318.15, M0: 115.36,
-      n: 13.06499,
+      n: 13.17635,
     },
     radiusKm: 1737.4,
     rotationHours: 655.72, // tidally locked
@@ -177,7 +254,7 @@ export const MOONS: BodyDefinition[] = [
     elements: {
       a: 9376, e: 0.0151, i: 1.075,
       node: 318.7, peri: 260.0, M0: 140.0,
-      n: 714.9,
+      n: 1128.96,
     },
     radiusKm: 11.27,
     rotationHours: 7.65,
@@ -190,7 +267,7 @@ export const MOONS: BodyDefinition[] = [
     elements: {
       a: 23460, e: 0.0003, i: 1.796,
       node: 104.4, peri: 305.6, M0: 180.0,
-      n: 17.36,
+      n: 285.16,
     },
     radiusKm: 6.2,
     rotationHours: 30.3,
@@ -202,8 +279,8 @@ export const MOONS: BodyDefinition[] = [
     id: 'io', name: 'Io', kind: 'moon', parent: 'jupiter',
     elements: {
       a: 421700, e: 0.0041, i: 0.04,
-      node: 150.7, peri: 36.1, M0: 190.0,
-      n: 5.567,
+      node: 150.8, peri: 137.3, M0: 100.0,
+      n: 203.494,
     },
     radiusKm: 1821.6,
     rotationHours: 42.46,
@@ -216,8 +293,8 @@ export const MOONS: BodyDefinition[] = [
     id: 'europa', name: 'Europa', kind: 'moon', parent: 'jupiter',
     elements: {
       a: 671100, e: 0.009, i: 0.47,
-      node: 145.8, peri: 322.5, M0: 125.0,
-      n: 3.233,
+      node: 124.8, peri: 160.4, M0: 100.0,
+      n: 101.375,
     },
     radiusKm: 1560.8,
     rotationHours: 43.45,
@@ -231,7 +308,7 @@ export const MOONS: BodyDefinition[] = [
     elements: {
       a: 1070400, e: 0.0013, i: 0.2,
       node: 197.0, peri: 118.5, M0: 105.0,
-      n: 2.008,
+      n: 50.318,
     },
     radiusKm: 2634.1,
     rotationHours: 71.94,
@@ -245,7 +322,7 @@ export const MOONS: BodyDefinition[] = [
     elements: {
       a: 1882700, e: 0.0074, i: 0.19,
       node: 308.5, peri: 332.5, M0: 35.0,
-      n: 1.236,
+      n: 21.570,
     },
     radiusKm: 2410.3,
     rotationHours: 89.56,
@@ -258,8 +335,8 @@ export const MOONS: BodyDefinition[] = [
     id: 'titan', name: 'Titan', kind: 'moon', parent: 'saturn',
     elements: {
       a: 1221870, e: 0.0288, i: 0.35,
-      node: 126.0, peri: 172.0, M0: 180.0,
-      n: 1.387,
+      node: 125.8, peri: 346.8, M0: 100.0,
+      n: 22.577,
     },
     radiusKm: 2574.7,
     rotationHours: 15.94,
@@ -273,7 +350,7 @@ export const MOONS: BodyDefinition[] = [
     elements: {
       a: 354759, e: 0.000016, i: 156.74, // retrograde orbit
       node: 47.4, peri: 5.4, M0: 145.0,
-      n: 5.382,
+      n: 61.256,
     },
     radiusKm: 1353.4,
     rotationHours: -5.88,
@@ -282,9 +359,191 @@ export const MOONS: BodyDefinition[] = [
     color2: rgb(0x9c9484),
     texture: 'ice',
   },
+  {
+    id: 'amalthea', name: 'Amalthea', kind: 'moon', parent: 'jupiter',
+    elements: {
+      a: 181353, e: 0.0761, i: 0.32,
+      node: 206.9, peri: 271.2, M0: 200.0,
+      n: 722.57,
+    },
+    radiusKm: 85.5,
+    rotationHours: 11.96, // tidally locked
+    tiltDeg: 0.32,
+    color: rgb(0x8a4a3a),
+    color2: rgb(0x6e3a2c),
+    texture: 'rock',
+  },
+  {
+    id: 'himalia', name: 'Himalia', kind: 'moon', parent: 'jupiter',
+    elements: {
+      a: 11509150, e: 0.1137, i: 28.57,
+      node: 96.9, peri: 186.0, M0: 100.0,
+      n: 2.131,
+    },
+    radiusKm: 85.0,
+    rotationHours: 382.7,
+    tiltDeg: 28.57,
+    color: rgb(0x8c8880),
+    color2: rgb(0x6a6660),
+    texture: 'rock',
+  },
+  {
+    id: 'enceladus', name: 'Enceladus', kind: 'moon', parent: 'saturn',
+    elements: {
+      a: 237948, e: 0.0047, i: 0.01,
+      node: 272.9, peri: 130.8, M0: 200.0,
+      n: 262.74,
+    },
+    radiusKm: 252.1,
+    rotationHours: 32.89, // tidally locked
+    tiltDeg: 0.01,
+    color: rgb(0xe8f0f2),
+    color2: rgb(0xc4d4d8),
+    texture: 'ice',
+  },
+  {
+    id: 'tethys', name: 'Tethys', kind: 'moon', parent: 'saturn',
+    elements: {
+      a: 294600, e: 0.0001, i: 1.09,
+      node: 127.0, peri: 193.8, M0: 90.0,
+      n: 225.87,
+    },
+    radiusKm: 531.1,
+    rotationHours: 38.25, // tidally locked
+    tiltDeg: 1.09,
+    color: rgb(0xd8d4c8),
+    color2: rgb(0xb4b0a4),
+    texture: 'ice',
+  },
+  {
+    id: 'dione', name: 'Dione', kind: 'moon', parent: 'saturn',
+    elements: {
+      a: 377300, e: 0.0022, i: 0.02,
+      node: 117.3, peri: 127.4, M0: 200.0,
+      n: 131.53,
+    },
+    radiusKm: 561.4,
+    rotationHours: 65.69, // tidally locked
+    tiltDeg: 0.02,
+    color: rgb(0xc0bcb0),
+    color2: rgb(0x9c988c),
+    texture: 'ice',
+  },
+  {
+    id: 'rhea', name: 'Rhea', kind: 'moon', parent: 'saturn',
+    elements: {
+      a: 527108, e: 0.0013, i: 0.35,
+      node: 250.4, peri: 130.1, M0: 100.0,
+      n: 79.68,
+    },
+    radiusKm: 763.8,
+    rotationHours: 108.44, // tidally locked
+    tiltDeg: 0.35,
+    color: rgb(0xb0aca0),
+    color2: rgb(0x8c8880),
+    texture: 'ice',
+  },
+  {
+    id: 'iapetus', name: 'Iapetus', kind: 'moon', parent: 'saturn',
+    elements: {
+      a: 3560820, e: 0.0286, i: 15.47,
+      node: 213.9, peri: 198.1, M0: 200.0,
+      n: 4.54,
+    },
+    radiusKm: 734.5,
+    rotationHours: 1903.7, // tidally locked
+    tiltDeg: 15.47,
+    color: rgb(0x9a8a78),
+    color2: rgb(0x4e4438), // dark leading hemisphere
+    texture: 'rock',
+  },
+  {
+    id: 'miranda', name: 'Miranda', kind: 'moon', parent: 'uranus',
+    elements: {
+      a: 129390, e: 0.0013, i: 0.10,
+      node: 180.9, peri: 222.9, M0: 100.0,
+      n: 254.69,
+    },
+    radiusKm: 235.8,
+    rotationHours: 33.92, // tidally locked
+    tiltDeg: 0.10,
+    color: rgb(0xa8a49c),
+    color2: rgb(0x84807a),
+    texture: 'rock',
+  },
+  {
+    id: 'ariel', name: 'Ariel', kind: 'moon', parent: 'uranus',
+    elements: {
+      a: 190900, e: 0.0012, i: 0.26,
+      node: 169.5, peri: 294.9, M0: 100.0,
+      n: 142.86,
+    },
+    radiusKm: 578.9,
+    rotationHours: 60.48, // tidally locked
+    tiltDeg: 0.26,
+    color: rgb(0xc0bcae),
+    color2: rgb(0x9c9a8e),
+    texture: 'ice',
+  },
+  {
+    id: 'umbriel', name: 'Umbriel', kind: 'moon', parent: 'uranus',
+    elements: {
+      a: 266000, e: 0.0039, i: 0.13,
+      node: 133.3, peri: 250.7, M0: 100.0,
+      n: 86.87,
+    },
+    radiusKm: 584.7,
+    rotationHours: 99.46, // tidally locked
+    tiltDeg: 0.13,
+    color: rgb(0x6e6a64),
+    color2: rgb(0x54504a),
+    texture: 'ice',
+  },
+  {
+    id: 'titania', name: 'Titania', kind: 'moon', parent: 'uranus',
+    elements: {
+      a: 435910, e: 0.0011, i: 0.34,
+      node: 98.7, peri: 290.8, M0: 100.0,
+      n: 41.35,
+    },
+    radiusKm: 788.4,
+    rotationHours: 208.9, // tidally locked
+    tiltDeg: 0.34,
+    color: rgb(0x9c968c),
+    color2: rgb(0x7a746a),
+    texture: 'ice',
+  },
+  {
+    id: 'oberon', name: 'Oberon', kind: 'moon', parent: 'uranus',
+    elements: {
+      a: 583520, e: 0.0008, i: 0.06,
+      node: 79.3, peri: 70.6, M0: 100.0,
+      n: 26.75,
+    },
+    radiusKm: 761.4,
+    rotationHours: 323.0, // tidally locked
+    tiltDeg: 0.06,
+    color: rgb(0x88827a),
+    color2: rgb(0x66605a),
+    texture: 'ice',
+  },
+  {
+    id: 'nereid', name: 'Nereid', kind: 'moon', parent: 'neptune',
+    elements: {
+      a: 5513700, e: 0.7482, i: 7.31,
+      node: 130.0, peri: 5.2, M0: 100.0,
+      n: 1.1731,
+    },
+    radiusKm: 170.0,
+    rotationHours: 5.2, // rotation poorly constrained
+    tiltDeg: 7.31,
+    color: rgb(0x908878),
+    color2: rgb(0x6a6458),
+    texture: 'rock',
+  },
 ];
 
-export const ALL_BODIES: BodyDefinition[] = [SUN, ...PLANETS, ...MOONS];
+export const ALL_BODIES: BodyDefinition[] = [SUN, ...PLANETS, ...DWARF_PLANETS, ...MOONS];
 
 /** Body by id (for resolving moon parents / UI). */
 export function findBody(id: string): BodyDefinition | undefined {
