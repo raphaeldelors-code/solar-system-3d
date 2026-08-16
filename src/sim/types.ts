@@ -4,6 +4,9 @@ export const J2000_UTC = Date.UTC(2000, 0, 1, 12, 0, 0);
 /** One Julian century. */
 export const JULIAN_CENTURY_DAYS = 36525;
 
+/** One astronomical unit in kilometres (IAU nominal). */
+export const AU_KM = 1.495978707e8;
+
 /**
  * Keplerian orbital elements (J2000 frame, heliocentric ecliptic).
  * Angles in degrees, distances in AU, time in days since J2000.

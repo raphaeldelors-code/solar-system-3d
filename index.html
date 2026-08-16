@@ -26,6 +26,12 @@
       #panel .value { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
       #panel .hint { opacity: 0.55; font-size: 11px; margin-top: 8px; }
       #date { font-variant-numeric: tabular-nums; color: #9fd6a8; }
+      #panel .info { margin-top: 10px; padding-top: 8px;
+        border-top: 1px solid rgba(120, 150, 200, 0.25); }
+      #panel .info-title { font-weight: 600; color: #8fb4e8; margin-bottom: 4px; }
+      #panel .info-row { display: flex; justify-content: space-between; gap: 12px;
+        margin: 2px 0; opacity: 0.95; }
+      #panel .info-row .value { min-width: 0; }
     </style>
   </head>
   <body>
@@ -57,6 +63,12 @@
         <label><input id="orbits" type="checkbox" checked /> Orbits</label>
         <label><input id="labels" type="checkbox" checked /> Labels</label>
         <label><input id="belts" type="checkbox" checked /> Belts</label>
+      </div>
+      <div id="info" class="info" hidden>
+        <div class="info-title" id="info-name">—</div>
+        <div class="info-row"><span>Orbit period</span><span id="info-period" class="value">—</span></div>
+        <div class="info-row"><span>Distance</span><span id="info-distance" class="value">—</span></div>
+        <div class="info-row"><span>Peri / Apo</span><span id="info-range" class="value">—</span></div>
       </div>
       <div class="hint">Drag: rotate · Wheel: zoom · Right-drag: pan</div>
     </div>

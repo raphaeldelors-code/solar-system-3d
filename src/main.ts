@@ -12,6 +12,7 @@ import {
   type BuiltScene, type VisualScale,
 } from './render/scene';
 import { attachRealTextures } from './render/realTextures';
+import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
 const dateEl = document.getElementById('date') as HTMLSpanElement;
@@ -24,6 +25,13 @@ const scaleEl = document.getElementById('scale') as HTMLSelectElement;
 const orbitsEl = document.getElementById('orbits') as HTMLInputElement;
 const labelsEl = document.getElementById('labels') as HTMLInputElement;
 const beltsEl = document.getElementById('belts') as HTMLInputElement;
+const infoEl = document.getElementById('info') as HTMLDivElement;
+const infoNameEl = document.getElementById('info-name') as HTMLDivElement;
+const infoPeriodEl = document.getElementById('info-period') as HTMLSpanElement;
+const infoDistanceEl = document.getElementById('info-distance') as HTMLSpanElement;
+const infoRangeEl = document.getElementById('info-range') as HTMLSpanElement;
+
+const byId = new Map(ALL_BODIES.map((b) => [b.id, b]));
 
 const clock = new SimClock(Date.now());
 let built: BuiltScene;
@@ -85,6 +93,22 @@ function fmtDate(): void {
   dateEl.textContent = `${y}-${m}-${day} ${h}:${min} UTC`;
 }
 
+/** Orbit period / live distance / peri-apoapsis for the followed body. */
+function updateInfo(): void {
+  if (!followId) { infoEl.hidden = true; return; }
+  const def = byId.get(followId);
+  const r = def ? orbitReadout(def, clock.t) : null;
+  if (!def || !r) { infoEl.hidden = true; return; }
+  infoEl.hidden = false;
+  infoNameEl.textContent = def.name;
+  infoPeriodEl.textContent = formatPeriod(r.periodDays);
+  infoDistanceEl.textContent =
+    def.kind === 'moon'
+      ? `${formatDistanceKm(r.distanceKm)} from ${byId.get(def.parent ?? '')?.name ?? 'parent'}`
+      : `${formatDistanceKm(r.distanceKm)} from Sun`;
+  infoRangeEl.textContent = `${formatDistanceKm(r.perihelionKm)} / ${formatDistanceKm(r.aphelionKm)}`;
+}
+
 // --- UI wiring -------------------------------------------------------------
 
 speedEl.addEventListener('input', () => {
@@ -103,6 +127,7 @@ nowBtn.addEventListener('click', () => {
 
 followEl.addEventListener('change', () => {
   followId = followEl.value;
+  updateInfo();
 });
 
 scaleEl.addEventListener('change', () => {
@@ -171,5 +196,6 @@ function frame(): void {
   built.controls.update();
   built.renderer.render(built.scene, built.camera);
   fmtDate();
+  updateInfo();
 }
 requestAnimationFrame(frame);
