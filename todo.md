@@ -20,7 +20,7 @@
 - [x] Saturn ring shadow on planet / planet shadow in rings — ring annulus casts+receives (RingGeometry is a true hole, no alpha-disc artifact)
 
 ## Phase 3 — Polish
-- [ ] Shareable URL state (time + camera + follow + speed)
+- [x] Shareable URL state (time + camera + follow + speed) — `src/state/urlState.ts` (pure), debounced `replaceState` sync + Share button in `main.ts`
 - [ ] Mobile touch polish / PWA
 - [ ] Constellation lines + planet name tooltips on hover
 - [ ] Screenshot button (PNG export)

@@ -45,6 +45,13 @@ No other test/build tooling is configured. Do not add it casually.
   injectable; unit-tested in `tests/realTextures.test.ts`. Note: three.js
   `Material.needsUpdate` is a setter-only accessor (no getter) — assert on the
   write, never read it back.
+- **Shareable URL state** (`src/state/urlState.ts`): pure (only the WHATWG
+  `URL` API) — `parseAppState(href)` / `encodeAppState(href, state)` round-trip
+  time, speed, follow, scale, toggles, pause, and camera into the query string.
+  `main.ts` restores it before `rebuildScene` and keeps the address bar in sync
+  via a debounced `history.replaceState` (`syncUrl`) fired from the controls'
+  `change` handlers and the OrbitControls `change` event. Unit-tested in
+  `tests/urlState.test.ts`.
 
 ## Code style
 - TypeScript strict (`tsconfig.json` is strict — do not loosen it).
