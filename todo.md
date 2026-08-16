@@ -21,6 +21,6 @@
 
 ## Phase 3 — Polish
 - [x] Shareable URL state (time + camera + follow + speed) — `src/state/urlState.ts` (pure), debounced `replaceState` sync + Share button in `main.ts`
-- [ ] Mobile touch polish / PWA
+- [x] Mobile touch polish / PWA — `public/manifest.webmanifest` + `public/sw.js` (prod-only register), generated icons, safe-area + coarse-pointer CSS, collapsible panel
 - [ ] Constellation lines + planet name tooltips on hover
 - [ ] Screenshot button (PNG export)

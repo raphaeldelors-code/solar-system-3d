@@ -15,6 +15,16 @@ import { attachRealTextures } from './render/realTextures';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
 
+// PWA: register the offline service worker in production builds only
+// (vite preview / dev use a live server; a cached shell would be confusing).
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {
+      /* offline support is a nicety; never block the app on it */
+    });
+  });
+}
+
 const canvas = document.getElementById('app') as HTMLCanvasElement;
 const dateEl = document.getElementById('date') as HTMLSpanElement;
 const speedEl = document.getElementById('speed') as HTMLInputElement;
