@@ -4,9 +4,9 @@
 - [x] Repo scaffold: Vite + TypeScript (strict) + Vitest
 - [x] Kepler orbital mechanics (J2000 elements, Newton solver) — `src/sim/kepler.ts`
 - [x] Simulation clock (speed, pause, "jump to now") — `src/sim/clock.ts`
-- [x] Data: Sun + 8 planets + 16 major moons, one extensible table — `src/data/solarSystem.ts`
+- [x] Data: Sun + 8 planets + 9 major moons, one extensible table — `src/data/bodies.ts`
 - [x] Renderer: procedural textures, starfield, sun glow, Saturn/Uranus rings — `src/render/`
-- [x] UI: time controls, camera follow, orbit/label toggles, scale presets — `src/ui/controls.ts`
+- [x] UI: time controls, camera follow, orbit/label toggles, scale presets — `src/main.ts`
 - [x] Tests: Kepler solver, clock, data validation, scale — `tests/`
 - [x] README: run / test / extend guide
 
