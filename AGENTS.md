@@ -36,6 +36,15 @@ No other test/build tooling is configured. Do not add it casually.
   deliberately skip shadows (2k instances would swamp a 2048 cube). Config
   lives in `shadows.ts` and is unit-tested in `tests/shadows.test.ts` (three.js
   lights/meshes construct in Node without a WebGL context).
+- **Real textures** (`src/render/realTextures.ts`): optional drop-in NASA
+  images at `public/textures/<bodyId>.jpg` (e.g. `earth.jpg`). At startup each
+  body id is HEAD-probed (result cached per id) and, when present, a decoded
+  `THREE.Texture` (sRGB, one decode per id for the page's lifetime) replaces
+  the procedural `map` and the material is marked for recompile. Purely
+  additive: missing file ⇒ procedural texture, no errors. fetch/loader are
+  injectable; unit-tested in `tests/realTextures.test.ts`. Note: three.js
+  `Material.needsUpdate` is a setter-only accessor (no getter) — assert on the
+  write, never read it back.
 
 ## Code style
 - TypeScript strict (`tsconfig.json` is strict — do not loosen it).

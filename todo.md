@@ -11,7 +11,7 @@
 - [x] README: run / test / extend guide
 
 ## Phase 2 — Realism
-- [ ] Optional real textures: drop NASA (public domain) images in `public/textures/<id>.jpg`, auto-loaded over procedural
+- [x] Optional real textures: drop NASA (public domain) images in `public/textures/<id>.jpg`, auto-loaded over procedural — `src/render/realTextures.ts` (HEAD-probe + cache, fire-and-forget attach)
 - [ ] Orbit period / current distance readout in info panel
 - [x] More moons: +13 (Charon, Amalthea, Janus, Mimas, Tethys, Dione, Rhea, Iapetus, Phoebe, Proteus, Ariel, Umbriel, Oberon, Titania, Miranda, Nereid) — 22 total
 - [x] Dwarf planets: Pluto, Ceres, Eris, Haumea, Makemake — `kind: 'dwarf'`, heliocentric orbits

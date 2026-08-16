@@ -11,6 +11,7 @@ import {
   VISIBLE_SCALE, TRUE_SCALE,
   type BuiltScene, type VisualScale,
 } from './render/scene';
+import { attachRealTextures } from './render/realTextures';
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
 const dateEl = document.getElementById('date') as HTMLSpanElement;
@@ -42,6 +43,11 @@ function rebuildScene(newScale: VisualScale): void {
   }
   applyToggles();
   updatePositions(built, clock.t, scale);
+  // Optional real NASA textures: probe public/textures/<id>.jpg and swap them
+  // over the procedural maps when present. Fire-and-forget (async decode);
+  // the probe+texture caches make repeat rebuilds cheap no-ops.
+  const texLoader = new THREE.TextureLoader();
+  void attachRealTextures(built.bodies.values(), texLoader);
   // re-frame camera on follow target
   if (followId) {
     const entry = built.bodies.get(followId);
