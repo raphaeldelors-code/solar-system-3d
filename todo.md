@@ -15,7 +15,7 @@
 - [ ] Orbit period / current distance readout in info panel
 - [x] More moons: +13 (Charon, Amalthea, Janus, Mimas, Tethys, Dione, Rhea, Iapetus, Phoebe, Proteus, Ariel, Umbriel, Oberon, Titania, Miranda, Nereid) — 22 total
 - [x] Dwarf planets: Pluto, Ceres, Eris, Haumea, Makemake — `kind: 'dwarf'`, heliocentric orbits
-- [ ] Asteroid belt + Kuiper belt (instanced meshes, seeded positions)
+- [x] Asteroid belt + Kuiper belt (instanced meshes, seeded positions) — `src/data/belts.ts` + `src/render/belts.ts`, "Belts" toggle
 - [ ] Real point-light shadows (eclipses: Moon on Earth, Io on Jupiter)
 - [ ] Saturn ring shadow on planet / planet shadow in rings
 

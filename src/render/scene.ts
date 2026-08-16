@@ -15,6 +15,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAt, sampleOrbit } from '../sim/kepler';
 import { makeSurfaceTexture, makeLabelTexture } from './textures';
+import { BELTS } from '../data/belts';
+import { buildBeltField, updateBeltField, type BeltField } from './belts';
 
 export const AU = 1; // 1 scene unit per AU
 const AU_TO_KM = 1.495978707e8;
@@ -70,6 +72,8 @@ export interface BuiltScene {
   controls: OrbitControls;
   scene: THREE.Scene;
   bodies: Map<string, SceneBody>;
+  /** Small-body fields (asteroid + Kuiper belts). */
+  belts: BeltField[];
   sunLight: THREE.PointLight;
   starMat: THREE.PointsMaterial;
   dispose: () => void;
@@ -229,13 +233,24 @@ export function buildScene(
     }
   }
 
+  // Belt populations (asteroid + Kuiper). Built last so they never
+  // interfere with body/parent resolution.
+  const belts: BeltField[] = [];
+  for (const def of BELTS) {
+    const field = buildBeltField(def);
+    belts.push(field);
+    scene.add(field.mesh);
+  }
+  updateBeltFields({ belts } as Pick<BuiltScene, 'belts'>, 0, scale);
+
   function dispose() {
     for (const d of disposables) d.dispose();
+    for (const b of belts) b.dispose();
     controls.dispose();
     renderer.dispose();
   }
 
-  return { renderer, camera, controls, scene, bodies: map, sunLight, starMat, dispose };
+  return { renderer, camera, controls, scene, bodies: map, belts, sunLight, starMat, dispose };
 }
 
 /**
@@ -278,6 +293,17 @@ export function updatePositions(
       pivot.position.copy(parentWorld).add(local);
       entry.worldPos.copy(pivot.position);
     }
+  }
+}
+
+/** Advance every belt field to simulation time `tDays` (per frame). */
+export function updateBeltFields(
+  built: Pick<BuiltScene, 'belts'>,
+  tDays: number,
+  scale: VisualScale,
+): void {
+  for (const field of built.belts) {
+    updateBeltField(field, tDays, scale);
   }
 }
 

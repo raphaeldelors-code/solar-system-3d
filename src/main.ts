@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { SimClock } from './sim/clock';
 import { ALL_BODIES } from './data/bodies';
 import {
-  buildScene, updatePositions, applySpin,
+  buildScene, updatePositions, applySpin, updateBeltFields,
   VISIBLE_SCALE, TRUE_SCALE,
   type BuiltScene, type VisualScale,
 } from './render/scene';
@@ -22,6 +22,7 @@ const followEl = document.getElementById('follow') as HTMLSelectElement;
 const scaleEl = document.getElementById('scale') as HTMLSelectElement;
 const orbitsEl = document.getElementById('orbits') as HTMLInputElement;
 const labelsEl = document.getElementById('labels') as HTMLInputElement;
+const beltsEl = document.getElementById('belts') as HTMLInputElement;
 
 const clock = new SimClock(Date.now());
 let built: BuiltScene;
@@ -56,6 +57,9 @@ function applyToggles(): void {
   for (const entry of built.bodies.values()) {
     if (entry.orbit) (entry.orbit.material as THREE.Material).visible = orbitsEl.checked;
     entry.label.visible = labelsEl.checked;
+  }
+  for (const field of built.belts) {
+    field.mesh.visible = beltsEl.checked;
   }
 }
 
@@ -102,6 +106,7 @@ scaleEl.addEventListener('change', () => {
 
 orbitsEl.addEventListener('change', applyToggles);
 labelsEl.addEventListener('change', applyToggles);
+beltsEl.addEventListener('change', applyToggles);
 
 window.addEventListener('resize', () => {
   built.camera.aspect = window.innerWidth / window.innerHeight;
@@ -146,6 +151,7 @@ function frame(): void {
   lastDays = clock.t;
 
   updatePositions(built, clock.t, scale);
+  updateBeltFields(built, clock.t, scale);
   applySpin(built, dtDays);
 
   // Follow camera.

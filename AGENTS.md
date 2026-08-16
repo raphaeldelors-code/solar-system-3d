@@ -21,6 +21,11 @@ No other test/build tooling is configured. Do not add it casually.
   (planet, dwarf, moon) = adding one object to the right array. Nothing
   else should need to change (scene, orbit lines, and follow dropdown
   all derive from `ALL_BODIES`).
+- **Belts** (`src/data/belts.ts`): small-body populations (asteroid +
+  Kuiper) are a *separate* seeded table — `BELTS` → `sampleBelt()` —
+  because instanced fields don't fit `BodyDefinition`. Rendering lives in
+  `src/render/belts.ts` (one InstancedMesh per belt); the data layer stays
+  pure (no `three`/DOM) and fully deterministic (mulberry32 seed).
 - Orbital math: heliocentric ecliptic J2000 frame. `positionAt(elements, daysSinceJ2000)`
   returns AU. Moons use the same math relative to their parent (`parent` id).
 
