@@ -37,6 +37,7 @@ const orbitsEl = document.getElementById('orbits') as HTMLInputElement;
 const labelsEl = document.getElementById('labels') as HTMLInputElement;
 const beltsEl = document.getElementById('belts') as HTMLInputElement;
 const shareBtn = document.getElementById('share') as HTMLButtonElement;
+const screenshotBtn = document.getElementById('screenshot') as HTMLButtonElement;
 const tooltipEl = document.getElementById('tooltip') as HTMLDivElement;
 const infoEl = document.getElementById('info') as HTMLDivElement;
 const infoNameEl = document.getElementById('info-name') as HTMLDivElement;
@@ -240,6 +241,27 @@ shareBtn.addEventListener('click', async () => {
     shareBtn.textContent = 'Link in address bar';
   }
   setTimeout(() => { shareBtn.textContent = 'Copy share link'; }, 1500);
+});
+
+// --- Screenshot ------------------------------------------------------------
+// Export the current WebGL frame as a PNG. The renderer is built with
+// preserveDrawingBuffer so canvas.toBlob() sees the last present.
+screenshotBtn.addEventListener('click', async () => {
+  const canvas = built.renderer.domElement;
+  const d = clock.toDate();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const stamp = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+    + `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z`;
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b), 'image/png'));
+  if (!blob) { screenshotBtn.textContent = 'Export failed'; return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `solar-system-${stamp}.png`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  screenshotBtn.textContent = 'Saved ✓';
+  setTimeout(() => { screenshotBtn.textContent = 'Save screenshot'; }, 1500);
 });
 
 // --- Init ------------------------------------------------------------------

@@ -110,7 +110,13 @@ export function buildScene(
   bodies: BodyDefinition[],
   scale: VisualScale,
 ): BuiltScene {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    // Keep the frame buffer alive after present so canvas.toBlob() in
+    // main.ts can export a PNG screenshot of the current view.
+    preserveDrawingBuffer: true,
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
