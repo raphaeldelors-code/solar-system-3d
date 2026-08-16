@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Solar System 3D</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+      #app { width: 100%; height: 100%; display: block; }
+      #panel {
+        position: fixed; top: 12px; left: 12px; z-index: 10;
+        background: rgba(10, 14, 24, 0.82); color: #cfd8e3;
+        border: 1px solid rgba(120, 150, 200, 0.25); border-radius: 10px;
+        padding: 12px 14px; font: 13px/1.5 system-ui, sans-serif;
+        backdrop-filter: blur(6px); min-width: 220px; user-select: none;
+      }
+      #panel h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: 0.06em;
+        text-transform: uppercase; color: #8fb4e8; }
+      #panel .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+      #panel label { flex: 0 0 auto; opacity: 0.85; }
+      #panel select, #panel button {
+        background: #1a2334; color: #cfd8e3; border: 1px solid #33415e;
+        border-radius: 6px; padding: 3px 8px; font: inherit; cursor: pointer;
+      }
+      #panel input[type=range] { flex: 1; accent-color: #6ea8ff; }
+      #panel .value { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+      #panel .hint { opacity: 0.55; font-size: 11px; margin-top: 8px; }
+      #date { font-variant-numeric: tabular-nums; color: #9fd6a8; }
+    </style>
+  </head>
+  <body>
+    <canvas id="app"></canvas>
+    <div id="panel">
+      <h1>Solar System</h1>
+      <div class="row"><label>Date</label><span id="date" class="value">—</span></div>
+      <div class="row">
+        <label>Speed</label>
+        <input id="speed" type="range" min="-2" max="2.5" step="0.01" value="0" />
+        <span id="speed-value" class="value">1.0 d/s</span>
+      </div>
+      <div class="row">
+        <button id="pause">Pause</button>
+        <button id="now">Now</button>
+      </div>
+      <div class="row">
+        <label>Follow</label>
+        <select id="follow"><option value="">Free camera</option></select>
+      </div>
+      <div class="row">
+        <label>Scale</label>
+        <select id="scale">
+          <option value="visible">Visible (default)</option>
+          <option value="true">True scale</option>
+        </select>
+      </div>
+      <div class="row">
+        <label><input id="orbits" type="checkbox" checked /> Orbits</label>
+        <label><input id="labels" type="checkbox" checked /> Labels</label>
+      </div>
+      <div class="hint">Drag: rotate · Wheel: zoom · Right-drag: pan</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

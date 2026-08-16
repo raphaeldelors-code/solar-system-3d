@@ -1,0 +1,23 @@
+{
+  "name": "solar-system-3d",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A realistic, extensible 3D solar system: sun, planets, moons, Kepler orbits. TypeScript + Three.js.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "three": "^0.168.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.168.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0",
+    "vitest": "^2.0.5"
+  }
+}
