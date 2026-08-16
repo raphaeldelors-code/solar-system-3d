@@ -17,6 +17,9 @@ import { positionAt, sampleOrbit } from '../sim/kepler';
 import { makeSurfaceTexture, makeLabelTexture } from './textures';
 import { BELTS } from '../data/belts';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
+import {
+  SUN_SHADOWS, configureSunShadows, setBodyShadowFlags,
+} from './shadows';
 
 export const AU = 1; // 1 scene unit per AU
 const AU_TO_KM = 1.495978707e8;
@@ -108,6 +111,10 @@ export function buildScene(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Shadows: Sun point light casts shadow-cube maps so moons/planets
+  // eclipse each other (Moon on Earth, Io on Jupiter, rings on Saturn).
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000005);
@@ -123,6 +130,7 @@ export function buildScene(
 
   // Lighting: Sun point light at origin + faint ambient.
   const sunLight = new THREE.PointLight(0xfff2d8, 3.5, 0, 0);
+  configureSunShadows(sunLight, SUN_SHADOWS.far);
   scene.add(sunLight);
   scene.add(new THREE.AmbientLight(0x223044, 0.4));
 
@@ -168,6 +176,8 @@ export function buildScene(
     disposables.push(geo, mat, surfaceTex);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = def.name;
+    // Shadow flags: every body except the light source casts and receives.
+    setBodyShadowFlags(mesh, isStar);
 
     // Axial tilt pivot; spin happens on the mesh around local Y.
     const pivot = new THREE.Group();
@@ -180,14 +190,22 @@ export function buildScene(
     if (def.rings) {
       const inner = r * def.rings.inner, outer = r * def.rings.outer;
       const ringGeo = new THREE.RingGeometry(inner, outer, 96);
-      const ringMat = new THREE.MeshBasicMaterial({
+      // Standard (lit) material so the rings react to the sun AND receive
+      // shadows (Saturn's shadow band across the rings). RingGeometry is a
+      // true annulus (the hole is real geometry, not alpha), so casting is
+      // safe: in the shadow pass it projects a band, not a solid disc.
+      const ringMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(...def.rings.color),
         side: THREE.DoubleSide,
         transparent: true,
         opacity: def.rings.opacity,
+        roughness: 0.9,
+        metalness: 0,
       });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       ringMesh.rotation.x = -Math.PI / 2;
+      ringMesh.castShadow = true;
+      ringMesh.receiveShadow = true;
       pivot.add(ringMesh);
       disposables.push(ringGeo, ringMat);
     }

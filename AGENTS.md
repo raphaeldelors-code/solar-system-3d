@@ -28,6 +28,14 @@ No other test/build tooling is configured. Do not add it casually.
   pure (no `three`/DOM) and fully deterministic (mulberry32 seed).
 - Orbital math: heliocentric ecliptic J2000 frame. `positionAt(elements, daysSinceJ2000)`
   returns AU. Moons use the same math relative to their parent (`parent` id).
+- **Shadows** (`src/render/shadows.ts`): the Sun's `PointLight` is a shadow
+  caster (PCFSoft cube map). Every body mesh casts+receives *except* the star
+  itself (a sphere centered on a point light would occlude the whole shadow
+  pass). Rings use a lit `MeshStandardMaterial` and cast+receive — `RingGeometry`
+  is a true annulus so no solid-disc alpha artifact. Belt InstancedMeshes
+  deliberately skip shadows (2k instances would swamp a 2048 cube). Config
+  lives in `shadows.ts` and is unit-tested in `tests/shadows.test.ts` (three.js
+  lights/meshes construct in Node without a WebGL context).
 
 ## Code style
 - TypeScript strict (`tsconfig.json` is strict — do not loosen it).

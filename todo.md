@@ -16,8 +16,8 @@
 - [x] More moons: +13 (Charon, Amalthea, Janus, Mimas, Tethys, Dione, Rhea, Iapetus, Phoebe, Proteus, Ariel, Umbriel, Oberon, Titania, Miranda, Nereid) — 22 total
 - [x] Dwarf planets: Pluto, Ceres, Eris, Haumea, Makemake — `kind: 'dwarf'`, heliocentric orbits
 - [x] Asteroid belt + Kuiper belt (instanced meshes, seeded positions) — `src/data/belts.ts` + `src/render/belts.ts`, "Belts" toggle
-- [ ] Real point-light shadows (eclipses: Moon on Earth, Io on Jupiter)
-- [ ] Saturn ring shadow on planet / planet shadow in rings
+- [x] Real point-light shadows (eclipses: Moon on Earth, Io on Jupiter) — `src/render/shadows.ts`, PCFSoft shadow cube from the sun
+- [x] Saturn ring shadow on planet / planet shadow in rings — ring annulus casts+receives (RingGeometry is a true hole, no alpha-disc artifact)
 
 ## Phase 3 — Polish
 - [ ] Shareable URL state (time + camera + follow + speed)
