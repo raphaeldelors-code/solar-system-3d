@@ -17,6 +17,7 @@ import { positionAt, sampleOrbit } from '../sim/kepler';
 import { makeSurfaceTexture, makeLabelTexture } from './textures';
 import { BELTS } from '../data/belts';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
+import { CONSTELLATIONS, raDecToUnit } from '../data/constellations';
 import {
   SUN_SHADOWS, configureSunShadows, setBodyShadowFlags,
 } from './shadows';
@@ -79,6 +80,8 @@ export interface BuiltScene {
   belts: BeltField[];
   sunLight: THREE.PointLight;
   starMat: THREE.PointsMaterial;
+  /** Constellation figure lines + named-star markers (decorative sky). */
+  constellations: THREE.Group;
   dispose: () => void;
 }
 
@@ -153,6 +156,10 @@ export function buildScene(
   });
   scene.add(new THREE.Points(starGeo, starMat));
 
+  // Constellation figure lines + named-star markers on the celestial sphere.
+  const constellations = buildConstellations();
+  scene.add(constellations);
+
   const disposables: { dispose: () => void }[] = [starGeo, starMat];
   const map = new Map<string, SceneBody>();
 
@@ -176,6 +183,8 @@ export function buildScene(
     disposables.push(geo, mat, surfaceTex);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = def.name;
+    // Stable id for raycast picking (main.ts tooltip); name is display-only.
+    mesh.userData.id = def.id;
     // Shadow flags: every body except the light source casts and receives.
     setBodyShadowFlags(mesh, isStar);
 
@@ -264,11 +273,65 @@ export function buildScene(
   function dispose() {
     for (const d of disposables) d.dispose();
     for (const b of belts) b.dispose();
+    constellations.userData.dispose?.();
     controls.dispose();
     renderer.dispose();
   }
 
-  return { renderer, camera, controls, scene, bodies: map, belts, sunLight, starMat, dispose };
+  return { renderer, camera, controls, scene, bodies: map, belts, sunLight, starMat, constellations, dispose };
+}
+
+/** Constellation sky radius: just inside the procedural starfield shell. */
+export const CONSTELLATION_RADIUS = 4800;
+
+/**
+ * Build the decorative constellation lines + star markers. Pure three.js
+ * construction over the data in `src/data/constellations.ts`.
+ */
+export function buildConstellations(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'constellations';
+
+  const lineMat = new THREE.LineBasicMaterial({
+    color: 0x8fb0ff, transparent: true, opacity: 0.32,
+    depthWrite: false,
+  });
+  const dotMat = new THREE.PointsMaterial({
+    color: 0xcfe0ff, size: 3.2, sizeAttenuation: false,
+    transparent: true, opacity: 0.9, depthWrite: false,
+  });
+
+  const lineVerts: number[] = [];
+  const dotVerts: number[] = [];
+  for (const c of CONSTELLATIONS) {
+    const pos = c.stars.map((s) => {
+      const [x, y, z] = raDecToUnit(s.raHours, s.decDeg);
+      return [x * CONSTELLATION_RADIUS, y * CONSTELLATION_RADIUS, z * CONSTELLATION_RADIUS];
+    });
+    for (const [a, b] of c.lines) {
+      lineVerts.push(...pos[a], ...pos[b]);
+    }
+    for (const p of pos) dotVerts.push(...p);
+  }
+
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lineVerts, 3));
+  const lines = new THREE.LineSegments(lineGeo, lineMat);
+  lines.name = 'constellation-lines';
+  group.add(lines);
+
+  const dotGeo = new THREE.BufferGeometry();
+  dotGeo.setAttribute('position', new THREE.Float32BufferAttribute(dotVerts, 3));
+  const dots = new THREE.Points(dotGeo, dotMat);
+  dots.name = 'constellation-stars';
+  group.add(dots);
+
+  // Expose for disposal.
+  group.userData.dispose = () => {
+    lineGeo.dispose(); lineMat.dispose();
+    dotGeo.dispose(); dotMat.dispose();
+  };
+  return group;
 }
 
 /**

@@ -37,6 +37,7 @@ const orbitsEl = document.getElementById('orbits') as HTMLInputElement;
 const labelsEl = document.getElementById('labels') as HTMLInputElement;
 const beltsEl = document.getElementById('belts') as HTMLInputElement;
 const shareBtn = document.getElementById('share') as HTMLButtonElement;
+const tooltipEl = document.getElementById('tooltip') as HTMLDivElement;
 const infoEl = document.getElementById('info') as HTMLDivElement;
 const infoNameEl = document.getElementById('info-name') as HTMLDivElement;
 const infoPeriodEl = document.getElementById('info-period') as HTMLSpanElement;
@@ -261,6 +262,67 @@ fmtDate();
   get renderer() { return built.renderer; },
   clock,
 };
+
+// --- Hover tooltip ----------------------------------------------------------
+// Raycast body meshes on pointer-move and show a name tooltip near the
+// cursor. Throttled so it never fights the render loop, and suppressed
+// while the pointer is down (orbiting/panning).
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
+let pointerPx = 0, pointerPy = 0;
+let pointerOnCanvas = false;
+let lastPickMs = 0;
+let picking = false;
+
+function bodyMeshes(): THREE.Object3D[] {
+  const out: THREE.Object3D[] = [];
+  for (const e of built.bodies.values()) out.push(e.mesh);
+  return out;
+}
+
+function showTooltip(name: string, sub: string): void {
+  tooltipEl.innerHTML = `${name}${sub ? `<span class="sub"> ${sub}</span>` : ''}`;
+  tooltipEl.style.left = `${pointerPx}px`;
+  tooltipEl.style.top = `${pointerPy}px`;
+  tooltipEl.classList.add('show');
+}
+function hideTooltip(): void {
+  tooltipEl.classList.remove('show');
+}
+
+function doPick(): void {
+  if (!pointerOnCanvas || picking) { hideTooltip(); return; }
+  raycaster.setFromCamera(pointerNdc, built.camera);
+  const hits = raycaster.intersectObjects(bodyMeshes(), false);
+  if (hits.length > 0) {
+    const id = hits[0].object.userData.id as string | undefined;
+    const def = id ? byId.get(id) : undefined;
+    if (def) {
+      const sub = def.kind === 'moon'
+        ? `moon of ${byId.get(def.parent ?? '')?.name ?? ''}`
+        : def.kind.charAt(0).toUpperCase() + def.kind.slice(1);
+      showTooltip(def.name, sub);
+      return;
+    }
+  }
+  hideTooltip();
+}
+
+canvas.addEventListener('pointermove', (ev) => {
+  pointerOnCanvas = true;
+  pointerPx = ev.clientX; pointerPy = ev.clientY;
+  pointerNdc.set(
+    (ev.clientX / window.innerWidth) * 2 - 1,
+    -(ev.clientY / window.innerHeight) * 2 + 1,
+  );
+  const now = performance.now();
+  if (now - lastPickMs < 50) return; // throttle
+  lastPickMs = now;
+  doPick();
+});
+canvas.addEventListener('pointerleave', () => { pointerOnCanvas = false; hideTooltip(); });
+canvas.addEventListener('pointerdown', () => { picking = true; hideTooltip(); });
+window.addEventListener('pointerup', () => { picking = false; });
 
 // --- Animation loop ---------------------------------------------------------
 
