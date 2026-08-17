@@ -402,13 +402,25 @@ export function updatePositions(
       pivot.position.copy(s.multiplyScalar(factor));
       entry.worldPos.copy(pivot.position);
     } else if (def.kind === 'moon' && def.elements) {
-      const p = positionAt(def.elements, tDays); // km, ecliptic frame
+      const p = positionAt(def.elements, tDays); // km, parent-equatorial frame
       const s = eclipticToScene(p);
       const d = Math.hypot(p.x, p.y, p.z);
       const factor = scale.moonDistance(d, def.id) / Math.max(1e-9, d);
       const local = s.multiplyScalar(factor);
-      const parentWorld = entry.parent ? entry.parent.worldPos : new THREE.Vector3();
-      pivot.position.copy(parentWorld).add(local);
+      const parent = entry.parent;
+      if (parent) {
+        // The moon's orbit LINE is a child of parent.pivot, which carries the
+        // parent's axial-tilt rotation (pivot.rotation.z = tiltDeg). The body
+        // must receive the SAME rotation, otherwise an inclined satellite
+        // drifts off its (angled) orbit line and instead appears to orbit in
+        // the flat ecliptic plane. Applying the parent pivot's orientation
+        // reproduces exactly the transform the line is rendered with, so the
+        // body sits on its own line for any tilted/retrograde parent.
+        local.applyQuaternion(parent.pivot.quaternion);
+        pivot.position.copy(parent.worldPos).add(local);
+      } else {
+        pivot.position.copy(local);
+      }
       entry.worldPos.copy(pivot.position);
     }
   }
