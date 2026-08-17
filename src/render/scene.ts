@@ -21,32 +21,50 @@ import { CONSTELLATIONS, raDecToUnit } from '../data/constellations';
 import {
   SUN_SHADOWS, configureSunShadows, setBodyShadowFlags,
 } from './shadows';
+import {
+  SUN_R, planetRadiusKm, moonRadiusKm, planetDistance, moonDistance,
+  baseMoonDistance, followDistanceKm,
+} from './visibleScale';
 
 export const AU = 1; // 1 scene unit per AU
 const AU_TO_KM = 1.495978707e8;
 
 export interface VisualScale {
-  /** Scene radius for a body of given km radius. */
+  /** Scene radius for a planet / dwarf / (non-star) body of given km radius. */
   bodyRadiusKm: (km: number) => number;
+  /** Scene radius for a moon of given km radius (much smaller than planets). */
+  moonRadiusKm: (km: number) => number;
   /** Scene distance multiplier applied to heliocentric AU positions. */
   planetDistance: (au: number) => number;
-  /** Scene distance multiplier for moon offsets (input km). */
-  moonDistance: (km: number) => number;
+  /**
+   * Scene distance of a moon at real distance `km` from its parent.
+   * `moonId` is the moon's own id (per-moon clamp lookup in visible mode);
+   * `TRUE_SCALE` ignores it.
+   */
+  moonDistance: (km: number, moonId?: string) => number;
   /** Suggested camera distance when following a body of this km radius. */
   followDistanceKm: (km: number) => number;
 }
 
-/** Compressed distances + exaggerated sizes: everything is visible. */
+/**
+ * Compressed distances + exaggerated sizes: everything is visible.
+ * The mappings live in `visibleScale.ts` (piecewise-linear orbit ramp,
+ * separate moon radius, per-moon clamp) — see that module for the
+ * derivation and the solved anchor/clamp constants.
+ */
 export const VISIBLE_SCALE: VisualScale = {
-  bodyRadiusKm: (km) => 0.5 + Math.log10(km / 100 + 1) * 0.9,
-  planetDistance: (au) => 4 + Math.log10(au / 0.38) * 11,
-  moonDistance: (km) => 1.6 + Math.log10(km / 3000 + 1) * 1.4,
-  followDistanceKm: (km) => 4 + Math.log10(km / 100 + 1) * 6,
+  bodyRadiusKm: planetRadiusKm,
+  moonRadiusKm: moonRadiusKm,
+  planetDistance,
+  moonDistance: (km, moonId) =>
+    (moonId ? moonDistance(moonId, km) : null) ?? baseMoonDistance(km),
+  followDistanceKm,
 };
 
 /** True physical scale (distances and sizes to the same ratio). */
 export const TRUE_SCALE: VisualScale = {
   bodyRadiusKm: (km) => (km / AU_TO_KM) * AU,
+  moonRadiusKm: (km) => (km / AU_TO_KM) * AU,
   planetDistance: (au) => au,
   moonDistance: (km) => (km / AU_TO_KM) * AU,
   followDistanceKm: (km) => Math.max(1.5, (km / AU_TO_KM) * 8),
@@ -91,10 +109,19 @@ function eclipticToScene(v: { x: number; y: number; z: number }): THREE.Vector3 
 
 function makeOrbitLine(
   elements: OrbitalElements,
-  scaleFactor: number,
+  /**
+   * Maps a sample's heliocentric radius (AU for planets, km for moons) to
+   * its scene distance. Must be the SAME per-point mapping the body
+   * positions use in `updatePositions`, otherwise the drawn line drifts
+   * off the actual path for any non-linear scale.
+   */
+  distMap: (r: number) => number,
 ): THREE.Line {
   const samples = sampleOrbit(elements, 0, 256);
-  const pts = samples.map((s) => eclipticToScene(s).multiplyScalar(scaleFactor));
+  const pts = samples.map((s) => {
+    const r = Math.hypot(s.x, s.y, s.z);
+    return eclipticToScene(s).multiplyScalar(distMap(r) / Math.max(1e-9, r));
+  });
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
   const mat = new THREE.LineBasicMaterial({
     color: 0x5570a0, transparent: true, opacity: 0.45,
@@ -176,10 +203,13 @@ export function buildScene(
     const isStar = def.kind === 'star';
     const isMoon = def.kind === 'moon';
 
-    // Radius in scene units (stars get a special size).
+    // Radius in scene units (stars get a special size; moons are much
+    // smaller than planets so satellites read as satellites).
     const r = isStar
-      ? (scale === TRUE_SCALE ? (def.radiusKm / AU_TO_KM) * 1.15 : 1.35)
-      : scale.bodyRadiusKm(def.radiusKm);
+      ? (scale === TRUE_SCALE ? (def.radiusKm / AU_TO_KM) * 1.15 : SUN_R)
+      : isMoon
+        ? scale.moonRadiusKm(def.radiusKm)
+        : scale.bodyRadiusKm(def.radiusKm);
 
     const geo = new THREE.SphereGeometry(r, 48, 32);
     const surfaceTex = makeSurfaceTexture(def);
@@ -235,13 +265,14 @@ export function buildScene(
     pivot.add(label);
     disposables.push(labelTex, labelMat);
 
-    // Orbit line.
+    // Orbit line. Per-point radius mapping (same one the body positions
+    // use) so eccentric ellipses stay on their drawn path.
     let orbit: THREE.Line | null = null;
     if (def.elements) {
-      const scaleFactor = isMoon
-        ? scale.moonDistance(def.elements.a) / def.elements.a
-        : scale.planetDistance(def.elements.a) / def.elements.a;
-      orbit = makeOrbitLine(def.elements, scaleFactor);
+      const distMap = (r: number): number => isMoon
+        ? scale.moonDistance(r, def.id)
+        : scale.planetDistance(r);
+      orbit = makeOrbitLine(def.elements, distMap);
       if (!isMoon) {
         scene.add(orbit);
       }
@@ -374,7 +405,7 @@ export function updatePositions(
       const p = positionAt(def.elements, tDays); // km, ecliptic frame
       const s = eclipticToScene(p);
       const d = Math.hypot(p.x, p.y, p.z);
-      const factor = scale.moonDistance(d) / Math.max(1e-9, d);
+      const factor = scale.moonDistance(d, def.id) / Math.max(1e-9, d);
       const local = s.multiplyScalar(factor);
       const parentWorld = entry.parent ? entry.parent.worldPos : new THREE.Vector3();
       pivot.position.copy(parentWorld).add(local);

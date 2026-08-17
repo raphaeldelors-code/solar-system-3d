@@ -7,8 +7,9 @@
  *
  * Shadow-cube coverage: `far` must reach the farthest shadow-casting body
  * in BOTH visual scales — in TRUE_SCALE the Kuiper belt extends to ~50 AU
- * (1 scene unit = 1 AU); in VISIBLE_SCALE the farthest body is ~27 units.
- * 60 covers both with margin.
+ * (1 scene unit = 1 AU); in VISIBLE_SCALE the farthest body (Eris apoapsis)
+ * is ~135 units, so the cube shadow camera must reach at least that far.
+ * 140 covers both with margin.
  */
 import * as THREE from 'three';
 
@@ -18,7 +19,7 @@ export const SUN_SHADOWS = {
   /** Near plane; well inside the smallest body (Sun in TRUE_SCALE ≈ 0.005). */
   near: 0.05,
   /** Default far plane; see module note. */
-  far: 60,
+  far: 140,
   /** Negative bias lifts shadows off occluder surfaces (avoids acne). */
   bias: -0.0004,
   /** Pushes the shadow along the surface normal (scene units). */
