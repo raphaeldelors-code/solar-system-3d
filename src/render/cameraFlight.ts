@@ -4,11 +4,19 @@
  * DOM / no three.js, so it is unit-tested in Node.
  *
  * `main.ts` owns the live PerspectiveCamera + OrbitControls and drives these
- * with `stepFlight` each frame. The transition eases both the camera
- * position and the orbit target with cubic in/out (slow start, fast middle,
- * gentle landing) — the "zoom + rotation with acceleration & deceleration"
- * the user asked for. FOV is held constant; the zoom comes from camera
- * distance, so there is no dolly-zoom distortion.
+ * with `stepFlight` each frame. The transition eases BOTH the orbit target
+ * and the camera's offset-from-target with cubic in/out (slow start, fast
+ * middle, gentle landing) — the "zoom + rotation with acceleration &
+ * deceleration" the user asked for. FOV is held constant; the zoom comes
+ * from camera distance, so there is no dolly-zoom distortion.
+ *
+ * The camera pose is always expressed as `target + offset` (offset = camera −
+ * target). Interpolating the *offset* (not the absolute position) means a
+ * flight to a moving picked body stays rigidly attached to it: the whole
+ * (target + camera) frame translates with the body every frame, so the body
+ * is exactly framed at landing no matter how far it has orbited since the
+ * flight began. Global anchors have a static target (the origin), so they
+ * reduce to an ordinary eased move.
  */
 
 export type Vec3 = readonly [number, number, number];
@@ -21,21 +29,36 @@ export interface CamAnchor {
 }
 
 export interface Flight {
-  fromPos: Vec3;
+  /** World-space orbit target at flight start. */
   fromTarget: Vec3;
-  toPos: Vec3;
+  /** Camera − target at flight start. */
+  fromOffset: Vec3;
+  /** World-space orbit target the flight should end on. */
   toTarget: Vec3;
+  /** Camera − target at the destination (fixed offset = the landing framing). */
+  toOffset: Vec3;
   /** Seconds for the whole move. */
   duration: number;
   /** Elapsed seconds. */
   t: number;
   /**
    * Body the flight is targeting (picked planet / moon). When set, the
-   * orbit-target keeps tracking that body's live world position each frame
-   * so the camera lands on the moving body, not where it was when the
-   * flight started. `null` for the global anchors (Sun / constellations).
+   * render loop substitutes that body's LIVE world position for the
+   * interpolated target each frame (and re-derives the camera from it), so a
+   * moving body is landed on, not where it was when the flight started.
+   * `null` for the global anchors (Sun / constellations).
    */
   followId: string | null;
+}
+
+export interface FlightSample {
+  /** Interpolated orbit target (or the live body position, set by caller). */
+  target: Vec3;
+  /** Interpolated camera − target offset. */
+  offset: Vec3;
+  /** target + offset (the camera position to set). */
+  pos: Vec3;
+  done: boolean;
 }
 
 /**
@@ -54,6 +77,14 @@ export function dirTo(a: Vec3, b: Vec3): Vec3 {
   const len = Math.hypot(dx, dy, dz);
   if (len < 1e-9) return [0, 1, 0];
   return [dx / len, dy / len, dz / len];
+}
+
+function sub(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function add(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 }
 
 /**
@@ -126,27 +157,44 @@ export function frameConstellations(
   };
 }
 
-export interface FlightSample {
-  pos: Vec3;
-  target: Vec3;
-  done: boolean;
-}
-
 /**
  * Advance a flight by `dt` seconds and return the camera pose for this
- * frame. Mutates `flight.t` (so it is stateful across frames).
+ * frame. Mutates `flight.t` (so it is stateful across frames). The caller
+ * may override `sample.target` with a live body position (for a picked body)
+ * and then use `add(sample.target, sample.offset)` as the camera position.
  */
 export function stepFlight(flight: Flight, dtSeconds: number): FlightSample {
   flight.t += dtSeconds;
   const k = easeInOutCubic(flight.t / flight.duration);
   const lp = (a: number, b: number) => a + (b - a) * k;
+  const target: Vec3 = [
+    lp(flight.fromTarget[0], flight.toTarget[0]),
+    lp(flight.fromTarget[1], flight.toTarget[1]),
+    lp(flight.fromTarget[2], flight.toTarget[2]),
+  ];
+  const offset: Vec3 = [
+    lp(flight.fromOffset[0], flight.toOffset[0]),
+    lp(flight.fromOffset[1], flight.toOffset[1]),
+    lp(flight.fromOffset[2], flight.toOffset[2]),
+  ];
+  return { target, offset, pos: add(target, offset), done: flight.t >= flight.duration };
+}
+
+/** Convenience: build a Flight from a `from`/`to` CamAnchor pair. */
+export function makeFlight(
+  fromPos: Vec3,
+  fromTarget: Vec3,
+  to: CamAnchor,
+  duration: number,
+  followId: string | null,
+): Flight {
   return {
-    pos: [lp(flight.fromPos[0], flight.toPos[0]),
-           lp(flight.fromPos[1], flight.toPos[1]),
-           lp(flight.fromPos[2], flight.toPos[2])],
-    target: [lp(flight.fromTarget[0], flight.toTarget[0]),
-             lp(flight.fromTarget[1], flight.toTarget[1]),
-             lp(flight.fromTarget[2], flight.toTarget[2])],
-    done: flight.t >= flight.duration,
+    fromTarget: fromTarget,
+    fromOffset: sub(fromPos, fromTarget),
+    toTarget: to.target,
+    toOffset: sub(to.pos, to.target),
+    duration,
+    t: 0,
+    followId,
   };
 }

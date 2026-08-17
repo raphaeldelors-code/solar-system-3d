@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   easeInOutCubic, dirTo, frameBody, frameSystem, frameConstellations,
-  stepFlight, type Flight, type CamAnchor,
+  stepFlight, makeFlight, type Flight, type CamAnchor,
 } from '../src/render/cameraFlight';
 
 const approx = (got: number, want: number, tol = 1e-6) =>
@@ -78,31 +78,58 @@ describe('frameConstellations', () => {
 });
 
 describe('stepFlight', () => {
+  // Flight from camera [0,0,0] orbiting origin, to camera [10,0,0] orbiting
+  // [5,0,0]. target: [0,0,0]->[5,0,0]; offset(camera−target): [0,0,0]->[5,0,0].
   const mk = (): Flight => ({
-    fromPos: [0, 0, 0], fromTarget: [0, 0, 0],
-    toPos: [10, 0, 0], toTarget: [10, 0, 0],
+    fromTarget: [0, 0, 0], fromOffset: [0, 0, 0],
+    toTarget: [5, 0, 0], toOffset: [5, 0, 0],
     duration: 1, t: 0, followId: null,
   });
-  it('starts at fromPos and lands exactly on toPos', () => {
+  it('starts at the from pose and lands exactly on the to pose', () => {
     const f = mk();
     const start = stepFlight(f, 0.0001);
     expect(start.done).toBe(false);
-    approx(start.pos[0], 0, 1e-3);
+    approx(start.target[0], 0, 1e-3);
+    approx(start.pos[0], 0, 1e-3); // pos = target + offset = 0
     // run past the end
     stepFlight(f, 10);
     const end = stepFlight(f, 0.0001);
     expect(end.done).toBe(true);
-    approx(end.pos[0], 10, 1e-9);
-    approx(end.target[0], 10, 1e-9);
+    approx(end.target[0], 5, 1e-9);
+    approx(end.pos[0], 10, 1e-9); // target 5 + offset 5
   });
-  it('is symmetric about the midpoint (eased)', () => {
+  it('is eased (slow start, gentle landing)', () => {
     const f = mk();
-    stepFlight(f, 0.25); // t=0.25
-    const p1 = stepFlight(f, 0.25).pos[0];   // t=0.5
-    stepFlight(f, 0.25); // t=0.75
-    const p3 = stepFlight(f, 0.25).pos[0];   // t=1.0
-    // t=0.5 should be the midpoint of the *distance* travel for this ease
-    approx(p1, 5, 1e-9);
-    approx(p3, 10, 1e-9);
+    // stepFlight advances t by dt and returns the sample for the NEW t, so
+    // read the sample the step that reaches t=0.5 returns (k=0.5 => mid).
+    const mid = stepFlight(f, 0.5); // t=0.5 -> eased k=0.5
+    approx(mid.target[0], 2.5, 1e-6);
+    approx(mid.pos[0], 5, 1e-6); // target 2.5 + offset 2.5
+    const end = stepFlight(f, 0.5); // t=1.0 -> k=1
+    approx(end.target[0], 5, 1e-6);
+    approx(end.pos[0], 10, 1e-6);
+  });
+  it('rigidly tracks a moving body: offset preserved, target substituted', () => {
+    const f = makeFlight(
+      [0, 0, 0], [0, 0, 0], // from: cam at origin orbiting origin
+      { target: [100, 0, 0], pos: [105, 0, 0] }, // to: orbit [100,0,0] at +5 offset
+      1, 'jupiter',
+    );
+    // Mid-flight (t=0.5): offset is halfway between [0,0,0] and [5,0,0] = [2.5,0,0].
+    f.t = 0.5;
+    const s = stepFlight(f, 0);
+    approx(s.offset[0], 2.5, 1e-6);
+    // The render loop substitutes the body's LIVE position for the target;
+    // the camera lands rigidly at liveTarget + offset, so a body that moved
+    // to [137,0,0] is still framed exactly at landing.
+    const liveBody = [137, 0, 0];
+    f.t = 1.0;
+    const end = stepFlight(f, 0);
+    const camAtLanding = [
+      liveBody[0] + end.offset[0], liveBody[1] + end.offset[1], liveBody[2] + end.offset[2],
+    ];
+    // offset at landing = toOffset = [5,0,0]
+    approx(camAtLanding[0], 142, 1e-6);
+    expect(end.done).toBe(true);
   });
 });

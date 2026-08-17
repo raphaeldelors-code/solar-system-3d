@@ -12,7 +12,7 @@ import {
   type BuiltScene, type VisualScale,
 } from './render/scene';
 import {
-  frameBody, frameSystem, frameConstellations, stepFlight,
+  frameBody, frameSystem, frameConstellations, stepFlight, makeFlight,
   type CamAnchor, type Flight,
 } from './render/cameraFlight';
 import { attachRealTextures } from './render/realTextures';
@@ -149,15 +149,16 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null): v
   followId = bodyId ?? '';
   followEl.value = followId;
   updateInfo();
-  flight = {
-    fromPos: [built.camera.position.x, built.camera.position.y, built.camera.position.z],
-    fromTarget: [built.controls.target.x, built.controls.target.y, built.controls.target.z],
-    toPos: dest.pos,
-    toTarget: dest.target,
+  // Build the flight from the live camera pose (pos + orbit target). The
+  // offset-lerp form keeps a moving picked body rigidly framed; global
+  // anchors have a static origin target so they reduce to an eased move.
+  flight = makeFlight(
+    [built.camera.position.x, built.camera.position.y, built.camera.position.z],
+    [built.controls.target.x, built.controls.target.y, built.controls.target.z],
+    dest,
     duration,
-    t: 0,
-    followId: bodyId,
-  };
+    bodyId,
+  );
 }
 
 // Anchor buttons. `data-anchor` distinguishes the two global presets; a
@@ -478,26 +479,40 @@ function frame(): void {
   lastDays = clock.t;
 
   updatePositions(built, clock.t, scale);
-  updateBeltFields(built, clock.t, scale);
+  // The belt population (2,100 Kepler solves + matrix composes) is the
+  // heaviest per-frame CPU cost. When the sim is paused nothing moves, so
+  // skip it entirely — belt matrices were already written on the last tick.
+  if (!clock.isPaused) updateBeltFields(built, clock.t, scale);
   applySpin(built, dtDays);
 
   if (flight) {
-    // Camera flight in progress: drive the camera manually with the eased
-    // path and hold user input until the landing. If the flight targets a
-    // picked body, track its live position so a fast-moving planet isn't
-    // landed behind; global anchors stay locked to the origin.
+    // Camera flight in progress. Drive the camera manually from the eased
+    // (target + offset) path — do NOT call controls.update() here: with
+    // damping on it would re-derive the camera from its internal spherical
+    // state (and any residual drag delta) and fight/corrupt the flight. If
+    // the flight tracks a picked body, substitute its live world position so
+    // a fast-moving planet is landed on, not where it was when we started.
     built.controls.enabled = false;
     const sample = stepFlight(flight, dtReal);
-    built.camera.position.set(sample.pos[0], sample.pos[1], sample.pos[2]);
+    let target = sample.target;
     if (flight.followId) {
       const e = built.bodies.get(flight.followId);
-      if (e) sample.target = [e.worldPos.x, e.worldPos.y, e.worldPos.z];
+      if (e) target = [e.worldPos.x, e.worldPos.y, e.worldPos.z];
     }
-    built.controls.target.set(sample.target[0], sample.target[1], sample.target[2]);
-    built.controls.update();
+    // camera = live target + eased offset (rigidly tracks a moving body).
+    built.controls.target.set(target[0], target[1], target[2]);
+    built.camera.position.set(
+      target[0] + sample.offset[0],
+      target[1] + sample.offset[1],
+      target[2] + sample.offset[2],
+    );
+    built.camera.lookAt(target[0], target[1], target[2]);
     if (sample.done) {
       flight = null;
       built.controls.enabled = true;
+      // Re-sync OrbitControls' internal spherical state to the pose we just
+      // landed on so user drag/wheel/pan resumes smoothly from here.
+      built.controls.update();
       // the user can break free any time via the Free-camera option.
       if (followId) {
         const e = built.bodies.get(followId);
@@ -513,6 +528,18 @@ function frame(): void {
   } else {
     built.controls.update();
   }
+
+  // Shadow culling: the Sun is a point light, so its shadow is a 6-face
+  // cube map (2048² each) re-rendered every frame — the heaviest single GPU
+  // cost. The shadow cube's far plane is 140 units (SUN_SHADOWS.far), so once
+  // the camera is beyond that the planets are far enough apart that their
+  // mutual shadows are sub-pixel / invisible anyway. Disable the whole shadow
+  // pass out there; keep it for close/mid views where eclipses + ring shadows
+  // are actually visible. Only toggle when the state actually changes.
+  const SHADOW_CULL_DIST = 170;
+  const camDist = built.camera.position.length();
+  const shadowsOn = camDist <= SHADOW_CULL_DIST;
+  if (shadowsOn !== built.sunLight.castShadow) built.sunLight.castShadow = shadowsOn;
 
   built.renderer.render(built.scene, built.camera);
   fmtDate();
