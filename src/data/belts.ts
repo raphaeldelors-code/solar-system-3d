@@ -48,26 +48,26 @@ export const BELTS: BeltDefinition[] = [
   {
     id: 'asteroid-belt',
     name: 'Main asteroid belt',
-    count: 1200,
+    count: 1800,
     seed: 0x5eed,
     a: [2.1, 3.3], // between Mars and Jupiter
     e: [0.0, 0.25],
     i: [0, 12],
-    baseSize: 0.04,
+    baseSize: 0.05,
     sizeJitter: 0.5,
-    color: 0x9a8f80,
+    color: 0xcfc2ac,
   },
   {
     id: 'kuiper-belt',
     name: 'Kuiper belt',
-    count: 900,
+    count: 1400,
     seed: 0x1b0b,
     a: [30, 48], // beyond Neptune
     e: [0.0, 0.3],
     i: [0, 8],
-    baseSize: 0.06,
+    baseSize: 0.075,
     sizeJitter: 0.6,
-    color: 0x8f9fb8,
+    color: 0xbcd2ee,
   },
 ];
 

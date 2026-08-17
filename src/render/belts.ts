@@ -37,7 +37,11 @@ export function buildBeltField(def: BeltDefinition): BeltField {
 
   const mat = new THREE.MeshStandardMaterial({
     color: def.color,
-    roughness: 0.95,
+    // A touch of emissive keeps the far side of each rock (and the whole
+    // belt at long camera distances) readable against the dark space, so the
+    // field reads as a belt rather than a scattering of near-black dots.
+    emissive: new THREE.Color(def.color).multiplyScalar(0.12),
+    roughness: 0.85,
     metalness: 0,
   });
   const mesh = new THREE.InstancedMesh(ROCK_GEOMETRY, mat, objects.length);

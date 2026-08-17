@@ -36,11 +36,26 @@ describe('SimClock', () => {
     expect(c.toDate().toISOString()).toBe('2005-06-15T12:00:00.000Z');
   });
 
-  it('log speed maps 10^v days/s', () => {
+  it('log speed maps to a symmetric signed days/s (0 = 1 d/s middle)', () => {
     const c = new SimClock(J2000_UTC);
+    // Positive side.
     c.setLogSpeed(2);
     expect(c.getSpeed()).toBeCloseTo(100, 10);
+    c.setLogSpeed(0.5);
+    expect(c.getSpeed()).toBeCloseTo(Math.sqrt(10), 10);
+    // Middle: 0 = real time, NOT paused / zero.
+    c.setLogSpeed(0);
+    expect(c.getSpeed()).toBeCloseTo(1, 12);
+    // Negative side: same magnitudes, reversed direction.
     c.setLogSpeed(-1);
-    expect(c.getSpeed()).toBeCloseTo(0.1, 10);
+    expect(c.getSpeed()).toBeCloseTo(-10, 10);
+    c.setLogSpeed(-2);
+    expect(c.getSpeed()).toBeCloseTo(-100, 10);
+  });
+  it('negative speed runs the calendar backwards on tick', () => {
+    const c = new SimClock(J2000_UTC);
+    c.setLogSpeed(-1); // -10 day/s
+    c.tick(10); // 10 s => -100 days
+    expect(c.t).toBeCloseTo(-100, 10);
   });
 });

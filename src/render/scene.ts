@@ -88,6 +88,12 @@ export interface SceneBody {
   worldPos: THREE.Vector3;
   /** This body's rendered radius in scene units (for camera framing). */
   sceneRadius: number;
+  /**
+   * Full width (scene units) to frame when the camera flies to this body:
+   * the diameter for a plain body, or the ring's OUTER diameter for a
+   * ringed planet, so a fly-to lands with the whole body + rings in view.
+   */
+  frameExtent: number;
 }
 
 export interface BuiltScene {
@@ -282,11 +288,16 @@ export function buildScene(
     }
 
     const parent = isMoon && def.parent ? (map.get(def.parent) ?? null) : null;
+    // Framing extent: the ringed planet is framed to its OUTER ring so a
+    // fly-to lands with the whole ring system in view; everything else to
+    // its body diameter.
+    const frameExtent = def.rings ? 2 * r * def.rings.outer : 2 * r;
     const entry: SceneBody = {
       def, pivot, mesh, label, orbit, parent,
       spin: 0,
       worldPos: new THREE.Vector3(),
       sceneRadius: r,
+      frameExtent,
     };
     map.set(def.id, entry);
   }

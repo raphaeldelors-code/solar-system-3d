@@ -84,6 +84,7 @@ describe('stepFlight', () => {
     fromTarget: [0, 0, 0], fromOffset: [0, 0, 0],
     toTarget: [5, 0, 0], toOffset: [5, 0, 0],
     duration: 1, t: 0, followId: null,
+    fromFov: 50, toFov: 50,
   });
   it('starts at the from pose and lands exactly on the to pose', () => {
     const f = mk();
@@ -114,6 +115,7 @@ describe('stepFlight', () => {
       [0, 0, 0], [0, 0, 0], // from: cam at origin orbiting origin
       { target: [100, 0, 0], pos: [105, 0, 0] }, // to: orbit [100,0,0] at +5 offset
       1, 'jupiter',
+      50, 50,
     );
     // Mid-flight (t=0.5): offset is halfway between [0,0,0] and [5,0,0] = [2.5,0,0].
     f.t = 0.5;

@@ -102,16 +102,21 @@ function rebuildScene(newScale: VisualScale): BuiltScene {
 
 const FOV_DEG = 50; // matches the PerspectiveCamera in buildScene
 
-/** Farthest heliocentric scene extent in the current scale (outermost aphelion). */
-function systemRadius(): number {
+/**
+ * Farthest heliocentric scene extent in the current scale (outermost
+ * aphelion). With `planetsOnly` the dwarf planets are excluded, so the
+ * System anchor frames the eight main planets (the dwarfs' distant orbits
+ * would just stretch the frame out to nothing useful).
+ */
+function systemRadius(planetsOnly = false): number {
   let maxR = 0;
   for (const entry of built.bodies.values()) {
     const el = entry.def.elements;
     if (!el) continue;
-    // Planets/dwarfs: a is in AU -> map through the scale's distance ramp at
-    // aphelion (a(1+e)). The ramp's linear extension past the last anchor
-    // keeps Eris's far reach inside the frame.
-    if (entry.def.kind === 'planet' || entry.def.kind === 'dwarf') {
+    // a is in AU -> map through the scale's distance ramp at aphelion
+    // (a(1+e)). The ramp's linear extension past the last anchor keeps the
+    // farthest orbit inside the frame.
+    if (entry.def.kind === 'planet' || (!planetsOnly && entry.def.kind === 'dwarf')) {
       const apoAu = el.a * (1 + el.e);
       maxR = Math.max(maxR, scale.planetDistance(apoAu));
     }
@@ -123,7 +128,9 @@ function camAnchorFor(name: 'system' | 'constellations'): CamAnchor {
   if (name === 'constellations') {
     return frameConstellations(CONSTELLATION_RADIUS, systemRadius(), FOV_DEG);
   }
-  return frameSystem(systemRadius(), FOV_DEG);
+  // Main planets only: the dwarfs (Pluto..Makemake) are far out and would
+  // over-zoom the frame; the user wants the main planets captured here.
+  return frameSystem(systemRadius(true), FOV_DEG);
 }
 
 function camAnchorForBody(id: string): CamAnchor | null {
@@ -132,7 +139,7 @@ function camAnchorForBody(id: string): CamAnchor | null {
   return frameBody(
     [built.camera.position.x, built.camera.position.y, built.camera.position.z],
     [entry.worldPos.x, entry.worldPos.y, entry.worldPos.z],
-    entry.sceneRadius,
+    entry.frameExtent,
     FOV_DEG,
   );
 }
@@ -152,12 +159,16 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null): v
   // Build the flight from the live camera pose (pos + orbit target). The
   // offset-lerp form keeps a moving picked body rigidly framed; global
   // anchors have a static origin target so they reduce to an eased move.
+  // The FOV eases to the anchor's requested value (sky anchor widens it)
+  // or back to the default so a wide sky view is never retained.
   flight = makeFlight(
     [built.camera.position.x, built.camera.position.y, built.camera.position.z],
     [built.controls.target.x, built.controls.target.y, built.controls.target.z],
     dest,
     duration,
     bodyId,
+    built.camera.fov,
+    FOV_DEG,
   );
 }
 
@@ -192,8 +203,12 @@ function applyToggles(): void {
 
 function fmtSpeed(): void {
   const s = clock.getSpeed();
-  const text = s >= 10 ? s.toFixed(0) + ' d/s' : s >= 0.01 ? s.toFixed(2) + ' d/s' : s.toFixed(4) + ' d/s';
-  speedValueEl.textContent = text;
+  // Signed: negative speed means the calendar runs backwards — show the
+  // direction explicitly so the user knows time is flowing the other way.
+  const sign = s < 0 ? '−' : '';
+  const a = Math.abs(s);
+  const mag = a >= 100 ? a.toFixed(0) : a >= 1 ? a.toFixed(1) : a.toFixed(2);
+  speedValueEl.textContent = `${sign}${mag} d/s`;
 }
 
 function fmtDate(): void {
@@ -263,12 +278,31 @@ window.addEventListener('resize', () => {
   built.renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Populate the follow dropdown.
-for (const b of ALL_BODIES) {
-  const opt = document.createElement('option');
-  opt.value = b.id;
-  opt.textContent = b.kind === 'moon' ? `  ${b.name} (${b.parent})` : b.name;
-  followEl.appendChild(opt);
+// Populate the follow dropdown, grouping each satellite directly under its
+// planet (indented) instead of dumping all 22 moons at the bottom: ALL_BODIES
+// lists moons last, but the menu reads better as planet → its satellites.
+{
+  const moonsByParent = new Map<string, (typeof ALL_BODIES)[number][]>();
+  for (const b of ALL_BODIES) {
+    if (b.kind === 'moon' && b.parent) {
+      const list = moonsByParent.get(b.parent) ?? [];
+      list.push(b);
+      moonsByParent.set(b.parent, list);
+    }
+  }
+  for (const b of ALL_BODIES) {
+    if (b.kind === 'moon') continue; // emitted under its planet below
+    const opt = document.createElement('option');
+    opt.value = b.id;
+    opt.textContent = b.name;
+    followEl.appendChild(opt);
+    for (const m of moonsByParent.get(b.id) ?? []) {
+      const mo = document.createElement('option');
+      mo.value = m.id;
+      mo.textContent = `    · ${m.name}`;
+      followEl.appendChild(mo);
+    }
+  }
 }
 
 // --- Shareable URL state ----------------------------------------------------
@@ -506,6 +540,12 @@ function frame(): void {
       target[1] + sample.offset[1],
       target[2] + sample.offset[2],
     );
+    // Ease the FOV too (sky anchor widens it; others ease back to 50°).
+    // Only touch the projection matrix while it is actually changing.
+    if (Math.abs(built.camera.fov - sample.fov) > 1e-3) {
+      built.camera.fov = sample.fov;
+      built.camera.updateProjectionMatrix();
+    }
     built.camera.lookAt(target[0], target[1], target[2]);
     if (sample.done) {
       flight = null;

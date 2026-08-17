@@ -16,7 +16,9 @@
  * (target + camera) frame translates with the body every frame, so the body
  * is exactly framed at landing no matter how far it has orbited since the
  * flight began. Global anchors have a static target (the origin), so they
- * reduce to an ordinary eased move.
+ * reduce to an ordinary eased move. The FOV is eased too: an anchor may
+ * request a different field of view (the sky anchor widens it to reveal
+ * more constellations; other anchors return to the default 50°).
  */
 
 export type Vec3 = readonly [number, number, number];
@@ -26,6 +28,13 @@ export interface CamAnchor {
   pos: Vec3;
   /** World-space point the camera should orbit / look at. */
   target: Vec3;
+  /**
+   * Optional camera FOV (degrees) to ease to on landing. Set by anchors that
+   * need a different field of view than the default (the constellations
+   * anchor widens it so more of the sky is visible at once). Omit to keep
+   * the current FOV.
+   */
+  fov?: number;
 }
 
 export interface Flight {
@@ -49,6 +58,10 @@ export interface Flight {
    * `null` for the global anchors (Sun / constellations).
    */
   followId: string | null;
+  /** FOV (degrees) the camera eases to over the flight. */
+  toFov: number;
+  /** FOV (degrees) at flight start. */
+  fromFov: number;
 }
 
 export interface FlightSample {
@@ -58,6 +71,8 @@ export interface FlightSample {
   offset: Vec3;
   /** target + offset (the camera position to set). */
   pos: Vec3;
+  /** Eased FOV (degrees) for this frame. */
+  fov: number;
   done: boolean;
 }
 
@@ -87,17 +102,23 @@ function add(a: Vec3, b: Vec3): Vec3 {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 }
 
+/** Fraction of the view height a picked body should fill at landing —
+ *  "almost full screen," with a touch of headroom so it isn't edge-to-edge. */
+const BODY_FILL = 0.9;
+
 /**
- * Frame a single body of world position `center` and world radius `r` from
- * the current camera position: the destination keeps the current view
- * bearing (so it flies/rotates in from where you already are, rather than
- * snapping to an arbitrary angle) and pulls back until the body fills a
- * comfortable fraction of the view height.
+ * Frame a single body of world position `center` from the current camera
+ * position. `extent` is the body's full width in scene units (diameter for a
+ * plain body, or the ring's outer diameter for a ringed planet, so the whole
+ * body + rings land in frame). The destination keeps the current view bearing
+ * (so it flies/rotates in from where you already are, rather than snapping to
+ * an arbitrary angle) and pulls in until the body fills most of the view —
+ * the "almost full screen" the user asked for on pick.
  */
 export function frameBody(
   currentPos: Vec3,
   center: Vec3,
-  r: number,
+  extent: number,
   fovDeg: number,
 ): CamAnchor {
   // Keep the camera on the SAME side it already is: the bearing runs from
@@ -106,11 +127,13 @@ export function frameBody(
   // far side of the body.
   const dir = dirTo(center, currentPos);
   const vHalf = (fovDeg * Math.PI) / 360; // half vertical fov
-  // Body diameter (2r) fills ~15% of the view height at `dist`:
-  //   2r = tan(vHalf) * dist * 0.15  =>  dist = 2r / (0.15 * tan(vHalf))
-  let dist = (2 * r) / (0.15 * Math.tan(vHalf)) + r;
-  // Floor so a tiny moon isn't absurdly close; never closer than 2 units.
-  dist = Math.max(dist, r * 12, 2);
+  // A body of width `extent` at distance `dist` fills
+  //   extent / (2 * tan(vHalf) * dist)
+  // of the view height. Set that to BODY_FILL and solve for `dist`. For a
+  // ringed planet `extent` is the outer-ring diameter, which keeps the
+  // camera safely outside the rings. Tiny absolute floor so we never skim a
+  // sub-unit body's surface.
+  const dist = Math.max(extent / (2 * BODY_FILL * Math.tan(vHalf)), 0.35);
   return {
     pos: [center[0] + dir[0] * dist, center[1] + dir[1] * dist, center[2] + dir[2] * dist],
     target: center,
@@ -124,8 +147,11 @@ export function frameBody(
  */
 export function frameSystem(radius: number, fovDeg: number): CamAnchor {
   const vHalf = (fovDeg * Math.PI) / 360;
-  // radius fits in 85% of the view height:  radius = tan(vHalf)*dist*0.85
-  const dist = radius / (0.85 * Math.tan(vHalf)) + radius;
+  // The region within `radius` of the origin fits in 85% of the view height:
+  //   radius = tan(vHalf) * dist * 0.85   =>   dist = radius / (0.85 tan)
+  // The caller chooses what to include in `radius` (the main planets'
+  // aphelia, or the full reach including dwarf planets).
+  const dist = radius / (0.85 * Math.tan(vHalf));
   const elev = 0.42; // height = 0.42 * dist  (~25° above the ecliptic)
   return {
     pos: [0, dist * elev, dist * Math.sqrt(1 - elev * elev)],
@@ -154,6 +180,11 @@ export function frameConstellations(
   return {
     pos: [0, dist * elev, dist * Math.sqrt(1 - elev * elev)],
     target: [0, 0, 0],
+    // The constellations wrap the WHOLE celestial sphere, so a fixed 50° FOV
+    // can only ever show a 50° cap of the sky no matter how far the camera
+    // backs off. Widening the FOV is what actually reveals more constellations
+    // at once — the "unzoom a bit more" the user asked for.
+    fov: 78,
   };
 }
 
@@ -177,16 +208,24 @@ export function stepFlight(flight: Flight, dtSeconds: number): FlightSample {
     lp(flight.fromOffset[1], flight.toOffset[1]),
     lp(flight.fromOffset[2], flight.toOffset[2]),
   ];
-  return { target, offset, pos: add(target, offset), done: flight.t >= flight.duration };
+  const fov = flight.fromFov + (flight.toFov - flight.fromFov) * k;
+  return { target, offset, pos: add(target, offset), fov, done: flight.t >= flight.duration };
 }
 
-/** Convenience: build a Flight from a `from`/`to` CamAnchor pair. */
+/**
+ * Build a Flight from the live camera pose to a `to` anchor. The flight
+ * eases the FOV to `to.fov` when the anchor requests one (sky anchor),
+ * otherwise it eases back to `defaultFov` so a wide sky view is never
+ * silently retained by later flights.
+ */
 export function makeFlight(
   fromPos: Vec3,
   fromTarget: Vec3,
   to: CamAnchor,
   duration: number,
   followId: string | null,
+  fromFov: number,
+  defaultFov: number,
 ): Flight {
   return {
     fromTarget: fromTarget,
@@ -196,5 +235,7 @@ export function makeFlight(
     duration,
     t: 0,
     followId,
+    toFov: to.fov ?? defaultFov,
+    fromFov,
   };
 }
