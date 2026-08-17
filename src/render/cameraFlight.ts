@@ -145,13 +145,13 @@ export function frameBody(
  * (radius `radius`, e.g. the outermost aphelion) fits with headroom, from a
  * pleasant ~25° elevation.
  */
-export function frameSystem(radius: number, fovDeg: number): CamAnchor {
+export function frameSystem(radius: number, fovDeg: number, fill = 0.85): CamAnchor {
   const vHalf = (fovDeg * Math.PI) / 360;
-  // The region within `radius` of the origin fits in 85% of the view height:
-  //   radius = tan(vHalf) * dist * 0.85   =>   dist = radius / (0.85 tan)
-  // The caller chooses what to include in `radius` (the main planets'
-  // aphelia, or the full reach including dwarf planets).
-  const dist = radius / (0.85 * Math.tan(vHalf));
+  // The region within `radius` of the origin fills `fill` of the view height:
+  //   radius = tan(vHalf) * dist * fill   =>   dist = radius / (fill * tan)
+  // The caller chooses `radius` (main-planet aphelia, or full dwarf-planet
+  // reach) and `fill` (higher = a tighter / closer frame on that region).
+  const dist = radius / (fill * Math.tan(vHalf));
   const elev = 0.42; // height = 0.42 * dist  (~25° above the ecliptic)
   return {
     pos: [0, dist * elev, dist * Math.sqrt(1 - elev * elev)],
@@ -180,11 +180,12 @@ export function frameConstellations(
   return {
     pos: [0, dist * elev, dist * Math.sqrt(1 - elev * elev)],
     target: [0, 0, 0],
-    // The constellations wrap the WHOLE celestial sphere, so a fixed 50° FOV
-    // can only ever show a 50° cap of the sky no matter how far the camera
-    // backs off. Widening the FOV is what actually reveals more constellations
-    // at once — the "unzoom a bit more" the user asked for.
-    fov: 78,
+    // The constellations wrap the whole celestial sphere, so a fixed 50° FOV
+    // shows only a 50° cap of sky — they read as a tiny sliver. Widening the
+    // FOV is what makes each constellation large enough to actually read as
+    // its star pattern (the "unzoom a bit more" the user asked for). A full
+    // panoramic tour (see `main.ts`) sweeps the rest of the sky.
+    fov: 120,
   };
 }
 

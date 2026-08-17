@@ -29,6 +29,59 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   });
 }
 
+// Sky tour: after the Sky anchor's flight lands, no single static view can
+// show all 13 constellations — they cover the whole celestial sphere (decl
+// −43°…+89°, RA 0h…21h), and the tightest bounding cone has a ~106° half-angle
+// (a ~212° FOV would be needed to fit them in one frame, which is impossible).
+// So the camera pans around the origin in a gentle panorama, sweeping every
+// constellation into view in turn; any user input stops it. `skyTour` holds
+// the camera's spherical pose around the origin.
+const SKY_TOUR_YAW = 0.15; // rad/s of azimuth — a full lap in ~42 s
+let skyTour: { theta: number; phi: number; radius: number } | null = null;
+// Armed by `flyTo` when the destination is the Sky anchor; the render loop
+// starts the tour from the landed pose once the flight finishes.
+let pendingSkyTour = false;
+
+function stopSkyTour(): void {
+  if (!skyTour) return;
+  skyTour = null;
+  built.controls.enabled = true;
+  built.controls.update();
+}
+
+// Begin the panorama from wherever the sky flight just landed, so there is
+// no visible jump: seed the spherical pose from the live camera position.
+function startSkyTour(): void {
+  const p = built.camera.position;
+  const radius = p.length();
+  if (radius < 1e-6) return;
+  const phi = Math.acos(Math.min(1, Math.max(-1, p.y / radius)));
+  const theta = Math.atan2(p.x, p.z);
+  skyTour = { theta, phi, radius };
+  built.controls.enabled = false;
+}
+
+// One frame of the panorama: advance the azimuth, keep elevation + distance,
+// and look back at the origin so the solar system stays centred.
+function advanceSkyTour(dtSeconds: number): void {
+  if (!skyTour) return;
+  skyTour.theta += SKY_TOUR_YAW * dtSeconds;
+  const { theta, phi, radius } = skyTour;
+  const sinPhi = Math.sin(phi);
+  built.camera.position.set(
+    radius * sinPhi * Math.sin(theta),
+    radius * Math.cos(phi),
+    radius * sinPhi * Math.cos(theta),
+  );
+  built.camera.lookAt(0, 0, 0);
+}
+
+// Any manual camera input ends the tour (drag to orbit, wheel, pan, or the
+// user picking a body / another anchor).
+for (const ev of ['pointerdown', 'wheel', 'keydown', 'touchstart']) {
+  window.addEventListener(ev, stopSkyTour, { passive: true });
+}
+
 const canvas = document.getElementById('app') as HTMLCanvasElement;
 const dateEl = document.getElementById('date') as HTMLSpanElement;
 const speedEl = document.getElementById('speed') as HTMLInputElement;
@@ -130,7 +183,9 @@ function camAnchorFor(name: 'system' | 'constellations'): CamAnchor {
   }
   // Main planets only: the dwarfs (Pluto..Makemake) are far out and would
   // over-zoom the frame; the user wants the main planets captured here.
-  return frameSystem(systemRadius(true), FOV_DEG);
+  // fill 0.95 (vs 0.85) pulls the camera in so the planets' orbits fill the
+  // view rather than leaving a wide empty margin.
+  return frameSystem(systemRadius(true), FOV_DEG, 0.95);
 }
 
 function camAnchorForBody(id: string): CamAnchor | null {
@@ -150,11 +205,14 @@ function camAnchorForBody(id: string): CamAnchor | null {
  * follows its live position each frame so a fast-moving planet isn't landed
  * behind; leave `null` for the global Sun / constellations anchors.
  */
-function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null): void {
+function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sky = false): void {
   // Picking a body arms the follow so after landing the camera keeps it
   // centered (the existing follow behavior). Global anchors clear it.
   followId = bodyId ?? '';
   followEl.value = followId;
+  // A Sky landing kicks off the panoramic tour; any other flight cancels it.
+  stopSkyTour();
+  pendingSkyTour = sky;
   updateInfo();
   // Build the flight from the live camera pose (pos + orbit target). The
   // offset-lerp form keeps a moving picked body rigidly framed; global
@@ -182,7 +240,7 @@ function wireAnchorButtons(): void {
     if (!btn) return;
     const fly = btn.dataset.fly!;
     if (fly === 'system') flyTo(camAnchorFor('system'), 1.6);
-    else if (fly === 'constellations') flyTo(camAnchorFor('constellations'), 1.8);
+    else if (fly === 'constellations') flyTo(camAnchorFor('constellations'), 1.8, null, true);
     else {
       const dest = camAnchorForBody(fly);
       if (dest) flyTo(dest, 1.4, fly);
@@ -257,7 +315,16 @@ nowBtn.addEventListener('click', () => {
 });
 
 followEl.addEventListener('change', () => {
-  followId = followEl.value;
+  const id = followEl.value;
+  if (id) {
+    // Picking a body in the list flies the camera to it with the same eased
+    // travel (accelerate → cruise → decelerate + FOV ease) as a click-pick
+    // and the Sky/System anchors, then follows it. No instant jump.
+    const dest = camAnchorForBody(id);
+    if (dest) { flyTo(dest, 1.4, id); return; }
+  }
+  // "Free camera" (or a body with no frame): just drop the follow.
+  followId = '';
   updateInfo();
   syncUrl();
 });
@@ -549,17 +616,29 @@ function frame(): void {
     built.camera.lookAt(target[0], target[1], target[2]);
     if (sample.done) {
       flight = null;
-      built.controls.enabled = true;
-      // Re-sync OrbitControls' internal spherical state to the pose we just
-      // landed on so user drag/wheel/pan resumes smoothly from here.
-      built.controls.update();
-      // the user can break free any time via the Free-camera option.
-      if (followId) {
-        const e = built.bodies.get(followId);
-        if (e) built.controls.target.copy(e.worldPos);
+      if (pendingSkyTour) {
+        // Sky anchor landed: start the panoramic sweep from this pose. The
+        // tour drives the camera directly (controls stay disabled) and runs
+        // until the user grabs it (pointerdown/wheel/keydown, see above).
+        pendingSkyTour = false;
+        startSkyTour();
+      } else {
+        built.controls.enabled = true;
+        // Re-sync OrbitControls' internal spherical state to the pose we just
+        // landed on so user drag/wheel/pan resumes smoothly from here.
+        built.controls.update();
+        // the user can break free any time via the Free-camera option.
+        if (followId) {
+          const e = built.bodies.get(followId);
+          if (e) built.controls.target.copy(e.worldPos);
+        }
       }
       syncUrl();
     }
+  } else if (skyTour) {
+    // Panoramic sky sweep (post-Sky-anchor): pan around the origin so the
+    // full sky of constellations comes into view in turn.
+    advanceSkyTour(dtReal);
   } else if (followId) {
     // Free follow: keep the followed body centered at the orbit pivot.
     const entry = built.bodies.get(followId);
