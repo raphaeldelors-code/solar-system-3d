@@ -86,6 +86,8 @@ export interface SceneBody {
   spin: number;
   /** Current world position (scene units). */
   worldPos: THREE.Vector3;
+  /** This body's rendered radius in scene units (for camera framing). */
+  sceneRadius: number;
 }
 
 export interface BuiltScene {
@@ -284,6 +286,7 @@ export function buildScene(
       def, pivot, mesh, label, orbit, parent,
       spin: 0,
       worldPos: new THREE.Vector3(),
+      sceneRadius: r,
     };
     map.set(def.id, entry);
   }

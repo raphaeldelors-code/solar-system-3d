@@ -41,6 +41,8 @@
       }
       #panel input[type=range] { flex: 1; accent-color: #6ea8ff; }
       #panel .value { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+      #panel .anchor-row { flex-wrap: wrap; }
+      #panel .anchor-row button { flex: 1 1 auto; white-space: nowrap; }
       #panel .hint { opacity: 0.55; font-size: 11px; margin-top: 8px; }
       #date { font-variant-numeric: tabular-nums; color: #9fd6a8; }
       #panel .info { margin-top: 10px; padding-top: 8px;
@@ -90,6 +92,10 @@
         <button id="pause">Pause</button>
         <button id="now">Now</button>
       </div>
+      <div class="row anchor-row" id="anchors">
+        <button data-fly="constellations" title="Zoom out until only the constellations fill the view">🌌 Sky</button>
+        <button data-fly="system" title="Fit the whole solar system in frame">🪐 System</button>
+      </div>
       <div class="row">
         <label>Follow</label>
         <select id="follow"><option value="">Free camera</option></select>
@@ -114,7 +120,7 @@
         <div class="info-row"><span>Distance</span><span id="info-distance" class="value">—</span></div>
         <div class="info-row"><span>Peri / Apo</span><span id="info-range" class="value">—</span></div>
       </div>
-      <div class="hint" id="hint">Drag: rotate · Wheel: zoom · Right-drag: pan</div>
+      <div class="hint" id="hint">Drag: rotate · Wheel: zoom · Right-drag: pan · Click a body to fly to it</div>
       </div>
     </div>
     <script>

@@ -8,9 +8,13 @@ import { SimClock } from './sim/clock';
 import { ALL_BODIES } from './data/bodies';
 import {
   buildScene, updatePositions, applySpin, updateBeltFields,
-  VISIBLE_SCALE, TRUE_SCALE,
+  VISIBLE_SCALE, TRUE_SCALE, CONSTELLATION_RADIUS,
   type BuiltScene, type VisualScale,
 } from './render/scene';
+import {
+  frameBody, frameSystem, frameConstellations, stepFlight,
+  type CamAnchor, type Flight,
+} from './render/cameraFlight';
 import { attachRealTextures } from './render/realTextures';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
@@ -55,6 +59,10 @@ let scale: VisualScale = VISIBLE_SCALE;
 let followId = '';
 let lastDays = clock.t;
 let lastMs = performance.now();
+// Active camera flight (anchor / picked-body). `null` when no flight is in
+// progress; the render loop advances it and hands control back to the free
+// OrbitControls when it lands.
+let flight: Flight | null = null;
 
 function rebuildScene(newScale: VisualScale): BuiltScene {
   if (built) built.dispose();
@@ -84,6 +92,91 @@ function rebuildScene(newScale: VisualScale): BuiltScene {
     }
   }
   return built;
+}
+
+// --- Camera anchors & flight ----------------------------------------------
+// Three "Visible" mode anchors + a smooth eased fly-to between them. The
+// framing math lives in render/cameraFlight.ts (pure & unit-tested); here we
+// just read the live camera pose, compute a destination, and hand the flight
+// to the render loop.
+
+const FOV_DEG = 50; // matches the PerspectiveCamera in buildScene
+
+/** Farthest heliocentric scene extent in the current scale (outermost aphelion). */
+function systemRadius(): number {
+  let maxR = 0;
+  for (const entry of built.bodies.values()) {
+    const el = entry.def.elements;
+    if (!el) continue;
+    // Planets/dwarfs: a is in AU -> map through the scale's distance ramp at
+    // aphelion (a(1+e)). The ramp's linear extension past the last anchor
+    // keeps Eris's far reach inside the frame.
+    if (entry.def.kind === 'planet' || entry.def.kind === 'dwarf') {
+      const apoAu = el.a * (1 + el.e);
+      maxR = Math.max(maxR, scale.planetDistance(apoAu));
+    }
+  }
+  return Math.max(maxR, 1);
+}
+
+function camAnchorFor(name: 'system' | 'constellations'): CamAnchor {
+  if (name === 'constellations') {
+    return frameConstellations(CONSTELLATION_RADIUS, systemRadius(), FOV_DEG);
+  }
+  return frameSystem(systemRadius(), FOV_DEG);
+}
+
+function camAnchorForBody(id: string): CamAnchor | null {
+  const entry = built.bodies.get(id);
+  if (!entry) return null;
+  return frameBody(
+    [built.camera.position.x, built.camera.position.y, built.camera.position.z],
+    [entry.worldPos.x, entry.worldPos.y, entry.worldPos.z],
+    entry.sceneRadius,
+    FOV_DEG,
+  );
+}
+
+/**
+ * Start an eased flight from the current camera pose to `dest`.
+ * `bodyId` (optional) is the picked body being tracked — the orbit-target
+ * follows its live position each frame so a fast-moving planet isn't landed
+ * behind; leave `null` for the global Sun / constellations anchors.
+ */
+function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null): void {
+  // Picking a body arms the follow so after landing the camera keeps it
+  // centered (the existing follow behavior). Global anchors clear it.
+  followId = bodyId ?? '';
+  followEl.value = followId;
+  updateInfo();
+  flight = {
+    fromPos: [built.camera.position.x, built.camera.position.y, built.camera.position.z],
+    fromTarget: [built.controls.target.x, built.controls.target.y, built.controls.target.z],
+    toPos: dest.pos,
+    toTarget: dest.target,
+    duration,
+    t: 0,
+    followId: bodyId,
+  };
+}
+
+// Anchor buttons. `data-anchor` distinguishes the two global presets; a
+// per-body button (or a pick) flies to that body instead.
+function wireAnchorButtons(): void {
+  const bar = document.getElementById('anchors');
+  if (!bar) return;
+  bar.addEventListener('click', (ev) => {
+    const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-fly]');
+    if (!btn) return;
+    const fly = btn.dataset.fly!;
+    if (fly === 'system') flyTo(camAnchorFor('system'), 1.6);
+    else if (fly === 'constellations') flyTo(camAnchorFor('constellations'), 1.8);
+    else {
+      const dest = camAnchorForBody(fly);
+      if (dest) flyTo(dest, 1.4, fly);
+    }
+    syncUrl();
+  });
 }
 
 function applyToggles(): void {
@@ -267,6 +360,7 @@ screenshotBtn.addEventListener('click', async () => {
 // --- Init ------------------------------------------------------------------
 
 rebuildScene(scale);
+wireAnchorButtons();
 // Apply the shared camera last (rebuildScene may have re-framed the follow target).
 if (urlState.cam) {
   built.camera.position.set(...urlState.cam.pos);
@@ -346,6 +440,30 @@ canvas.addEventListener('pointerleave', () => { pointerOnCanvas = false; hideToo
 canvas.addEventListener('pointerdown', () => { picking = true; hideTooltip(); });
 window.addEventListener('pointerup', () => { picking = false; });
 
+// --- Click-to-pick: fly to a clicked body ---------------------------------
+// A genuine click (press + release with no meaningful drag) on a body starts
+// an eased flight to it and arms the follow so it stays centered on landing.
+// Dragging to orbit / panning never triggers it (distance threshold).
+let pressX = 0, pressY = 0;
+canvas.addEventListener('pointerdown', (ev) => {
+  pressX = ev.clientX; pressY = ev.clientY;
+});
+canvas.addEventListener('pointerup', (ev) => {
+  if (Math.hypot(ev.clientX - pressX, ev.clientY - pressY) > 6) return; // drag, not a click
+  const rect = canvas.getBoundingClientRect();
+  pointerNdc.set(
+    ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+    -((ev.clientY - rect.top) / rect.height) * 2 + 1,
+  );
+  raycaster.setFromCamera(pointerNdc, built.camera);
+  const hits = raycaster.intersectObjects(bodyMeshes(), false);
+  if (hits.length > 0) {
+    const id = hits[0].object.userData.id as string | undefined;
+    const dest = id ? camAnchorForBody(id) : null;
+    if (dest) flyTo(dest, 1.4, id);
+  }
+});
+
 // --- Animation loop ---------------------------------------------------------
 
 function frame(): void {
@@ -363,15 +481,39 @@ function frame(): void {
   updateBeltFields(built, clock.t, scale);
   applySpin(built, dtDays);
 
-  // Follow camera.
-  if (followId) {
-    const entry = built.bodies.get(followId);
-    if (entry) {
-      built.controls.target.lerp(entry.worldPos, 0.2);
+  if (flight) {
+    // Camera flight in progress: drive the camera manually with the eased
+    // path and hold user input until the landing. If the flight targets a
+    // picked body, track its live position so a fast-moving planet isn't
+    // landed behind; global anchors stay locked to the origin.
+    built.controls.enabled = false;
+    const sample = stepFlight(flight, dtReal);
+    built.camera.position.set(sample.pos[0], sample.pos[1], sample.pos[2]);
+    if (flight.followId) {
+      const e = built.bodies.get(flight.followId);
+      if (e) sample.target = [e.worldPos.x, e.worldPos.y, e.worldPos.z];
     }
+    built.controls.target.set(sample.target[0], sample.target[1], sample.target[2]);
+    built.controls.update();
+    if (sample.done) {
+      flight = null;
+      built.controls.enabled = true;
+      // the user can break free any time via the Free-camera option.
+      if (followId) {
+        const e = built.bodies.get(followId);
+        if (e) built.controls.target.copy(e.worldPos);
+      }
+      syncUrl();
+    }
+  } else if (followId) {
+    // Free follow: keep the followed body centered at the orbit pivot.
+    const entry = built.bodies.get(followId);
+    if (entry) built.controls.target.lerp(entry.worldPos, 0.2);
+    built.controls.update();
+  } else {
+    built.controls.update();
   }
 
-  built.controls.update();
   built.renderer.render(built.scene, built.camera);
   fmtDate();
   updateInfo();
