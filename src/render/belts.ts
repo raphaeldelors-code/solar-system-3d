@@ -11,7 +11,8 @@
 import * as THREE from 'three';
 import type { BeltDefinition, BeltObject } from '../data/belts';
 import { sampleBelt } from '../data/belts';
-import { positionAt } from '../sim/kepler';
+import { positionAtInto } from '../sim/kepler';
+import type { Vec3 } from '../sim/kepler';
 import type { VisualScale } from './scene';
 
 export interface BeltField {
@@ -26,6 +27,14 @@ export interface BeltField {
 
 /** Shared low-poly shape for all belt rocks (unit radius). */
 const ROCK_GEOMETRY = new THREE.IcosahedronGeometry(1, 0);
+
+// Module-level scratch for the render loop (single-threaded, never nested).
+const BELT_MATRIX = new THREE.Matrix4();
+const BELT_POS = new THREE.Vector3();
+const BELT_QUAT = new THREE.Quaternion();
+const BELT_SCL = new THREE.Vector3();
+const BELT_EULER = new THREE.Euler();
+const BELT_AU: Vec3 = { x: 0, y: 0, z: 0 };
 
 /**
  * Build the instanced field for one belt. Instance matrices are set on the
@@ -67,18 +76,21 @@ export function buildBeltField(def: BeltDefinition): BeltField {
  * Advance all instances of one belt to simulation time `tDays`.
  * Mirrors the planet path in scene.updatePositions: positionAt (AU) ->
  * ecliptic->scene mapping -> radial scale compression.
+ *
+ * Allocation-free: reuses module-level scratch (single-threaded loop).
  */
 export function updateBeltField(field: BeltField, tDays: number, scale: VisualScale): void {
-  const { objects, mesh, def } = field;
-  const m = new THREE.Matrix4();
-  const pos = new THREE.Vector3();
-  const quat = new THREE.Quaternion();
-  const scl = new THREE.Vector3();
-  const euler = new THREE.Euler();
+  const { objects, mesh } = field;
+  const m = BELT_MATRIX;
+  const pos = BELT_POS;
+  const quat = BELT_QUAT;
+  const scl = BELT_SCL;
+  const euler = BELT_EULER;
+  const p = BELT_AU;
 
   for (let i = 0; i < objects.length; i++) {
     const o = objects[i];
-    const p = positionAt(o.elements, tDays); // AU, ecliptic frame
+    positionAtInto(o.elements, tDays, p); // AU, ecliptic frame
     // ecliptic x -> -x, y -> -z, z (north) -> +y (same map as scene.ts)
     pos.set(-p.x, p.z, -p.y);
     const d = Math.hypot(p.x, p.y, p.z);
@@ -92,5 +104,4 @@ export function updateBeltField(field: BeltField, tDays: number, scale: VisualSc
     mesh.setMatrixAt(i, m);
   }
   mesh.instanceMatrix.needsUpdate = true;
-  void def;
 }

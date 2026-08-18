@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { BodyDefinition, OrbitalElements } from '../sim/types';
-import { positionAt, sampleOrbit } from '../sim/kepler';
+import { positionAtInto, sampleOrbit } from '../sim/kepler';
 import { makeSurfaceTexture, makeLabelTexture } from './textures';
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
@@ -115,11 +115,22 @@ export interface BuiltScene {
   starMat: THREE.PointsMaterial;
   /** Constellation figure lines + named-star markers (decorative sky). */
   constellations: THREE.Group;
+  /** Per-frame scratch state (sorted body order for updatePositions). */
+  userData: { updateOrder?: SceneBody[] };
   dispose: () => void;
 }
 
 function eclipticToScene(v: { x: number; y: number; z: number }): THREE.Vector3 {
   return new THREE.Vector3(-v.x, v.z, -v.y);
+}
+
+/**
+ * Allocation-free ecliptic->scene map: writes into the caller-owned vector.
+ * (ecliptic x -> -x, ecliptic y -> -z, ecliptic north z -> +y)
+ */
+function eclipticToSceneInto(v: { x: number; y: number; z: number }, out: THREE.Vector3): THREE.Vector3 {
+  out.set(-v.x, v.z, -v.y);
+  return out;
 }
 
 function makeOrbitLine(
@@ -352,7 +363,7 @@ export function buildScene(
     renderer.dispose();
   }
 
-  return { renderer, camera, controls, scene, bodies: map, belts, sunLight, starMat, constellations, dispose };
+  return { renderer, camera, controls, scene, bodies: map, belts, sunLight, starMat, constellations, userData: {}, dispose };
 }
 
 /** Constellation sky radius: just inside the procedural starfield shell. */
@@ -411,36 +422,45 @@ export function buildConstellations(): THREE.Group {
 /**
  * Advance all body positions to simulation time `tDays`.
  * Called once per frame from the animation loop.
+ *
+ * Allocation-free hot path: a single sorted entry list is cached per
+ * `BuiltScene`, and one shared scratch vector replaces the per-body
+ * `new THREE.Vector3` churn (~36/frame + belt instances).
  */
 export function updatePositions(
   built: BuiltScene,
   tDays: number,
   scale: VisualScale,
 ): void {
-  const { bodies } = built;
+  let order = built.userData.updateOrder as SceneBody[] | undefined;
+  if (!order) {
+    // Planets + Sun first (moons depend on parent world positions).
+    order = [...built.bodies.values()].sort((a, b) => {
+      const da = a.parent ? 1 : 0, db = b.parent ? 1 : 0;
+      return da - db;
+    });
+    built.userData.updateOrder = order;
+  }
 
-  // Planets + Sun first (moons depend on parent world positions).
-  const entries = [...bodies.values()].sort((a, b) => {
-    const da = a.parent ? 1 : 0, db = b.parent ? 1 : 0;
-    return da - db;
-  });
+  const scratch = UPDATE_POS_SCRATCH;
+  const auScratch = UPDATE_AU_SCRATCH;
 
-  for (const entry of entries) {
+  for (const entry of order) {
     const { def, pivot } = entry;
 
     if (def.kind === 'star') {
       pivot.position.set(0, 0, 0);
       entry.worldPos.set(0, 0, 0);
     } else if ((def.kind === 'planet' || def.kind === 'dwarf') && def.elements) {
-      const p = positionAt(def.elements, tDays); // AU, ecliptic frame
-      const s = eclipticToScene(p);
+      const p = positionAtInto(def.elements, tDays, auScratch); // AU, ecliptic frame
+      const s = eclipticToSceneInto(p, scratch);
       const d = Math.hypot(p.x, p.y, p.z);
       const factor = scale.planetDistance(d) / Math.max(1e-9, d);
       pivot.position.copy(s.multiplyScalar(factor));
       entry.worldPos.copy(pivot.position);
     } else if (def.kind === 'moon' && def.elements) {
-      const p = positionAt(def.elements, tDays); // km, parent-equatorial frame
-      const s = eclipticToScene(p);
+      const p = positionAtInto(def.elements, tDays, auScratch); // km, parent-equatorial frame
+      const s = eclipticToSceneInto(p, scratch);
       const d = Math.hypot(p.x, p.y, p.z);
       const factor = scale.moonDistance(d, def.id) / Math.max(1e-9, d);
       const local = s.multiplyScalar(factor);
@@ -462,6 +482,10 @@ export function updatePositions(
     }
   }
 }
+
+// Module-level scratch for the render loop (single-threaded, never nested).
+const UPDATE_POS_SCRATCH = new THREE.Vector3();
+const UPDATE_AU_SCRATCH: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
 
 /** Advance every belt field to simulation time `tDays` (per frame). */
 export function updateBeltFields(

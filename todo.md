@@ -1,26 +1,21 @@
 # TODO — solar-system-3d
 
-## Phase 1 — Core (see `plans/001-core-solar-system.md`)
-- [x] Repo scaffold: Vite + TypeScript (strict) + Vitest
-- [x] Kepler orbital mechanics (J2000 elements, Newton solver) — `src/sim/kepler.ts`
-- [x] Simulation clock (speed, pause, "jump to now") — `src/sim/clock.ts`
-- [x] Data: Sun + 8 planets + 22 moons, one extensible table — `src/data/bodies.ts`
-- [x] Renderer: procedural textures, starfield, sun glow, Saturn/Uranus rings — `src/render/`
-- [x] UI: time controls, camera follow, orbit/label toggles, scale presets — `src/main.ts`
-- [x] Tests: Kepler solver, clock, data validation (element sanity, periods, orbits finite) — `tests/`
-- [x] README: run / test / extend guide
+## Phase 1–3 (done — see `plans/001-core-solar-system.md`)
+Core, realism, polish all shipped (PWA, URL state, shadows, belts, real-texture
+loader, constellation tour, tooltips, screenshot button).
 
-## Phase 2 — Realism
-- [x] Optional real textures: drop NASA (public domain) images in `public/textures/<id>.jpg`, auto-loaded over procedural — `src/render/realTextures.ts` (HEAD-probe + cache, fire-and-forget attach)
-- [x] Orbit period / current distance readout in info panel — `src/sim/orbitInfo.ts` (pure), shown for the Follow target
-- [x] More moons: +13 (Charon, Amalthea, Janus, Mimas, Tethys, Dione, Rhea, Iapetus, Phoebe, Proteus, Ariel, Umbriel, Oberon, Titania, Miranda, Nereid) — 22 total
-- [x] Dwarf planets: Pluto, Ceres, Eris, Haumea, Makemake — `kind: 'dwarf'`, heliocentric orbits
-- [x] Asteroid belt + Kuiper belt (instanced meshes, seeded positions) — `src/data/belts.ts` + `src/render/belts.ts`, "Belts" toggle
-- [x] Real point-light shadows (eclipses: Moon on Earth, Io on Jupiter) — `src/render/shadows.ts`, PCFSoft shadow cube from the sun
-- [x] Saturn ring shadow on planet / planet shadow in rings — ring annulus casts+receives (RingGeometry is a true hole, no alpha-disc artifact)
+## Phase 4 — Review fixes + features (see `plans/002-review-fixes-and-features.md`)
+- [x] Plan 002 written
+- [x] A1 fix(render): kill per-frame Vector3 alloc in updatePositions
+- [ ] A2 fix(sim): JPL secular rates + long-range accuracy tests (Mars opp. 2027-02-19, Mercury transit 2032-11-13, eclipse 2026-08-12)
+- [ ] A3 fix(web): og: meta + og-image + webglcontextlost handler
+- [ ] A4 fix(tools): ESLint + Prettier + CI lint step
+- [ ] B1 feat(sim): celestial event engine (eclipses, transits, conjunctions, oppositions, Saturn edge-on) + Events UI
+- [ ] B2 feat(nav): body search combobox + clean grouped satellite menu
+- [ ] B3 feat(render): true-scale tour (3 s morph + captions + return)
+- [ ] B4 feat(render): real NASA/SSS textures committed + LICENSE credits
+- [ ] C: update AGENTS.md, final gates, live-site verify
 
-## Phase 3 — Polish
-- [x] Shareable URL state (time + camera + follow + speed) — `src/state/urlState.ts` (pure), debounced `replaceState` sync + Share button in `main.ts`
-- [x] Mobile touch polish / PWA — `public/manifest.webmanifest` + `public/sw.js` (prod-only register), generated icons, safe-area + coarse-pointer CSS, collapsible panel
-- [ ] Constellation lines + planet name tooltips on hover
-- [ ] Screenshot button (PNG export)
+## Declined (user decision 2026-08-18)
+- Hohmann probe missions — declined
+- From-here viewpoints (Moon Earthrise etc.) — declined
