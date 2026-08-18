@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0e18" />
+    <meta name="description" content="A realistic, extensible 3D solar system: sun, planets, moons, Kepler orbits." />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Solar 3D" />
+    <title>Solar System 3D</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+      #app { width: 100%; height: 100%; display: block; touch-action: none; }
+      #panel {
+        position: fixed;
+        top: calc(12px + env(safe-area-inset-top));
+        left: calc(12px + env(safe-area-inset-left));
+        z-index: 10;
+        background: rgba(10, 14, 24, 0.82); color: #cfd8e3;
+        border: 1px solid rgba(120, 150, 200, 0.25); border-radius: 10px;
+        padding: 12px 14px; font: 13px/1.5 system-ui, sans-serif;
+        backdrop-filter: blur(6px); min-width: 220px; user-select: none;
+      }
+      #panel h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: 0.06em;
+        text-transform: uppercase; color: #8fb4e8; cursor: pointer;
+        display: flex; justify-content: space-between; align-items: center; }
+      #panel h1::after { content: '▾'; opacity: 0.6; font-size: 11px; }
+      #panel.collapsed h1 { margin-bottom: 0; }
+      #panel.collapsed h1::after { content: '▸'; }
+      #panel.collapsed .panel-body { display: none; }
+      #panel .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+      #panel label { flex: 0 0 auto; opacity: 0.85; }
+      #panel select, #panel button {
+        background: #1a2334; color: #cfd8e3; border: 1px solid #33415e;
+        border-radius: 6px; padding: 3px 8px; font: inherit; cursor: pointer;
+      }
+      #panel input[type=range] { flex: 1; accent-color: #6ea8ff; }
+      #panel .value { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+      #panel button.active { background: #2b4a7a; border-color: #6ea8ff; color: #eaf2ff; }
+      #panel .anchor-row { flex-wrap: wrap; }
+      #panel .anchor-row button { flex: 1 1 auto; white-space: nowrap; }
+      #panel .hint { opacity: 0.55; font-size: 11px; margin-top: 8px; }
+      #date { font-variant-numeric: tabular-nums; color: #9fd6a8; }
+      #panel .info { margin-top: 10px; padding-top: 8px;
+        border-top: 1px solid rgba(120, 150, 200, 0.25); }
+      #panel .info-title { font-weight: 600; color: #8fb4e8; margin-bottom: 4px; }
+      #panel .info-row { display: flex; justify-content: space-between; gap: 12px;
+        margin: 2px 0; opacity: 0.95; }
+      #panel .info-row .value { min-width: 0; }
+      #tooltip {
+        position: fixed; pointer-events: none; z-index: 20;
+        padding: 3px 9px; border-radius: 7px;
+        background: rgba(12, 17, 30, 0.85);
+        border: 1px solid rgba(120, 150, 200, 0.4);
+        color: #e8f0fb; font-size: 13px; font-weight: 600;
+        white-space: nowrap; transform: translate(14px, -50%);
+        opacity: 0; transition: opacity 0.1s ease;
+      }
+      #tooltip.show { opacity: 1; }
+      #tooltip .sub { font-weight: 400; font-size: 11px; color: #9fb4d4; }
+      /* Mobile / coarse-pointer polish */
+      @media (pointer: coarse) {
+        #panel { font-size: 14px; }
+        #panel select, #panel button { padding: 8px 12px; min-height: 34px; }
+        #panel input[type=range] { height: 30px; }
+      }
+      @media (max-width: 560px) {
+        #panel {
+          right: calc(12px + env(safe-area-inset-right));
+          min-width: 0; max-width: calc(100vw - 24px);
+        }
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/index-CEPCajrl.js"></script>
+  </head>
+  <body>
+    <canvas id="app"></canvas>
+    <div id="tooltip" aria-hidden="true"></div>
+    <div id="panel">
+      <h1 id="panel-toggle">Solar System</h1>
+      <div class="panel-body">
+      <div class="row"><label>Date</label><span id="date" class="value">—</span></div>
+      <div class="row">
+        <label>Speed</label>
+        <input id="speed" type="range" min="-3" max="2.5" step="0.01" value="0"
+               aria-label="Simulation speed magnitude (log scale). Left = slower (0.001 d/s ≈ a year in 30 minutes), middle = 1 day/s, right ≈ 316 days/s. Use the Reverse button to run time backwards." />
+        <span id="speed-value" class="value">1.0 d/s</span>
+      </div>
+      <div class="row">
+        <button id="pause">Pause</button>
+        <button id="reverse">Reverse →</button>
+        <button id="now">Now</button>
+      </div>
+      <div class="row anchor-row" id="anchors">
+        <button data-fly="constellations" title="Zoom out until only the constellations fill the view">🌌 Sky</button>
+        <button data-fly="system" title="Fit the whole solar system in frame">🪐 System</button>
+      </div>
+      <div class="row">
+        <label>Follow</label>
+        <select id="follow"><option value="">Free camera</option></select>
+      </div>
+      <div class="row">
+        <label>Scale</label>
+        <select id="scale">
+          <option value="visible">Visible (default)</option>
+          <option value="true">True scale</option>
+        </select>
+      </div>
+      <div class="row">
+        <label><input id="orbits" type="checkbox" checked /> Orbits</label>
+        <label><input id="labels" type="checkbox" checked /> Labels</label>
+        <label><input id="belts" type="checkbox" checked /> Belts</label>
+      </div>
+      <div class="row"><button id="share">Copy share link</button></div>
+      <div class="row"><button id="screenshot">Save screenshot</button></div>
+      <div id="info" class="info" hidden>
+        <div class="info-title" id="info-name">—</div>
+        <div class="info-row"><span>Orbit period</span><span id="info-period" class="value">—</span></div>
+        <div class="info-row"><span>Distance</span><span id="info-distance" class="value">—</span></div>
+        <div class="info-row"><span>Peri / Apo</span><span id="info-range" class="value">—</span></div>
+      </div>
+      <div class="hint" id="hint">Drag: rotate · Wheel: zoom · Right-drag: pan · Click a body to fly to it</div>
+      </div>
+    </div>
+    <script>
+      // Panel collapse (mobile-first); start collapsed on narrow screens.
+      (function () {
+        var panel = document.getElementById('panel');
+        var toggle = document.getElementById('panel-toggle');
+        var hint = document.getElementById('hint');
+        if (window.innerWidth < 560) panel.classList.add('collapsed');
+        if (window.matchMedia('(pointer: coarse)').matches) {
+          hint.textContent = 'Drag: rotate · Pinch: zoom · Two-finger drag: pan';
+        }
+        toggle.addEventListener('click', function () {
+          panel.classList.toggle('collapsed');
+        });
+      })();
+    </script>
+  </body>
+</html>
