@@ -12,7 +12,7 @@ describe('parseAppState', () => {
 
   it('parses all scalar params', () => {
     const s = parseAppState(
-      `${BASE}?t=1758000000000&sp=0.5&f=earth&sc=t&o=0&l=1&b=0&p=1`,
+      `${BASE}?t=1758000000000&sp=0.5&f=earth&sc=t&o=0&l=1&b=0&p=1&rv=1`,
     );
     expect(s).toEqual({
       timeMs: 1758000000000,
@@ -23,7 +23,13 @@ describe('parseAppState', () => {
       labels: true,
       belts: false,
       paused: true,
+      reversed: true,
     });
+  });
+
+  it('treats an absent rv as no key (forward by default)', () => {
+    expect('reversed' in parseAppState(`${BASE}?t=1`)).toBe(false);
+    expect(parseAppState(`${BASE}?rv=0`).reversed).toBe(false);
   });
 
   it('parses the camera triple', () => {
@@ -55,7 +61,7 @@ describe('encodeAppState', () => {
   it('produces a clean absolute URL with ordered params', () => {
     const out = encodeAppState(BASE, {
       timeMs: 1758000000000.4, speedLog: 0.5, follow: 'earth', scale: 'true',
-      orbits: false, labels: true, belts: false, paused: true,
+      orbits: false, labels: true, belts: false, paused: true, reversed: true,
     });
     const u = new URL(out);
     expect(u.origin).toBe('http://localhost:4173');
@@ -68,6 +74,7 @@ describe('encodeAppState', () => {
     expect(u.searchParams.get('l')).toBe('1');
     expect(u.searchParams.get('b')).toBe('0');
     expect(u.searchParams.get('p')).toBe('1');
+    expect(u.searchParams.get('rv')).toBe('1');
   });
 
   it('omits undefined keys entirely', () => {

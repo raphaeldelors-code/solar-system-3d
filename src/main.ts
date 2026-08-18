@@ -8,6 +8,7 @@ import { SimClock } from './sim/clock';
 import { ALL_BODIES } from './data/bodies';
 import {
   buildScene, updatePositions, applySpin, updateBeltFields,
+  satelliteExtentScene, updateSatelliteHighlight,
   VISIBLE_SCALE, TRUE_SCALE, CONSTELLATION_RADIUS,
   type BuiltScene, type VisualScale,
 } from './render/scene';
@@ -87,6 +88,7 @@ const dateEl = document.getElementById('date') as HTMLSpanElement;
 const speedEl = document.getElementById('speed') as HTMLInputElement;
 const speedValueEl = document.getElementById('speed-value') as HTMLSpanElement;
 const pauseBtn = document.getElementById('pause') as HTMLButtonElement;
+const reverseBtn = document.getElementById('reverse') as HTMLButtonElement;
 const nowBtn = document.getElementById('now') as HTMLButtonElement;
 const followEl = document.getElementById('follow') as HTMLSelectElement;
 const scaleEl = document.getElementById('scale') as HTMLSelectElement;
@@ -104,12 +106,23 @@ const infoRangeEl = document.getElementById('info-range') as HTMLSpanElement;
 
 const byId = new Map(ALL_BODIES.map((b) => [b.id, b]));
 
+// id -> parent id for quick "which planet owns this satellite" lookups.
+const moonParent = new Map<string, string>(
+  ALL_BODIES.filter((b) => b.kind === 'moon' && b.parent).map((m) => [m.id, m.parent as string]),
+);
+
 const clock = new SimClock(Date.now());
 // `!`: definitely assigned by the initial rebuildScene(scale) call below;
 // TS can't see the assignment through the function boundary.
 let built!: BuiltScene;
 let scale: VisualScale = VISIBLE_SCALE;
 let followId = '';
+/**
+ * Currently highlighted satellite (a selected moon). The follow/camera can
+ * be on the parent planet while the selected satellite stays lit — this is
+ * how "pick a satellite" works: planet+all-orbits view + highlighted moon.
+ */
+let selectedSatelliteId = '';
 let lastDays = clock.t;
 let lastMs = performance.now();
 // Active camera flight (anchor / picked-body). `null` when no flight is in
@@ -191,10 +204,26 @@ function camAnchorFor(name: 'system' | 'constellations'): CamAnchor {
 function camAnchorForBody(id: string): CamAnchor | null {
   const entry = built.bodies.get(id);
   if (!entry) return null;
+  // The framing target is always the body itself — or its parent planet when
+  // a satellite is picked. Both a planet pick and one of its satellite picks
+  // produce the SAME view: planet + all of its satellite orbits filling the
+  // screen. The selected moon is distinguished by its highlight ring (see
+  // `selectedSatelliteId`), not by a separate close-up. This also keeps the
+  // camera locked to the (slow) planet rather than whipping around with the
+  // fast moon.
+  const planetId = moonParent.get(id) ?? id;
+  const planet = built.bodies.get(planetId) ?? entry;
+  const satExtent = satelliteExtentScene(planetId, scale);
+  // Framing extent: the planet's own disc, widened to span the full
+  // satellite system (2× outermost orbit + planet radius) when present.
+  const extent = Math.max(
+    planet.frameExtent,
+    satExtent > 0 ? 2 * satExtent + planet.sceneRadius : 0,
+  );
   return frameBody(
     [built.camera.position.x, built.camera.position.y, built.camera.position.z],
-    [entry.worldPos.x, entry.worldPos.y, entry.worldPos.z],
-    entry.frameExtent,
+    [planet.worldPos.x, planet.worldPos.y, planet.worldPos.z],
+    extent,
     FOV_DEG,
   );
 }
@@ -208,8 +237,11 @@ function camAnchorForBody(id: string): CamAnchor | null {
 function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sky = false): void {
   // Picking a body arms the follow so after landing the camera keeps it
   // centered (the existing follow behavior). Global anchors clear it.
+  // For satellites the CAMERA locks to the parent planet (see followLockId),
+  // while the follow/selection stays on the moon for info + highlight.
   followId = bodyId ?? '';
   followEl.value = followId;
+  selectedSatelliteId = bodyId && moonParent.has(bodyId) ? bodyId : '';
   // A Sky landing kicks off the panoramic tour; any other flight cancels it.
   stopSkyTour();
   pendingSkyTour = sky;
@@ -217,6 +249,10 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
   // Build the flight from the live camera pose (pos + orbit target). The
   // offset-lerp form keeps a moving picked body rigidly framed; global
   // anchors have a static origin target so they reduce to an eased move.
+  // For satellites the flight tracks the PLANET (dest is already aimed at
+  // the planet, and following the planet keeps the view from whirling with
+  // the fast moon).
+  const trackId = bodyId ? (moonParent.has(bodyId) ? moonParent.get(bodyId)! : bodyId) : null;
   // The FOV eases to the anchor's requested value (sky anchor widens it)
   // or back to the default so a wide sky view is never retained.
   flight = makeFlight(
@@ -224,7 +260,7 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
     [built.controls.target.x, built.controls.target.y, built.controls.target.z],
     dest,
     duration,
-    bodyId,
+    trackId,
     built.camera.fov,
     FOV_DEG,
   );
@@ -261,12 +297,19 @@ function applyToggles(): void {
 
 function fmtSpeed(): void {
   const s = clock.getSpeed();
-  // Signed: negative speed means the calendar runs backwards — show the
-  // direction explicitly so the user knows time is flowing the other way.
-  const sign = s < 0 ? '−' : '';
+  // The slider is a MAGNITUDE (log10 days/second, can go well below 1 for
+  // slow satellite observation); direction lives on the Reverse toggle.
+  // Show the direction explicitly so a reversed sim is never ambiguous.
+  const arrow = clock.isReversed ? '← ' : '';
   const a = Math.abs(s);
-  const mag = a >= 100 ? a.toFixed(0) : a >= 1 ? a.toFixed(1) : a.toFixed(2);
-  speedValueEl.textContent = `${sign}${mag} d/s`;
+  // Below 0.1 d/s show "h/s" (hours per second) — the satellite-observation
+  // range reads better that way than 0.0x d/s.
+  let mag: string, unit: string;
+  if (a >= 100) { mag = a.toFixed(0); unit = 'd/s'; }
+  else if (a >= 1) { mag = a.toFixed(1); unit = 'd/s'; }
+  else if (a >= 0.1) { mag = a.toFixed(2); unit = 'd/s'; }
+  else { mag = (a * 24).toFixed(2); unit = 'h/s'; }
+  speedValueEl.textContent = `${arrow}${mag} ${unit}`;
 }
 
 function fmtDate(): void {
@@ -306,6 +349,17 @@ speedEl.addEventListener('input', () => {
 pauseBtn.addEventListener('click', () => {
   clock.setPaused(!clock.isPaused);
   pauseBtn.textContent = clock.isPaused ? 'Resume' : 'Pause';
+  syncUrl();
+});
+
+// Time direction is a toggle, NOT part of the slider: the slider stays a
+// pure magnitude so slow satellite observation is available in BOTH
+// directions (the old signed slider made "slow" only reachable one way).
+reverseBtn.addEventListener('click', () => {
+  clock.setReversed(!clock.isReversed);
+  reverseBtn.textContent = clock.isReversed ? 'Reverse ←' : 'Reverse →';
+  reverseBtn.classList.toggle('active', clock.isReversed);
+  fmtSpeed();
   syncUrl();
 });
 
@@ -379,8 +433,14 @@ window.addEventListener('resize', () => {
 const urlState = parseAppState(window.location.href);
 if (urlState.timeMs != null) clock.setDate(new Date(urlState.timeMs));
 if (urlState.speedLog != null) {
-  speedEl.value = String(urlState.speedLog);
-  clock.setLogSpeed(urlState.speedLog);
+  // Magnitude slider: clamp to the HTML range (sub-day down, 316 d/s up).
+  const sp = Math.max(-3, Math.min(2.5, urlState.speedLog));
+  speedEl.value = String(sp);
+  clock.setLogSpeed(sp);
+}
+if (urlState.reversed != null) {
+  clock.setReversed(urlState.reversed);
+  reverseBtn.textContent = urlState.reversed ? 'Reverse ←' : 'Reverse →';
 }
 if (urlState.scale) {
   scaleEl.value = urlState.scale;
@@ -396,6 +456,8 @@ if (urlState.paused != null) {
 if (urlState.follow && byId.has(urlState.follow)) {
   followEl.value = urlState.follow;
   followId = urlState.follow;
+  // Restoring a satellite selection re-arms its highlight ring too.
+  selectedSatelliteId = moonParent.has(urlState.follow) ? urlState.follow : '';
 }
 
 /** Snapshot the current UI + camera into a shareable ViewState. */
@@ -403,6 +465,7 @@ function captureState(): ViewState {
   return {
     timeMs: clock.toDate().getTime(),
     speedLog: parseFloat(speedEl.value),
+    reversed: clock.isReversed,
     follow: followId || undefined,
     scale: scale === TRUE_SCALE ? 'true' : 'visible',
     orbits: orbitsEl.checked,
@@ -641,12 +704,26 @@ function frame(): void {
     advanceSkyTour(dtReal);
   } else if (followId) {
     // Free follow: keep the followed body centered at the orbit pivot.
+    // When the followed body is a satellite, lock the CAMERA to its parent
+    // planet (not the moon): the moon orbits the planet many times per sim
+    // day, so chasing the moon made the whole view whirl/jitter at speed
+    // (the "chaotic tracking"). The planet is the stable pivot; the selected
+    // moon is instead marked by its pulsing highlight ring (see below), which
+    // reads correctly at any speed. Planets are only a little faster than the
+    // camera's lerp can track, so the view stays steady.
     const entry = built.bodies.get(followId);
-    if (entry) built.controls.target.lerp(entry.worldPos, 0.2);
+    const lockEntry = entry && moonParent.has(followId)
+      ? built.bodies.get(moonParent.get(followId)!)
+      : entry;
+    if (lockEntry) built.controls.target.lerp(lockEntry.worldPos, 0.2);
     built.controls.update();
   } else {
     built.controls.update();
   }
+
+  // Pulsing highlight on the selected satellite (driven by wall-clock time so
+  // the pulse is smooth and independent of the sim speed / direction).
+  updateSatelliteHighlight(built, selectedSatelliteId, nowMs / 1000);
 
   // Shadow culling: the Sun is a point light, so its shadow is a 6-face
   // cube map (2048² each) re-rendered every frame — the heaviest single GPU

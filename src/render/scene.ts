@@ -16,6 +16,7 @@ import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAt, sampleOrbit } from '../sim/kepler';
 import { makeSurfaceTexture, makeLabelTexture } from './textures';
 import { BELTS } from '../data/belts';
+import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
 import { CONSTELLATIONS, raDecToUnit } from '../data/constellations';
 import {
@@ -80,6 +81,12 @@ export interface SceneBody {
   label: THREE.Sprite;
   /** Orbit line (planets in scene frame; moons in parent local frame). */
   orbit: THREE.Line | null;
+  /**
+   * Pulsing glow ring highlighting the selected satellite (child of the
+   * pivot so it tilts with the body; hidden unless this body is the
+   * selection). See `setSatelliteHighlight`.
+   */
+  orbitEmphasis: THREE.Mesh;
   /** Parent body entry; null for planets/Sun (Sun at origin). */
   parent: SceneBody | null;
   /** Spin angle accumulator [rad]. */
@@ -239,6 +246,22 @@ export function buildScene(
     pivot.add(mesh);
     scene.add(pivot);
 
+    // Selection highlight: a flat glow ring in the body's equatorial plane
+    // (same plane its satellites orbit in). Child of the pivot so it tilts
+    // with the body; invisible until `setSatelliteHighlight` marks this body
+    // as the selected satellite.
+    const hlGeo = new THREE.RingGeometry(1.55, 2.35, 64);
+    const hlMat = new THREE.MeshBasicMaterial({
+      color: 0x7fd8ff, side: THREE.DoubleSide, transparent: true,
+      opacity: 0, depthWrite: false,
+    });
+    const orbitEmphasis = new THREE.Mesh(hlGeo, hlMat);
+    orbitEmphasis.rotation.x = -Math.PI / 2;
+    orbitEmphasis.scale.setScalar(Math.max(1e-3, r));
+    orbitEmphasis.visible = false;
+    pivot.add(orbitEmphasis);
+    disposables.push(hlGeo, hlMat);
+
     // Rings.
     if (def.rings) {
       const inner = r * def.rings.inner, outer = r * def.rings.outer;
@@ -293,7 +316,7 @@ export function buildScene(
     // its body diameter.
     const frameExtent = def.rings ? 2 * r * def.rings.outer : 2 * r;
     const entry: SceneBody = {
-      def, pivot, mesh, label, orbit, parent,
+      def, pivot, mesh, label, orbit, orbitEmphasis, parent,
       spin: 0,
       worldPos: new THREE.Vector3(),
       sceneRadius: r,
@@ -458,5 +481,59 @@ export function applySpin(built: BuiltScene, dtDays: number): void {
     const daysPerSpin = entry.def.rotationHours / 24;
     entry.spin += (dtDays / Math.abs(daysPerSpin)) * Math.PI * 2 * Math.sign(daysPerSpin);
     entry.mesh.rotation.y = entry.spin;
+  }
+}
+
+/**
+ * Scene-space distance of a moon from its parent, using the active scale's
+ * per-moon mapping (same one its positions use, so it matches the drawn
+ * orbit line). Moon `elements.a` is in km.
+ */
+export function satelliteSceneDistance(moonDef: BodyDefinition, scale: VisualScale): number {
+  const km = moonDef.elements ? moonDef.elements.a : 0;
+  return scale.moonDistance(km, moonDef.id);
+}
+
+/**
+ * Farthest satellite scene distance around a planet (0 if it has none).
+ * Framing extent for "planet + all its satellite orbits": a diameter of
+ * 2× this plus the planet's own radius keeps every orbit in the frame.
+ */
+export function satelliteExtentScene(planetId: string, scale: VisualScale): number {
+  let max = 0;
+  for (const m of MOONS) {
+    if (m.parent !== planetId) continue;
+    max = Math.max(max, satelliteSceneDistance(m, scale));
+  }
+  return max;
+}
+
+/**
+ * Selection highlight for a satellite: a pulsing glow ring in the moon's
+ * equatorial plane + its orbit line brightened. `id` '' clears the
+ * selection. Call once per frame with a wall-clock `tSeconds` to drive
+ * the pulse (phase is absolute, so the pulse never jumps).
+ */
+export function updateSatelliteHighlight(
+  built: BuiltScene,
+  id: string,
+  tSeconds: number,
+): void {
+  const phase = 0.5 + 0.5 * Math.sin(tSeconds * 3.4); // 0..1, ~1.9 s period
+  for (const entry of built.bodies.values()) {
+    const isSel = id !== '' && entry.def.id === id;
+    entry.orbitEmphasis.visible = isSel;
+    if (isSel) {
+      const m = entry.orbitEmphasis.material as THREE.MeshBasicMaterial;
+      m.opacity = 0.35 + 0.55 * phase;
+      // gentle breathing so the ring reads as "the one you picked"
+      const s = entry.sceneRadius * (1.0 + 0.12 * phase);
+      entry.orbitEmphasis.scale.setScalar(s);
+    }
+    if (entry.orbit) {
+      const om = entry.orbit.material as THREE.LineBasicMaterial;
+      om.opacity = isSel ? 0.95 : 0.45;
+      om.color.set(isSel ? 0x7fd8ff : 0x5570a0);
+    }
   }
 }

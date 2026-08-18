@@ -11,6 +11,7 @@
  *   l   = labels  on/off (1/0)
  *   b   = belts   on/off (1/0)
  *   p   = paused  on/off (1/0)
+ *   rv  = reversed time on/off (1/0)  (forward by default)
  *   cam = "px,py,pz,tx,ty,tz" camera pos + target (6 finite numbers)
  */
 
@@ -19,8 +20,10 @@ export type ScaleChoice = 'visible' | 'true';
 export interface ViewState {
   /** Sim time as UTC milliseconds (Date.now() domain). */
   timeMs?: number;
-  /** Speed slider value (log10 days per second). */
+  /** Speed slider value (log10 of the speed magnitude in days per second). */
   speedLog?: number;
+  /** Time running backwards. */
+  reversed?: boolean;
   /** Followed body id; '' or undefined = free camera. */
   follow?: string;
   scale?: ScaleChoice;
@@ -79,6 +82,8 @@ export function parseAppState(href: string): ViewState {
   if (belts !== undefined) state.belts = belts;
   const paused = flag(q.get('p'));
   if (paused !== undefined) state.paused = paused;
+  const reversed = flag(q.get('rv'));
+  if (reversed !== undefined) state.reversed = reversed;
 
   const camRaw = q.get('cam');
   if (camRaw) {
@@ -112,6 +117,7 @@ export function encodeAppState(href: string, s: ViewState): string {
   setOrDel('l', s.labels === undefined ? undefined : (s.labels ? '1' : '0'));
   setOrDel('b', s.belts === undefined ? undefined : (s.belts ? '1' : '0'));
   setOrDel('p', s.paused === undefined ? undefined : (s.paused ? '1' : '0'));
+  setOrDel('rv', s.reversed === undefined ? undefined : (s.reversed ? '1' : '0'));
 
   if (s.cam) {
     const [px, py, pz, tx, ty, tz] = [...s.cam.pos, ...s.cam.target].map(round3);

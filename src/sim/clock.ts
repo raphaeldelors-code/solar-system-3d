@@ -2,19 +2,23 @@ import { J2000_UTC } from './types';
 
 /**
  * Simulation clock. Time is tracked as days since J2000; speed is
- * "simulated days per real second". The slider is SIGNED and symmetric:
- * 0 is the middle (real-time, 1 day/s) and negative values run the
- * simulation BACKWARDS (negative days/second), so the calendar follows the
- * reversed motion.
+ * "simulated days per real second".
+ *
+ * The speed slider is a pure MAGNITUDE (log10 days/second): it can go
+ * below 0 for sub-day speeds (10^-3 d/s ≈ real time ×10^-3), which is what
+ * lets you watch satellites move slowly instead of in day-jumps. Direction
+ * (forward / reverse) is a SEPARATE toggle (SimClock.setReversed), not part
+ * of the slider — so the slowest setting is always available regardless of
+ * which way time is flowing.
  */
 export class SimClock {
   private days: number;
-  private speed: number; // days per second (may be negative = reverse time)
+  private logMag = 0; // log10 of the speed magnitude in days/second
+  private reversed = false;
   private paused = false;
 
   constructor(startMs: number = Date.now()) {
     this.days = (startMs - J2000_UTC) / 86_400_000;
-    this.speed = 1; // 1 day per second at log speed 0
   }
 
   /** Days elapsed since J2000. */
@@ -30,17 +34,26 @@ export class SimClock {
 
   /** Current speed as days/second (negative when running backwards). */
   getSpeed(): number {
-    return this.speed;
+    return (this.reversed ? -1 : 1) * 10 ** this.logMag;
   }
 
-  /** Set speed from the signed log10 slider.
-   *  `v` is the slider position with 0 = middle = 1 day/s (real time):
-   *    magnitude  = 10^|v|   days/second
-   *    direction  = v < 0 ? -1 : +1   (negative = reverse time)
-   *  So the slider is symmetric: +2 => +100 d/s, -2 => -100 d/s, 0 => 1 d/s.
-   *  Stopping the sim is the Pause button's job, not the slider's. */
+  /**
+   * Set the speed magnitude from the slider: `v` is log10(days/second).
+   * v = 0 → 1 d/s, v = 2 → 100 d/s, v = -1 → 0.1 d/s, v = -3 → 0.001 d/s.
+   * Direction is independent — see `setReversed`.
+   */
   setLogSpeed(v: number): void {
-    this.speed = (v < 0 ? -1 : 1) * 10 ** Math.abs(v);
+    this.logMag = v;
+  }
+
+  /** True while time runs backwards. */
+  get isReversed(): boolean {
+    return this.reversed;
+  }
+
+  /** Flip / set the flow direction (forward vs backwards). */
+  setReversed(r: boolean): void {
+    this.reversed = r;
   }
 
   get isPaused(): boolean {
@@ -53,7 +66,7 @@ export class SimClock {
 
   /** Advance by a real-time delta in seconds. */
   tick(dtSeconds: number): void {
-    if (!this.paused) this.days += this.speed * dtSeconds;
+    if (!this.paused) this.days += this.getSpeed() * dtSeconds;
   }
 
   /** Convert current sim time back to a Date. */
