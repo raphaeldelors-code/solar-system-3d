@@ -28,6 +28,17 @@ No other test/build tooling is configured. Do not add it casually.
   pure (no `three`/DOM) and fully deterministic (mulberry32 seed).
 - Orbital math: heliocentric ecliptic J2000 frame. `positionAt(elements, daysSinceJ2000)`
   returns AU. Moons use the same math relative to their parent (`parent` id).
+  Planets also carry JPL Table 2a secular `rates` and Table 2b periodic mean-anomaly
+  terms (`periodicM`), applied by `periodicMOffset()` in `kepler.ts` on every
+  time-evolution path (per-frame positions, orbit sampling). Long-range accuracy
+  (±1500 y) is pinned by `tests/groundTruth.test.ts` against JPL Horizons DE441
+  epochs (`tests/fixtures/ground_truth.json`).
+- **Geocentric Moon** (`src/sim/moon.ts`, pure): Meeus ch.47 lunar
+  longitude/latitude/distance (60-term L,R + 60-term B periodic tables)
+  referred to the mean equinox *of date*; `moonGeocentricJ2000()` precesses it
+  to the J2000 ecliptic via Meeus ch.22.1 so it composes with the heliocentric
+  planet vectors. Gotcha: ch.47's sigma_B/1e6 is ALREADY in degrees — never
+  multiply by R2D again.
 - **Shadows** (`src/render/shadows.ts`): the Sun's `PointLight` is a shadow
   caster (PCFSoft cube map). Every body mesh casts+receives *except* the star
   itself (a sphere centered on a point light would occlude the whole shadow
