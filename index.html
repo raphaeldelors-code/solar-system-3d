@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0e18" />
     <meta name="description" content="A realistic, extensible 3D solar system: sun, planets, moons, Kepler orbits." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Solar System 3D" />
+    <meta property="og:title" content="Solar System 3D" />
+    <meta property="og:description" content="A realistic, extensible 3D solar system: sun, planets, moons, Kepler orbits — with shadows, belts and shareable camera views." />
+    <meta property="og:url" content="https://raphaeldelors-code.github.io/solar-system-3d/" />
+    <meta property="og:image" content="https://raphaeldelors-code.github.io/solar-system-3d/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Solar System 3D — a glowing sun with orbiting planets on a starfield" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Solar System 3D" />
+    <meta name="twitter:description" content="A realistic, extensible 3D solar system: sun, planets, moons, Kepler orbits." />
+    <meta name="twitter:image" content="https://raphaeldelors-code.github.io/solar-system-3d/og-image.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
     <link rel="apple-touch-icon" href="icon-192.png" />
@@ -75,11 +88,38 @@
           min-width: 0; max-width: calc(100vw - 24px);
         }
       }
+      /* WebGL context-lost overlay: shown while the GPU context is down
+         (e.g. driver reset / tab reclaimed), hidden once it is restored. */
+      #gl-lost {
+        position: fixed; inset: 0; z-index: 30; display: none;
+        align-items: center; justify-content: center; text-align: center;
+        background: rgba(2, 4, 9, 0.92); color: #cfd8e3;
+        font: 15px/1.6 system-ui, sans-serif; padding: 24px;
+      }
+      #gl-lost.show { display: flex; }
+      #gl-lost .box { max-width: 420px; }
+      #gl-lost h2 { margin: 0 0 10px; font-size: 17px; color: #8fb4e8;
+        letter-spacing: 0.04em; text-transform: uppercase; }
+      #gl-lost p { margin: 0 0 16px; opacity: 0.8; }
+      #gl-lost button {
+        background: #1a2334; color: #cfd8e3; border: 1px solid #33415e;
+        border-radius: 7px; padding: 8px 16px; font: inherit; cursor: pointer;
+      }
+      #gl-lost button:hover { background: #2b4a7a; border-color: #6ea8ff; }
     </style>
-    <script type="module" crossorigin src="./assets/index-Ba8eVpX7.js"></script>
+    <script type="module" crossorigin src="./assets/index-CKwMG0N2.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
+    <div id="gl-lost" role="alert" hidden>
+      <div class="box">
+        <h2>3D view paused</h2>
+        <p>Your browser's graphics context was lost (this can happen when a GPU
+          driver resets or a backgrounded tab is reclaimed). The simulation is
+          safe — it will resume automatically when the context is restored.</p>
+        <button id="gl-reload" type="button">Reload page</button>
+      </div>
+    </div>
     <div id="tooltip" aria-hidden="true"></div>
     <div id="panel">
       <h1 id="panel-toggle">Solar System</h1>
