@@ -28,6 +28,13 @@ export interface OrbitalElements {
   n: number;
   /** Optional secular rates [deg/Julian century] for slow element drift. */
   rates?: { a?: number; e?: number; i?: number; node?: number; peri?: number; M0?: number };
+  /**
+   * JPL Table 2b periodic terms in the MEAN ANOMALY (Jupiter..Neptune):
+   * dM = b*T^2 + c*cos(f*T) + s*sin(f*T) degrees, with T in Julian centuries
+   * since J2000. `f` is a frequency in deg/century. Applied inside the time
+   * evolution of M (meanAnomalyAt), so the drawn orbit line stays on path.
+   */
+  periodicM?: Array<{ b: number; c: number; s: number; f: number }>;
 }
 
 export type BodyKind = 'star' | 'planet' | 'moon' | 'dwarf';

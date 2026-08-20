@@ -28,11 +28,18 @@ export function solveKepler(M: number, e: number, tol = 1e-10): number {
   return E;
 }
 
+/**
+ * Elements resolved at a time: all fields concrete, no `rates` (already
+ * applied) and no `periodicM` (a time-evolution input, not a resolved
+ * value — its effect is folded into `M0`).
+ */
+type ResolvedElements = Omit<Required<Omit<OrbitalElements, 'rates'>>, 'periodicM'>;
+
 /** Elements at a given time (applies optional secular rates). */
 export function elementsAt(
   el: OrbitalElements,
   daysSinceJ2000: number,
-): Required<Omit<OrbitalElements, 'rates'>> {
+): ResolvedElements {
   const c = daysSinceJ2000 / JULIAN_CENTURY_DAYS;
   const r = el.rates;
   return {
@@ -41,19 +48,30 @@ export function elementsAt(
     i: el.i + (r?.i ?? 0) * c,
     node: el.node + (r?.node ?? 0) * c,
     peri: el.peri + (r?.peri ?? 0) * c,
-    M0: el.M0 + (r?.M0 ?? 0) * c,
+    M0: el.M0 + (r?.M0 ?? 0) * c + periodicMOffset(el, daysSinceJ2000),
     n: el.n,
   };
 }
 
-/** Resolved (rate-applied) elements without the `rates` key. */
-type ResolvedElements = Required<Omit<OrbitalElements, 'rates'>>;
-
 /**
- * Fill `out` with resolved-at-time elements. Same math as `elementsAt` but
- * allocation-free; hot per-frame callers (scene, belts) use this with a
- * caller-owned scratch to keep the GC quiet.
+ * JPL Table 2b periodic terms of the MEAN ANOMALY, in degrees:
+ * dM = sum over terms of (b*T^2 + c*cos(f*T) + s*sin(f*T)), with T in
+ * Julian centuries since J2000 and `f` a frequency in deg/century.
+ * Applied on top of the secular M(t) by every path that evolves the mean
+ * anomaly in time (per-frame positions, orbit-line sampling).
  */
+export function periodicMOffset(el: OrbitalElements, daysSinceJ2000: number): number {
+  if (!el.periodicM) return 0;
+  const T = daysSinceJ2000 / JULIAN_CENTURY_DAYS;
+  let dM = 0;
+  for (const term of el.periodicM) {
+    const ang = term.f * T;
+    dM += term.b * T * T + term.c * Math.cos(ang * DEG) + term.s * Math.sin(ang * DEG);
+  }
+  return dM;
+}
+
+/** Resolved elements at a given time, allocation-free (see `ResolvedElements`). */
 export function elementsAtInto(el: OrbitalElements, daysSinceJ2000: number, out: ResolvedElements): void {
   const c = daysSinceJ2000 / JULIAN_CENTURY_DAYS;
   const r = el.rates;
@@ -62,7 +80,7 @@ export function elementsAtInto(el: OrbitalElements, daysSinceJ2000: number, out:
   out.i = el.i + (r?.i ?? 0) * c;
   out.node = el.node + (r?.node ?? 0) * c;
   out.peri = el.peri + (r?.peri ?? 0) * c;
-  out.M0 = el.M0 + (r?.M0 ?? 0) * c;
+  out.M0 = el.M0 + (r?.M0 ?? 0) * c + periodicMOffset(el, daysSinceJ2000);
   out.n = el.n;
 }
 
@@ -88,7 +106,8 @@ export function positionAtInto(el: OrbitalElements, daysSinceJ2000: number, out:
   const inc = el.i + (el.rates?.i ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS);
   const node = el.node + (el.rates?.node ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS);
   const peri = el.peri + (el.rates?.peri ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS);
-  const M0 = el.M0 + (el.rates?.M0 ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS);
+  const M0 = el.M0 + (el.rates?.M0 ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS)
+    + periodicMOffset(el, daysSinceJ2000);
   return positionAtMeanAnomalyInto(e, ee, inc, node, peri, M0, el.n, daysSinceJ2000, out);
 }
 
@@ -97,7 +116,7 @@ export function positionAtInto(el: OrbitalElements, daysSinceJ2000: number, out:
  * already resolved at the desired epoch. Used for orbit-line sampling.
  */
 export function positionAtMeanAnomaly(
-  e: Required<Omit<OrbitalElements, 'rates'>>,
+  e: ResolvedElements,
   M: number,
 ): Vec3 {
   return positionAtMeanAnomalyInto(e.a, e.e, e.i, e.node, e.peri, e.M0, e.n, 0, { x: 0, y: 0, z: 0 }, M);

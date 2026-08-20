@@ -13,7 +13,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { BodyDefinition, OrbitalElements } from '../sim/types';
-import { positionAtInto, sampleOrbit } from '../sim/kepler';
+import { positionAtInto, sampleOrbit, type Vec3 } from '../sim/kepler';
+import { moonGeocentricJ2000 } from '../sim/moon';
+import { AU_KM, J2000_UTC } from '../sim/types';
 import { makeSurfaceTexture, makeLabelTexture } from './textures';
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
@@ -314,11 +316,38 @@ export function buildScene(
       const distMap = (r: number): number => isMoon
         ? scale.moonDistance(r, def.id)
         : scale.planetDistance(r);
-      orbit = makeOrbitLine(def.elements, distMap);
-      if (!isMoon) {
-        scene.add(orbit);
+      if (def.id === 'moon') {
+        // The Moon's orbit line is one revolution of its REAL Meeus ch.47
+        // geocentric path (sampled once at build time; the path shape is
+        // slow-moving), mapped with the same per-point distance the body
+        // positions use. The line is attached to the parent pivot below,
+        // which carries the same tilt rotation the body position receives
+        // in updatePositions - so both share the exact transform and the
+        // body stays glued to the drawn line.
+        const t0 = 5000 * (Date.now() - J2000_UTC) / 86400000;
+        const pts: THREE.Vector3[] = [];
+        for (let k = 0; k <= 128; k++) {
+          const p = moonGeocentricJ2000(t0 + (k / 128) * 27.55455);
+          const km = Math.hypot(p[0], p[1], p[2]) * AU_KM;
+          const s = eclipticToScene({ x: p[0], y: p[1], z: p[2] });
+          pts.push(s.multiplyScalar(scale.moonDistance(km, 'moon') / Math.max(1e-9, km)));
+        }
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        const mat = new THREE.LineBasicMaterial({
+          color: 0x5570a0, transparent: true, opacity: 0.45,
+        });
+        orbit = new THREE.Line(geo, mat);
+        orbit.userData.geo = geo;
+        orbit.userData.mat = mat;
+        disposables.push(geo, mat);
+      } else {
+        orbit = makeOrbitLine(def.elements, distMap);
+        if (!isMoon) {
+          scene.add(orbit);
+        }
+        // Other moons' orbits are attached to the parent pivot after all
+        // bodies exist.
       }
-      // Moon orbits are attached to the parent pivot after all bodies exist.
     }
 
     const parent = isMoon && def.parent ? (map.get(def.parent) ?? null) : null;
@@ -459,10 +488,20 @@ export function updatePositions(
       pivot.position.copy(s.multiplyScalar(factor));
       entry.worldPos.copy(pivot.position);
     } else if (def.kind === 'moon' && def.elements) {
-      const p = positionAtInto(def.elements, tDays, auScratch); // km, parent-equatorial frame
+      let p: Vec3;
+      if (def.id === 'moon') {
+        // Real ephemeris: Meeus ch.47 geocentric position (J2000 ecliptic,
+        // AU), not the nominal two-body orbit. The distance display still
+        // goes through the shared moon scale, fed with the true km distance.
+        const m = moonGeocentricJ2000(tDays);
+        p = { x: m[0], y: m[1], z: m[2] };
+      } else {
+        p = positionAtInto(def.elements, tDays, auScratch); // km, parent-equatorial frame
+      }
       const s = eclipticToSceneInto(p, scratch);
       const d = Math.hypot(p.x, p.y, p.z);
-      const factor = scale.moonDistance(d, def.id) / Math.max(1e-9, d);
+      const km = def.id === 'moon' ? d * AU_KM : d; // Moon: AU -> km; others: already km
+      const factor = scale.moonDistance(km, def.id) / Math.max(1e-9, d);
       const local = s.multiplyScalar(factor);
       const parent = entry.parent;
       if (parent) {

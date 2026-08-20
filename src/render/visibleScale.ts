@@ -48,19 +48,19 @@ export const SUN_R = 1.35;
  * module docstring for the derivation.
  */
 const ANCHORS: ReadonlyArray<readonly [au: number, d: number]> = [
-  [0.387099, 5.000000],    // mercury
-  [0.723332, 9.724523],    // venus
-  [1.000003, 15.051060],   // earth
-  [1.523710, 23.211637],   // mars
-  [2.7675, 28.815177],     // asteroid belt centre (Ceres)
-  [5.203363, 43.950402],   // jupiter
-  [9.53707, 66.856402],    // saturn
-  [19.191264, 83.895733],  // uranus
-  [30.068963, 101.998096], // neptune
-  [39.482117, 126.472295], // pluto
-  [43.11, 128.472295],     // haumea
-  [45.43, 130.472295],     // makemake
-  [67.864, 132.472295],    // eris
+  [0.387098, 5.000000],     // mercury
+  [0.723321, 9.724486],     // venus
+  [1.000000, 15.051293],    // earth
+  [1.523712, 23.211311],    // mars
+  [2.767500, 28.814579],    // asteroid belt centre (Ceres)
+  [5.202480, 43.956733],    // jupiter
+  [9.541499, 66.964136],    // saturn
+  [19.187979, 84.022651],   // uranus
+  [30.069528, 102.130054],  // neptune
+  [39.482117, 126.602786],  // pluto
+  [43.110000, 128.602786],  // haumea
+  [45.430000, 130.602786],  // makemake
+  [67.864000, 132.602786],  // eris
 ];
 
 /** Piecewise-linear heliocentric distance mapping (AU -> scene units).

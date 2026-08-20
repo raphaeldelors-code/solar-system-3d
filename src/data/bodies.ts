@@ -1,20 +1,23 @@
 /**
  * Solar-system body data.
  *
- * Orbital elements are J2000 MEAN elements from JPL/Standish ("Approximate
- * Positions of the Planets 1800-2050"), converted to the convention used by
- * src/sim/kepler.ts:
- *   M0   = L - varpi      (mean anomaly at epoch, deg)
- *   peri = varpi - node   (argument of perihelion, deg)
- *   node = Omega          (longitude of ascending node, deg)
- *   n    = dL / dT        (mean motion, deg/day)
- * a in AU for planets; in km for moons (position offset from the parent).
- * Retrograde orbits are encoded by i > 90 deg (Triton), never by n < 0.
+ * Planet orbital elements are JPL "Approximate Positions of the Planets
+ * 1800-2050" Table 2a (Standish & Williams 1992), converted to the
+ * convention used by src/sim/kepler.ts:
+ *   node = Omega,  peri = varpi - Omega,  M0 = L - varpi   (J2000, deg)
+ *   n    = (dL - dvarpi) / 36525                      (mean motion, deg/day)
+ * Secular rates per Julian century live in `rates`; the Table 2b periodic
+ * terms of the mean anomaly (Jupiter..Neptune) live in `periodicM` and are
+ * applied by `meanAnomalyAt` in src/sim/kepler.ts. The Earth entry is the
+ * Earth/Moon BARYCENTER, which is what Table 2a describes; the rendered
+ * Moon is a separate Meeus ch.47 ephemeris (src/sim/moon.ts).
  *
- * Precision: good to a few 0.01 deg of longitude over a few decades —
- * plenty for a visual simulation; not an ephemeris.
- */
-import type { BodyDefinition } from '../sim/types';
+ * a in AU for planets; in km for moons (position offset from the parent).
+ * The Moon keeps a nominal J2000 element set for its displayed orbit line
+ * and UI bookkeeping; its per-frame position in scene.ts comes from the
+ * Meeus ch.47 tables instead of the two-body solution.
+ * Retrograde orbits are encoded by i > 90 deg (Triton), never by n < 0.
+ */import type { BodyDefinition } from '../sim/types';
 
 /** Convert 0xrrggbb to an RGB tuple for BodyDefinition.color. */
 const rgb = (hex: number): [number, number, number] => [
@@ -39,9 +42,10 @@ export const PLANETS: BodyDefinition[] = [
   {
     id: 'mercury', name: 'Mercury', kind: 'planet', parent: 'sun',
     elements: {
-      a: 0.38709893, e: 0.20563069, i: 7.00524868,
-      node: 48.33129135, peri: -23.9435788, M0: 174.79115238,
+      a: 0.38709843, e: 0.20563661, i: 7.00559432,
+      node: 48.33961819, peri: 29.118100759999997, M0: 174.79394829,
       n: 4.09233444,
+      rates: { a: 0.0, e: 2.123e-05, i: -0.00590158, node: -0.12214182, peri: 0.28154195 },
     },
     radiusKm: 2439.7,
     rotationHours: 1407.5,
@@ -53,12 +57,13 @@ export const PLANETS: BodyDefinition[] = [
   {
     id: 'venus', name: 'Venus', kind: 'planet', parent: 'sun',
     elements: {
-      a: 0.72333199, e: 0.00677323, i: 3.39471722,
-      node: 76.68021837, peri: 54.95479212, M0: 50.58151601,
-      n: 1.60213034,
+      a: 0.72332102, e: 0.00676399, i: 3.39777545,
+      node: 76.67261496, peri: 55.094942169999996, M0: 50.21215136999999,
+      n: 1.60212892,
+      rates: { a: -2.6e-07, e: -5.107e-05, i: 0.00043494, node: -0.27274174, peri: 0.32953822 },
     },
     radiusKm: 6051.8,
-    rotationHours: -5832.5, // retrograde spin
+    rotationHours: -5832.5,
     tiltDeg: 177.36,
     color: rgb(0xe6c98a),
     color2: rgb(0xc9a86a),
@@ -67,9 +72,10 @@ export const PLANETS: BodyDefinition[] = [
   {
     id: 'earth', name: 'Earth', kind: 'planet', parent: 'sun',
     elements: {
-      a: 1.00000261, e: 0.01671123, i: -0.00001531,
-      node: 0.0, peri: 102.93768193, M0: -2.47311,
-      n: 0.98560912,
+      a: 1.00000018, e: 0.01673163, i: -0.00054346,
+      node: -5.11260389, peri: 108.04266274, M0: -2.4631431299999917,
+      n: 0.98560041,
+      rates: { a: -3e-08, e: -3.661e-05, i: -0.01337178, node: -0.24123856, peri: 0.5591911599999999 },
     },
     radiusKm: 6371.0,
     rotationHours: 23.93,
@@ -81,9 +87,10 @@ export const PLANETS: BodyDefinition[] = [
   {
     id: 'mars', name: 'Mars', kind: 'planet', parent: 'sun',
     elements: {
-      a: 1.52371034, e: 0.0933941, i: 1.84969142,
-      node: 49.55953891, peri: -73.5031685, M0: 19.39019048,
-      n: 0.52402078,
+      a: 1.52371243, e: 0.09336511, i: 1.85181869,
+      node: 49.71320984, peri: -73.63065768, M0: 19.3493162,
+      n: 0.52402045,
+      rates: { a: 9.7e-07, e: 9.149e-05, i: -0.00724757, node: -0.26852431, peri: 0.72076056 },
     },
     radiusKm: 3389.5,
     rotationHours: 24.62,
@@ -95,9 +102,11 @@ export const PLANETS: BodyDefinition[] = [
   {
     id: 'jupiter', name: 'Jupiter', kind: 'planet', parent: 'sun',
     elements: {
-      a: 5.20336301, e: 0.04838624, i: 1.30530838,
-      node: 100.4738848, peri: 14.81452005, M0: 19.89500253,
-      n: 0.08305566,
+      a: 5.20248019, e: 0.0485359, i: 1.29861416,
+      node: 100.29282654, peri: -86.0178741, M0: 20.059839080000003,
+      n: 0.08308615,
+      rates: { a: -2.864e-05, e: 0.00018026, i: -0.00322699, node: 0.13024619, peri: 0.051745769999999996 },
+      periodicM: [ { b: -0.00012452, c: 0.0606406, s: -0.35635438, f: 38.35125 } ],
     },
     radiusKm: 69911,
     rotationHours: 9.93,
@@ -109,9 +118,11 @@ export const PLANETS: BodyDefinition[] = [
   {
     id: 'saturn', name: 'Saturn', kind: 'planet', parent: 'sun',
     elements: {
-      a: 9.53707032, e: 0.05386179, i: 2.48446465,
-      node: 113.66242448, peri: 92.81254132, M0: 319.56276892,
-      n: 0.03343968,
+      a: 9.54149883, e: 0.05550825, i: 2.49424102,
+      node: 113.63998702, peri: -20.778626390000014, M0: -42.78564733999999,
+      n: 0.03344485,
+      rates: { a: -3.065e-05, e: -0.00032044, i: 0.00451969, node: -0.25015002, peri: 0.7919448 },
+      periodicM: [ { b: 0.00025899, c: -0.13434469, s: 0.87320147, f: 38.35125 } ],
     },
     radiusKm: 58232,
     rotationHours: 10.66,
@@ -119,29 +130,33 @@ export const PLANETS: BodyDefinition[] = [
     color: rgb(0xe3d3a3),
     color2: rgb(0xbfa77a),
     texture: 'gas',
-    rings: { inner: 1.24, outer: 2.27, opacity: 0.85, color: rgb(0xcfc4a6) },
+  rings: { inner: 1.24, outer: 2.27, opacity: 0.85, color: rgb(0xcfc4a6) },
   },
   {
     id: 'uranus', name: 'Uranus', kind: 'planet', parent: 'sun',
     elements: {
-      a: 19.19126393, e: 0.04725744, i: 0.76986308,
-      node: 74.01692503, peri: 171.65786469, M0: 145.00115509,
-      n: 0.01175261,
+      a: 19.18797948, e: 0.0468574, i: 0.77298127,
+      node: 73.96250215, peri: 98.47154226, M0: 141.76872184,
+      n: 0.01172902,
+      rates: { a: -0.00020455, e: -1.55e-05, i: -0.00180155, node: 0.05739699, peri: 0.035272859999999996 },
+      periodicM: [ { b: 0.00058331, c: -0.97731848, s: 0.17689245, f: 7.67025 } ],
     },
     radiusKm: 25362,
-    rotationHours: -17.24, // retrograde spin
+    rotationHours: -17.24,
     tiltDeg: 97.77,
     color: rgb(0x9fd8e0),
     color2: rgb(0x7cc2cc),
     texture: 'ice',
-    rings: { inner: 1.64, outer: 2.0, opacity: 0.25, color: rgb(0x9fb8c0) },
+  rings: { inner: 1.64, outer: 2.0, opacity: 0.25, color: rgb(0x9fb8c0) },
   },
   {
     id: 'neptune', name: 'Neptune', kind: 'planet', parent: 'sun',
     elements: {
-      a: 30.06896348, e: 0.00859048, i: 1.76684385,
-      node: 131.78063601, peri: 44.80244713, M0: 261.64306417,
-      n: 0.00600423,
+      a: 30.06952752, e: 0.00895439, i: 1.7700552,
+      node: 131.78635853, peri: -85.10477129, M0: 257.54130563,
+      n: 0.00598097,
+      rates: { a: 6.447e-05, e: 8.18e-06, i: 0.000224, node: -0.00606302, peri: 0.0161624 },
+      periodicM: [ { b: -0.00041348, c: 0.68346318, s: -0.10162547, f: 7.67025 } ],
     },
     radiusKm: 24622,
     rotationHours: 16.11,
@@ -152,10 +167,6 @@ export const PLANETS: BodyDefinition[] = [
   },
 ];
 
-/**
- * Dwarf planets (JPL/Standish-style J2000 mean elements). a in AU.
- * Pluto's large eccentricity and 17° inclination are what make it interesting.
- */
 export const DWARF_PLANETS: BodyDefinition[] = [
   {
     id: 'pluto', name: 'Pluto', kind: 'dwarf', parent: 'sun',
