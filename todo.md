@@ -8,7 +8,7 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] Plan 002 written
 - [x] A1 fix(render): kill per-frame Vector3 alloc in updatePositions
 - [x] A2 fix(sim): JPL secular rates + long-range accuracy tests (Mars opp. 2027-02-19, Mercury transit 2032-11-13, eclipse 2026-08-12) — Table 2a/2b rates+periodic anomaly terms, geocentric Moon (Meeus ch.47), Horizons DE441 ground-truth fixture; `2995fbe`
-- [ ] A3 fix(web): og: meta + og-image + webglcontextlost handler
+- [x] A3 fix(web): og: meta + og-image + webglcontextlost handler — `og:`/twitter tags + 1200×630 `public/og-image.png` (`scripts/make_og_image.py`, pure stdlib) + graceful `webglcontextlost`/`restored` pause-overlay in `main.ts`
 - [ ] A4 fix(tools): ESLint + Prettier + CI lint step
 - [ ] B1 feat(sim): celestial event engine (eclipses, transits, conjunctions, oppositions, Saturn edge-on) + Events UI
 - [ ] B2 feat(nav): body search combobox + clean grouped satellite menu
