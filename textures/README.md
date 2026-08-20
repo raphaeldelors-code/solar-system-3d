@@ -19,9 +19,9 @@ needed** — just add files. `bodyId` is the `id` field in `src/data/bodies.ts`
 
 NASA imagery is public domain. Good sources (equirectangular, 2:1 aspect):
 
-- Earth  — Blue Marble / MODIS (visible + night lights)
-- Moon   — Lunar Orbiter / LRO Mosaic
-- Mars   — MRO / HiRISE full-surface mosaic
+- Earth — Blue Marble / MODIS (visible + night lights)
+- Moon — Lunar Orbiter / LRO Mosaic
+- Mars — MRO / HiRISE full-surface mosaic
 - Jupiter/Saturn — Cassini/Juno global color mosaics
 
 Any 2:1 JPG (e.g. 2048×1024) works; the texture is wrapped horizontally and
