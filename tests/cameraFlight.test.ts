@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-  easeInOutCubic, dirTo, frameBody, frameSystem, frameConstellations,
-  stepFlight, makeFlight, type Flight, type CamAnchor,
+  easeInOutCubic,
+  dirTo,
+  frameBody,
+  frameSystem,
+  frameConstellations,
+  stepFlight,
+  makeFlight,
+  type Flight,
+  type CamAnchor,
 } from '../src/render/cameraFlight';
 
 const approx = (got: number, want: number, tol = 1e-6) =>
@@ -12,8 +19,8 @@ describe('easeInOutCubic', () => {
     approx(easeInOutCubic(0), 0);
     approx(easeInOutCubic(1), 1);
     approx(easeInOutCubic(0.5), 0.5);
-    approx(easeInOutCubic(-0.5), 0);   // clamped
-    approx(easeInOutCubic(1.5), 1);    // clamped
+    approx(easeInOutCubic(-0.5), 0); // clamped
+    approx(easeInOutCubic(1.5), 1); // clamped
   });
   it('accelerates then decelerates (mid slow at ends, fast in middle)', () => {
     // slope near 0 is ~0, slope at 0.5 is ~2x the average.
@@ -28,7 +35,9 @@ describe('easeInOutCubic', () => {
 describe('dirTo', () => {
   it('unit vector along the axis', () => {
     const d = dirTo([0, 0, 0], [0, 0, 10]);
-    approx(d[0], 0); approx(d[1], 0); approx(d[2], 1);
+    approx(d[0], 0);
+    approx(d[1], 0);
+    approx(d[2], 1);
   });
   it('coincident points -> [0,1,0]', () => {
     const d = dirTo([1, 2, 3], [1, 2, 3]);
@@ -72,7 +81,7 @@ describe('frameConstellations', () => {
     const a = frameConstellations(4800, 140, 50);
     expect(a.target).toEqual([0, 0, 0]);
     const dist = Math.hypot(a.pos[0], a.pos[1], a.pos[2]);
-    expect(dist).toBeLessThan(4800);           // inside the constellation shell
+    expect(dist).toBeLessThan(4800); // inside the constellation shell
     expect(dist).toBeGreaterThan(0);
   });
 });
@@ -81,10 +90,15 @@ describe('stepFlight', () => {
   // Flight from camera [0,0,0] orbiting origin, to camera [10,0,0] orbiting
   // [5,0,0]. target: [0,0,0]->[5,0,0]; offset(camera−target): [0,0,0]->[5,0,0].
   const mk = (): Flight => ({
-    fromTarget: [0, 0, 0], fromOffset: [0, 0, 0],
-    toTarget: [5, 0, 0], toOffset: [5, 0, 0],
-    duration: 1, t: 0, followId: null,
-    fromFov: 50, toFov: 50,
+    fromTarget: [0, 0, 0],
+    fromOffset: [0, 0, 0],
+    toTarget: [5, 0, 0],
+    toOffset: [5, 0, 0],
+    duration: 1,
+    t: 0,
+    followId: null,
+    fromFov: 50,
+    toFov: 50,
   });
   it('starts at the from pose and lands exactly on the to pose', () => {
     const f = mk();
@@ -112,10 +126,13 @@ describe('stepFlight', () => {
   });
   it('rigidly tracks a moving body: offset preserved, target substituted', () => {
     const f = makeFlight(
-      [0, 0, 0], [0, 0, 0], // from: cam at origin orbiting origin
+      [0, 0, 0],
+      [0, 0, 0], // from: cam at origin orbiting origin
       { target: [100, 0, 0], pos: [105, 0, 0] }, // to: orbit [100,0,0] at +5 offset
-      1, 'jupiter',
-      50, 50,
+      1,
+      'jupiter',
+      50,
+      50,
     );
     // Mid-flight (t=0.5): offset is halfway between [0,0,0] and [5,0,0] = [2.5,0,0].
     f.t = 0.5;
@@ -128,7 +145,9 @@ describe('stepFlight', () => {
     f.t = 1.0;
     const end = stepFlight(f, 0);
     const camAtLanding = [
-      liveBody[0] + end.offset[0], liveBody[1] + end.offset[1], liveBody[2] + end.offset[2],
+      liveBody[0] + end.offset[0],
+      liveBody[1] + end.offset[1],
+      liveBody[2] + end.offset[2],
     ];
     // offset at landing = toOffset = [5,0,0]
     approx(camAtLanding[0], 142, 1e-6);

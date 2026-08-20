@@ -133,7 +133,9 @@ describe('spot checks (real astronomy)', () => {
       const p = positionAt(m.elements!, 0);
       const r = dist(p);
       expect(r, `${m.id} |r|`).toBeGreaterThan(0);
-      expect(Math.abs(r - m.elements!.a), `${m.id} |r-a|`).toBeLessThan(m.elements!.a * (m.elements!.e + 0.02));
+      expect(Math.abs(r - m.elements!.a), `${m.id} |r-a|`).toBeLessThan(
+        m.elements!.a * (m.elements!.e + 0.02),
+      );
     }
   });
 });

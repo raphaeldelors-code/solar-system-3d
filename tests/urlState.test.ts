@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  parseAppState, encodeAppState, type ViewState,
-} from '../src/state/urlState';
+import { parseAppState, encodeAppState, type ViewState } from '../src/state/urlState';
 
 const BASE = 'http://localhost:4173/index.html';
 
@@ -11,9 +9,7 @@ describe('parseAppState', () => {
   });
 
   it('parses all scalar params', () => {
-    const s = parseAppState(
-      `${BASE}?t=1758000000000&sp=0.5&f=earth&sc=t&o=0&l=1&b=0&p=1&rv=1`,
-    );
+    const s = parseAppState(`${BASE}?t=1758000000000&sp=0.5&f=earth&sc=t&o=0&l=1&b=0&p=1&rv=1`);
     expect(s).toEqual({
       timeMs: 1758000000000,
       speedLog: 0.5,
@@ -60,8 +56,15 @@ describe('parseAppState', () => {
 describe('encodeAppState', () => {
   it('produces a clean absolute URL with ordered params', () => {
     const out = encodeAppState(BASE, {
-      timeMs: 1758000000000.4, speedLog: 0.5, follow: 'earth', scale: 'true',
-      orbits: false, labels: true, belts: false, paused: true, reversed: true,
+      timeMs: 1758000000000.4,
+      speedLog: 0.5,
+      follow: 'earth',
+      scale: 'true',
+      orbits: false,
+      labels: true,
+      belts: false,
+      paused: true,
+      reversed: true,
     });
     const u = new URL(out);
     expect(u.origin).toBe('http://localhost:4173');
@@ -99,8 +102,14 @@ describe('encodeAppState', () => {
 
   it('round-trips a full state through parse', () => {
     const s: ViewState = {
-      timeMs: 1758000000000, speedLog: 1.25, follow: 'jupiter', scale: 'true',
-      orbits: true, labels: false, belts: true, paused: false,
+      timeMs: 1758000000000,
+      speedLog: 1.25,
+      follow: 'jupiter',
+      scale: 'true',
+      orbits: true,
+      labels: false,
+      belts: true,
+      paused: false,
       cam: { pos: [10, 20, 30], target: [0, 0, 0] },
     };
     const out = encodeAppState(BASE, s);

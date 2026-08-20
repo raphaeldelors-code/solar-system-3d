@@ -26,16 +26,16 @@ npm run build      # type-check (tsc --noEmit) + vite production build
 
 ## Controls
 
-| Control | Action |
-| --- | --- |
-| Drag | Rotate camera |
-| Wheel | Zoom |
-| Right-drag | Pan |
-| Speed slider | Sim speed, 0.01–100 days/sec (log scale) |
-| Pause / Now | Freeze time / jump to today |
-| Follow | Lock camera to Sun, any planet, or moon |
-| Scale | **Visible** (compressed distances, exaggerated sizes) or **True** (physical scale) |
-| Orbits / Labels | Toggle orbit lines and name labels |
+| Control         | Action                                                                             |
+| --------------- | ---------------------------------------------------------------------------------- |
+| Drag            | Rotate camera                                                                      |
+| Wheel           | Zoom                                                                               |
+| Right-drag      | Pan                                                                                |
+| Speed slider    | Sim speed, 0.01–100 days/sec (log scale)                                           |
+| Pause / Now     | Freeze time / jump to today                                                        |
+| Follow          | Lock camera to Sun, any planet, or moon                                            |
+| Scale           | **Visible** (compressed distances, exaggerated sizes) or **True** (physical scale) |
+| Orbits / Labels | Toggle orbit lines and name labels                                                 |
 
 ## Architecture
 

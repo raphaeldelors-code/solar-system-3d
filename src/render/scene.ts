@@ -21,12 +21,15 @@ import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
 import { CONSTELLATIONS, raDecToUnit } from '../data/constellations';
+import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows';
 import {
-  SUN_SHADOWS, configureSunShadows, setBodyShadowFlags,
-} from './shadows';
-import {
-  SUN_R, planetRadiusKm, moonRadiusKm, planetDistance, moonDistance,
-  baseMoonDistance, followDistanceKm,
+  SUN_R,
+  planetRadiusKm,
+  moonRadiusKm,
+  planetDistance,
+  moonDistance,
+  baseMoonDistance,
+  followDistanceKm,
 } from './visibleScale';
 
 export const AU = 1; // 1 scene unit per AU
@@ -59,8 +62,7 @@ export const VISIBLE_SCALE: VisualScale = {
   bodyRadiusKm: planetRadiusKm,
   moonRadiusKm: moonRadiusKm,
   planetDistance,
-  moonDistance: (km, moonId) =>
-    (moonId ? moonDistance(moonId, km) : null) ?? baseMoonDistance(km),
+  moonDistance: (km, moonId) => (moonId ? moonDistance(moonId, km) : null) ?? baseMoonDistance(km),
   followDistanceKm,
 };
 
@@ -130,7 +132,10 @@ function eclipticToScene(v: { x: number; y: number; z: number }): THREE.Vector3 
  * Allocation-free ecliptic->scene map: writes into the caller-owned vector.
  * (ecliptic x -> -x, ecliptic y -> -z, ecliptic north z -> +y)
  */
-function eclipticToSceneInto(v: { x: number; y: number; z: number }, out: THREE.Vector3): THREE.Vector3 {
+function eclipticToSceneInto(
+  v: { x: number; y: number; z: number },
+  out: THREE.Vector3,
+): THREE.Vector3 {
   out.set(-v.x, v.z, -v.y);
   return out;
 }
@@ -152,7 +157,9 @@ function makeOrbitLine(
   });
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
   const mat = new THREE.LineBasicMaterial({
-    color: 0x5570a0, transparent: true, opacity: 0.45,
+    color: 0x5570a0,
+    transparent: true,
+    opacity: 0.45,
   });
   const line = new THREE.Line(geo, mat);
   line.userData.geo = geo;
@@ -184,7 +191,10 @@ export function buildScene(
   scene.background = new THREE.Color(0x000005);
 
   const camera = new THREE.PerspectiveCamera(
-    50, window.innerWidth / window.innerHeight, 0.0005, 20000,
+    50,
+    window.innerWidth / window.innerHeight,
+    0.0005,
+    20000,
   );
   camera.position.set(0, 16, 30);
 
@@ -202,8 +212,10 @@ export function buildScene(
   const starCount = 4000;
   const starPos = new Float32Array(starCount * 3);
   for (let i = 0; i < starCount; i++) {
-    const u = Math.random(), v = Math.random();
-    const theta = 2 * Math.PI * u, phi = Math.acos(2 * v - 1);
+    const u = Math.random(),
+      v = Math.random();
+    const theta = 2 * Math.PI * u,
+      phi = Math.acos(2 * v - 1);
     const r = 5000 + Math.random() * 3000;
     starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
     starPos[i * 3 + 1] = r * Math.cos(phi);
@@ -212,8 +224,11 @@ export function buildScene(
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
   const starMat = new THREE.PointsMaterial({
-    color: 0xdde6f5, size: 1.6, sizeAttenuation: false,
-    transparent: true, opacity: 0.8,
+    color: 0xdde6f5,
+    size: 1.6,
+    sizeAttenuation: false,
+    transparent: true,
+    opacity: 0.8,
   });
   scene.add(new THREE.Points(starGeo, starMat));
 
@@ -225,7 +240,10 @@ export function buildScene(
   const map = new Map<string, SceneBody>();
 
   // Planets and Sun first so moons can resolve their parents.
-  const ordered = [...bodies.filter((b) => b.kind !== 'moon'), ...bodies.filter((b) => b.kind === 'moon')];
+  const ordered = [
+    ...bodies.filter((b) => b.kind !== 'moon'),
+    ...bodies.filter((b) => b.kind === 'moon'),
+  ];
 
   for (const def of ordered) {
     const isStar = def.kind === 'star';
@@ -234,7 +252,9 @@ export function buildScene(
     // Radius in scene units (stars get a special size; moons are much
     // smaller than planets so satellites read as satellites).
     const r = isStar
-      ? (scale === TRUE_SCALE ? (def.radiusKm / AU_TO_KM) * 1.15 : SUN_R)
+      ? scale === TRUE_SCALE
+        ? (def.radiusKm / AU_TO_KM) * 1.15
+        : SUN_R
       : isMoon
         ? scale.moonRadiusKm(def.radiusKm)
         : scale.bodyRadiusKm(def.radiusKm);
@@ -265,8 +285,11 @@ export function buildScene(
     // as the selected satellite.
     const hlGeo = new THREE.RingGeometry(1.55, 2.35, 64);
     const hlMat = new THREE.MeshBasicMaterial({
-      color: 0x7fd8ff, side: THREE.DoubleSide, transparent: true,
-      opacity: 0, depthWrite: false,
+      color: 0x7fd8ff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
     });
     const orbitEmphasis = new THREE.Mesh(hlGeo, hlMat);
     orbitEmphasis.rotation.x = -Math.PI / 2;
@@ -277,7 +300,8 @@ export function buildScene(
 
     // Rings.
     if (def.rings) {
-      const inner = r * def.rings.inner, outer = r * def.rings.outer;
+      const inner = r * def.rings.inner,
+        outer = r * def.rings.outer;
       const ringGeo = new THREE.RingGeometry(inner, outer, 96);
       // Standard (lit) material so the rings react to the sun AND receive
       // shadows (Saturn's shadow band across the rings). RingGeometry is a
@@ -313,9 +337,8 @@ export function buildScene(
     // use) so eccentric ellipses stay on their drawn path.
     let orbit: THREE.Line | null = null;
     if (def.elements) {
-      const distMap = (r: number): number => isMoon
-        ? scale.moonDistance(r, def.id)
-        : scale.planetDistance(r);
+      const distMap = (r: number): number =>
+        isMoon ? scale.moonDistance(r, def.id) : scale.planetDistance(r);
       if (def.id === 'moon') {
         // The Moon's orbit line is one revolution of its REAL Meeus ch.47
         // geocentric path (sampled once at build time; the path shape is
@@ -324,7 +347,7 @@ export function buildScene(
         // which carries the same tilt rotation the body position receives
         // in updatePositions - so both share the exact transform and the
         // body stays glued to the drawn line.
-        const t0 = 5000 * (Date.now() - J2000_UTC) / 86400000;
+        const t0 = (5000 * (Date.now() - J2000_UTC)) / 86400000;
         const pts: THREE.Vector3[] = [];
         for (let k = 0; k <= 128; k++) {
           const p = moonGeocentricJ2000(t0 + (k / 128) * 27.55455);
@@ -334,7 +357,9 @@ export function buildScene(
         }
         const geo = new THREE.BufferGeometry().setFromPoints(pts);
         const mat = new THREE.LineBasicMaterial({
-          color: 0x5570a0, transparent: true, opacity: 0.45,
+          color: 0x5570a0,
+          transparent: true,
+          opacity: 0.45,
         });
         orbit = new THREE.Line(geo, mat);
         orbit.userData.geo = geo;
@@ -356,7 +381,13 @@ export function buildScene(
     // its body diameter.
     const frameExtent = def.rings ? 2 * r * def.rings.outer : 2 * r;
     const entry: SceneBody = {
-      def, pivot, mesh, label, orbit, orbitEmphasis, parent,
+      def,
+      pivot,
+      mesh,
+      label,
+      orbit,
+      orbitEmphasis,
+      parent,
       spin: 0,
       worldPos: new THREE.Vector3(),
       sceneRadius: r,
@@ -392,7 +423,19 @@ export function buildScene(
     renderer.dispose();
   }
 
-  return { renderer, camera, controls, scene, bodies: map, belts, sunLight, starMat, constellations, userData: {}, dispose };
+  return {
+    renderer,
+    camera,
+    controls,
+    scene,
+    bodies: map,
+    belts,
+    sunLight,
+    starMat,
+    constellations,
+    userData: {},
+    dispose,
+  };
 }
 
 /** Constellation sky radius: just inside the procedural starfield shell. */
@@ -407,12 +450,18 @@ export function buildConstellations(): THREE.Group {
   group.name = 'constellations';
 
   const lineMat = new THREE.LineBasicMaterial({
-    color: 0x8fb0ff, transparent: true, opacity: 0.32,
+    color: 0x8fb0ff,
+    transparent: true,
+    opacity: 0.32,
     depthWrite: false,
   });
   const dotMat = new THREE.PointsMaterial({
-    color: 0xcfe0ff, size: 3.2, sizeAttenuation: false,
-    transparent: true, opacity: 0.9, depthWrite: false,
+    color: 0xcfe0ff,
+    size: 3.2,
+    sizeAttenuation: false,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
   });
 
   const lineVerts: number[] = [];
@@ -442,8 +491,10 @@ export function buildConstellations(): THREE.Group {
 
   // Expose for disposal.
   group.userData.dispose = () => {
-    lineGeo.dispose(); lineMat.dispose();
-    dotGeo.dispose(); dotMat.dispose();
+    lineGeo.dispose();
+    lineMat.dispose();
+    dotGeo.dispose();
+    dotMat.dispose();
   };
   return group;
 }
@@ -456,16 +507,13 @@ export function buildConstellations(): THREE.Group {
  * `BuiltScene`, and one shared scratch vector replaces the per-body
  * `new THREE.Vector3` churn (~36/frame + belt instances).
  */
-export function updatePositions(
-  built: BuiltScene,
-  tDays: number,
-  scale: VisualScale,
-): void {
+export function updatePositions(built: BuiltScene, tDays: number, scale: VisualScale): void {
   let order = built.userData.updateOrder as SceneBody[] | undefined;
   if (!order) {
     // Planets + Sun first (moons depend on parent world positions).
     order = [...built.bodies.values()].sort((a, b) => {
-      const da = a.parent ? 1 : 0, db = b.parent ? 1 : 0;
+      const da = a.parent ? 1 : 0,
+        db = b.parent ? 1 : 0;
       return da - db;
     });
     built.userData.updateOrder = order;
@@ -577,11 +625,7 @@ export function satelliteExtentScene(planetId: string, scale: VisualScale): numb
  * selection. Call once per frame with a wall-clock `tSeconds` to drive
  * the pulse (phase is absolute, so the pulse never jumps).
  */
-export function updateSatelliteHighlight(
-  built: BuiltScene,
-  id: string,
-  tSeconds: number,
-): void {
+export function updateSatelliteHighlight(built: BuiltScene, id: string, tSeconds: number): void {
   const phase = 0.5 + 0.5 * Math.sin(tSeconds * 3.4); // 0..1, ~1.9 s period
   for (const entry of built.bodies.values()) {
     const isSel = id !== '' && entry.def.id === id;

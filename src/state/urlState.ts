@@ -112,12 +112,12 @@ export function encodeAppState(href: string, s: ViewState): string {
   setOrDel('t', s.timeMs !== undefined ? String(Math.round(s.timeMs)) : undefined);
   setOrDel('sp', s.speedLog !== undefined ? String(round3(s.speedLog)) : undefined);
   setOrDel('f', s.follow === undefined ? undefined : s.follow);
-  setOrDel('sc', s.scale === undefined ? undefined : (s.scale === 'true' ? 't' : 'v'));
-  setOrDel('o', s.orbits === undefined ? undefined : (s.orbits ? '1' : '0'));
-  setOrDel('l', s.labels === undefined ? undefined : (s.labels ? '1' : '0'));
-  setOrDel('b', s.belts === undefined ? undefined : (s.belts ? '1' : '0'));
-  setOrDel('p', s.paused === undefined ? undefined : (s.paused ? '1' : '0'));
-  setOrDel('rv', s.reversed === undefined ? undefined : (s.reversed ? '1' : '0'));
+  setOrDel('sc', s.scale === undefined ? undefined : s.scale === 'true' ? 't' : 'v');
+  setOrDel('o', s.orbits === undefined ? undefined : s.orbits ? '1' : '0');
+  setOrDel('l', s.labels === undefined ? undefined : s.labels ? '1' : '0');
+  setOrDel('b', s.belts === undefined ? undefined : s.belts ? '1' : '0');
+  setOrDel('p', s.paused === undefined ? undefined : s.paused ? '1' : '0');
+  setOrDel('rv', s.reversed === undefined ? undefined : s.reversed ? '1' : '0');
 
   if (s.cam) {
     const [px, py, pz, tx, ty, tz] = [...s.cam.pos, ...s.cam.target].map(round3);
@@ -128,7 +128,8 @@ export function encodeAppState(href: string, s: ViewState): string {
 
   const search = q.toString();
   // Rebuild preserving origin + path (absolute input) or path (relative input).
-  const prefix = u.origin.startsWith('http') && href.includes('://') ? `${u.origin}${u.pathname}` : u.pathname;
+  const prefix =
+    u.origin.startsWith('http') && href.includes('://') ? `${u.origin}${u.pathname}` : u.pathname;
   return `${prefix}${search ? `?${search}` : ''}${u.hash}`;
 }
 

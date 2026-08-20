@@ -6,8 +6,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
 import {
-  textureUrlFor, probeRealTexture, loadRealTexture, attachRealTextures,
-  resetProbeCache, resetRealTextureCache,
+  textureUrlFor,
+  probeRealTexture,
+  loadRealTexture,
+  attachRealTextures,
+  resetProbeCache,
+  resetRealTextureCache,
 } from '../src/render/realTextures';
 import type { SceneBody } from '../src/render/scene';
 import type { BodyDefinition } from '../src/sim/types';
@@ -15,8 +19,7 @@ import type { BodyDefinition } from '../src/sim/types';
 type FakeFetch = (url: string, init?: { method?: string }) => Promise<{ ok: boolean }>;
 
 function okFetch(existing: Set<string>): FakeFetch {
-  return (url) =>
-    Promise.resolve({ ok: existing.has(url) });
+  return (url) => Promise.resolve({ ok: existing.has(url) });
 }
 
 /** Minimal SceneBody stub: only def.id and mesh.material are read. */
@@ -79,7 +82,10 @@ describe('probeRealTexture', () => {
 
   it('dedupes concurrent probes to a single request', async () => {
     let n = 0;
-    const f: FakeFetch = () => { n += 1; return Promise.resolve({ ok: true }); };
+    const f: FakeFetch = () => {
+      n += 1;
+      return Promise.resolve({ ok: true });
+    };
     const [a, b, c] = await Promise.all([
       probeRealTexture('textures/jupiter.jpg', f),
       probeRealTexture('textures/jupiter.jpg', f),
@@ -140,7 +146,9 @@ describe('attachRealTextures', () => {
     // getter), so intercept the set to assert it was marked for recompile.
     let markedForUpdate = false;
     Object.defineProperty(earth.mat, 'needsUpdate', {
-      set(v: boolean) { markedForUpdate = v; },
+      set(v: boolean) {
+        markedForUpdate = v;
+      },
       configurable: true,
     });
     const applied = await attachRealTextures([earth.entry, mars.entry], loader, f);

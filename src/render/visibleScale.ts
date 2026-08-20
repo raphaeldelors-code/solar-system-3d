@@ -48,19 +48,19 @@ export const SUN_R = 1.35;
  * module docstring for the derivation.
  */
 const ANCHORS: ReadonlyArray<readonly [au: number, d: number]> = [
-  [0.387098, 5.000000],     // mercury
-  [0.723321, 9.724486],     // venus
-  [1.000000, 15.051293],    // earth
-  [1.523712, 23.211311],    // mars
-  [2.767500, 28.814579],    // asteroid belt centre (Ceres)
-  [5.202480, 43.956733],    // jupiter
-  [9.541499, 66.964136],    // saturn
-  [19.187979, 84.022651],   // uranus
-  [30.069528, 102.130054],  // neptune
-  [39.482117, 126.602786],  // pluto
-  [43.110000, 128.602786],  // haumea
-  [45.430000, 130.602786],  // makemake
-  [67.864000, 132.602786],  // eris
+  [0.387098, 5.0], // mercury
+  [0.723321, 9.724486], // venus
+  [1.0, 15.051293], // earth
+  [1.523712, 23.211311], // mars
+  [2.7675, 28.814579], // asteroid belt centre (Ceres)
+  [5.20248, 43.956733], // jupiter
+  [9.541499, 66.964136], // saturn
+  [19.187979, 84.022651], // uranus
+  [30.069528, 102.130054], // neptune
+  [39.482117, 126.602786], // pluto
+  [43.11, 128.602786], // haumea
+  [45.43, 130.602786], // makemake
+  [67.864, 132.602786], // eris
 ];
 
 /** Piecewise-linear heliocentric distance mapping (AU -> scene units).
@@ -72,12 +72,12 @@ export function planetDistance(au: number): number {
     const [a1, d1] = ANCHORS[i];
     if (au <= a1) {
       const [a0, d0] = ANCHORS[i - 1];
-      return d0 + (au - a0) / (a1 - a0) * (d1 - d0);
+      return d0 + ((au - a0) / (a1 - a0)) * (d1 - d0);
     }
   }
   const [a0, d0] = ANCHORS[ANCHORS.length - 2];
   const [a1, d1] = ANCHORS[ANCHORS.length - 1];
-  return d1 + (au - a1) / (a1 - a0) * (d1 - d0); // extend past last anchor
+  return d1 + ((au - a1) / (a1 - a0)) * (d1 - d0); // extend past last anchor
 }
 
 // --------------------------------------------------------------------------
@@ -132,28 +132,28 @@ interface MoonClamp {
  * constraint solver in `solve_scale.py` — keep them in sync.
  */
 const MOON_CLAMPS: Readonly<Record<string, MoonClamp>> = {
-  moon:      { floor: 2.208715, cap: 3.111655 },
-  phobos:    { floor: 1.978417, cap: 2.793120 },
-  deimos:    { floor: 2.294943, cap: 2.794943 },
-  amalthea:  { floor: 2.584476, cap: 11.023209 },
-  io:        { floor: 3.034156, cap: 10.931830 },
-  europa:    { floor: 3.569515, cap: 10.937531 },
-  ganymede:  { floor: 4.118656, cap: 10.918046 },
-  callisto:  { floor: 4.683945, cap: 10.921384 },
-  himalia:   { floor: 5.143966, cap: 11.023314 },
+  moon: { floor: 2.208715, cap: 3.111655 },
+  phobos: { floor: 1.978417, cap: 2.79312 },
+  deimos: { floor: 2.294943, cap: 2.794943 },
+  amalthea: { floor: 2.584476, cap: 11.023209 },
+  io: { floor: 3.034156, cap: 10.93183 },
+  europa: { floor: 3.569515, cap: 10.937531 },
+  ganymede: { floor: 4.118656, cap: 10.918046 },
+  callisto: { floor: 4.683945, cap: 10.921384 },
+  himalia: { floor: 5.143966, cap: 11.023314 },
   enceladus: { floor: 5.170574, cap: 8.103596 },
-  tethys:    { floor: 5.601783, cap: 8.080787 },
-  dione:     { floor: 6.057633, cap: 8.078954 },
-  rhea:      { floor: 6.525752, cap: 8.068518 },
-  titan:     { floor: 7.048484, cap: 8.024341 },
-  iapetus:   { floor: 7.569867, cap: 8.069867 },
-  miranda:   { floor: 4.292651, cap: 6.671852 },
-  ariel:     { floor: 4.724860, cap: 6.644337 },
-  umbriel:   { floor: 5.184918, cap: 6.644004 },
-  titania:   { floor: 5.655488, cap: 6.633825 },
-  oberon:    { floor: 6.135031, cap: 6.635031 },
-  triton:    { floor: 2.461502, cap: 9.679395 },
-  nereid:    { floor: 8.720057, cap: 9.745187 },
+  tethys: { floor: 5.601783, cap: 8.080787 },
+  dione: { floor: 6.057633, cap: 8.078954 },
+  rhea: { floor: 6.525752, cap: 8.068518 },
+  titan: { floor: 7.048484, cap: 8.024341 },
+  iapetus: { floor: 7.569867, cap: 8.069867 },
+  miranda: { floor: 4.292651, cap: 6.671852 },
+  ariel: { floor: 4.72486, cap: 6.644337 },
+  umbriel: { floor: 5.184918, cap: 6.644004 },
+  titania: { floor: 5.655488, cap: 6.633825 },
+  oberon: { floor: 6.135031, cap: 6.635031 },
+  triton: { floor: 2.461502, cap: 9.679395 },
+  nereid: { floor: 8.720057, cap: 9.745187 },
 };
 
 /**

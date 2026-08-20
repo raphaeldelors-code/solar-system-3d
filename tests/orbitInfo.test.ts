@@ -82,8 +82,7 @@ describe('formatPeriod', () => {
 describe('formatDistanceKm', () => {
   it('plain km below 1e6', () => expect(formatDistanceKm(384_400)).toBe('384,400 km'));
   it('million km below 1e8', () => expect(formatDistanceKm(14_900_000)).toBe('14.9 M km'));
-  it('billion km at/above 1e8', () =>
-    expect(formatDistanceKm(AU_KM)).toBe('0.15 B km'));
+  it('billion km at/above 1e8', () => expect(formatDistanceKm(AU_KM)).toBe('0.15 B km'));
   it('rejects invalid input', () => {
     expect(formatDistanceKm(-1)).toBe('—');
     expect(formatDistanceKm(Number.POSITIVE_INFINITY)).toBe('—');

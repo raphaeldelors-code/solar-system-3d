@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  BELTS, mulberry32, sampleBelt,
-} from '../src/data/belts';
+import { BELTS, mulberry32, sampleBelt } from '../src/data/belts';
 import { positionAt } from '../src/sim/kepler';
 
 describe('mulberry32 (seeded RNG)', () => {

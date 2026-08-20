@@ -7,14 +7,26 @@ import * as THREE from 'three';
 import { SimClock } from './sim/clock';
 import { ALL_BODIES } from './data/bodies';
 import {
-  buildScene, updatePositions, applySpin, updateBeltFields,
-  satelliteExtentScene, updateSatelliteHighlight,
-  VISIBLE_SCALE, TRUE_SCALE, CONSTELLATION_RADIUS,
-  type BuiltScene, type VisualScale,
+  buildScene,
+  updatePositions,
+  applySpin,
+  updateBeltFields,
+  satelliteExtentScene,
+  updateSatelliteHighlight,
+  VISIBLE_SCALE,
+  TRUE_SCALE,
+  CONSTELLATION_RADIUS,
+  type BuiltScene,
+  type VisualScale,
 } from './render/scene';
 import {
-  frameBody, frameSystem, frameConstellations, stepFlight, makeFlight,
-  type CamAnchor, type Flight,
+  frameBody,
+  frameSystem,
+  frameConstellations,
+  stepFlight,
+  makeFlight,
+  type CamAnchor,
+  type Flight,
 } from './render/cameraFlight';
 import { attachRealTextures } from './render/realTextures';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
@@ -312,10 +324,19 @@ function fmtSpeed(): void {
   // Below 0.1 d/s show "h/s" (hours per second) — the satellite-observation
   // range reads better that way than 0.0x d/s.
   let mag: string, unit: string;
-  if (a >= 100) { mag = a.toFixed(0); unit = 'd/s'; }
-  else if (a >= 1) { mag = a.toFixed(1); unit = 'd/s'; }
-  else if (a >= 0.1) { mag = a.toFixed(2); unit = 'd/s'; }
-  else { mag = (a * 24).toFixed(2); unit = 'h/s'; }
+  if (a >= 100) {
+    mag = a.toFixed(0);
+    unit = 'd/s';
+  } else if (a >= 1) {
+    mag = a.toFixed(1);
+    unit = 'd/s';
+  } else if (a >= 0.1) {
+    mag = a.toFixed(2);
+    unit = 'd/s';
+  } else {
+    mag = (a * 24).toFixed(2);
+    unit = 'h/s';
+  }
   speedValueEl.textContent = `${arrow}${mag} ${unit}`;
 }
 
@@ -331,10 +352,16 @@ function fmtDate(): void {
 
 /** Orbit period / live distance / peri-apoapsis for the followed body. */
 function updateInfo(): void {
-  if (!followId) { infoEl.hidden = true; return; }
+  if (!followId) {
+    infoEl.hidden = true;
+    return;
+  }
   const def = byId.get(followId);
   const r = def ? orbitReadout(def, clock.t) : null;
-  if (!def || !r) { infoEl.hidden = true; return; }
+  if (!def || !r) {
+    infoEl.hidden = true;
+    return;
+  }
   infoEl.hidden = false;
   infoNameEl.textContent = def.name;
   infoPeriodEl.textContent = formatPeriod(r.periodDays);
@@ -382,7 +409,10 @@ followEl.addEventListener('change', () => {
     // travel (accelerate → cruise → decelerate + FOV ease) as a click-pick
     // and the Sky/System anchors, then follows it. No instant jump.
     const dest = camAnchorForBody(id);
-    if (dest) { flyTo(dest, 1.4, id); return; }
+    if (dest) {
+      flyTo(dest, 1.4, id);
+      return;
+    }
   }
   // "Free camera" (or a body with no frame): just drop the follow.
   followId = '';
@@ -396,9 +426,18 @@ scaleEl.addEventListener('change', () => {
   syncUrl();
 });
 
-orbitsEl.addEventListener('change', () => { applyToggles(); syncUrl(); });
-labelsEl.addEventListener('change', () => { applyToggles(); syncUrl(); });
-beltsEl.addEventListener('change', () => { applyToggles(); syncUrl(); });
+orbitsEl.addEventListener('change', () => {
+  applyToggles();
+  syncUrl();
+});
+labelsEl.addEventListener('change', () => {
+  applyToggles();
+  syncUrl();
+});
+beltsEl.addEventListener('change', () => {
+  applyToggles();
+  syncUrl();
+});
 
 window.addEventListener('resize', () => {
   built.camera.aspect = window.innerWidth / window.innerHeight;
@@ -505,7 +544,9 @@ shareBtn.addEventListener('click', async () => {
   } catch {
     shareBtn.textContent = 'Link in address bar';
   }
-  setTimeout(() => { shareBtn.textContent = 'Copy share link'; }, 1500);
+  setTimeout(() => {
+    shareBtn.textContent = 'Copy share link';
+  }, 1500);
 });
 
 // --- Screenshot ------------------------------------------------------------
@@ -515,18 +556,25 @@ screenshotBtn.addEventListener('click', async () => {
   const canvas = built.renderer.domElement;
   const d = clock.toDate();
   const pad = (n: number) => String(n).padStart(2, '0');
-  const stamp = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
-    + `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z`;
+  const stamp =
+    `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}` +
+    `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z`;
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob((b) => resolve(b), 'image/png'));
-  if (!blob) { screenshotBtn.textContent = 'Export failed'; return; }
+    canvas.toBlob((b) => resolve(b), 'image/png'),
+  );
+  if (!blob) {
+    screenshotBtn.textContent = 'Export failed';
+    return;
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `solar-system-${stamp}.png`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   screenshotBtn.textContent = 'Saved ✓';
-  setTimeout(() => { screenshotBtn.textContent = 'Save screenshot'; }, 1500);
+  setTimeout(() => {
+    screenshotBtn.textContent = 'Save screenshot';
+  }, 1500);
 });
 
 // --- Init ------------------------------------------------------------------
@@ -545,9 +593,15 @@ fmtDate();
 // Debug/test handle: lets scripts (and e2e checks) inspect the live scene
 // without coupling to module internals. Intentionally minimal.
 (window as unknown as Record<string, unknown>).__solar = {
-  get scene() { return built.scene; },
-  get camera() { return built.camera; },
-  get renderer() { return built.renderer; },
+  get scene() {
+    return built.scene;
+  },
+  get camera() {
+    return built.camera;
+  },
+  get renderer() {
+    return built.renderer;
+  },
   clock,
 };
 
@@ -557,7 +611,8 @@ fmtDate();
 // while the pointer is down (orbiting/panning).
 const raycaster = new THREE.Raycaster();
 const pointerNdc = new THREE.Vector2();
-let pointerPx = 0, pointerPy = 0;
+let pointerPx = 0,
+  pointerPy = 0;
 let pointerOnCanvas = false;
 let lastPickMs = 0;
 let picking = false;
@@ -579,16 +634,20 @@ function hideTooltip(): void {
 }
 
 function doPick(): void {
-  if (!pointerOnCanvas || picking) { hideTooltip(); return; }
+  if (!pointerOnCanvas || picking) {
+    hideTooltip();
+    return;
+  }
   raycaster.setFromCamera(pointerNdc, built.camera);
   const hits = raycaster.intersectObjects(bodyMeshes(), false);
   if (hits.length > 0) {
     const id = hits[0].object.userData.id as string | undefined;
     const def = id ? byId.get(id) : undefined;
     if (def) {
-      const sub = def.kind === 'moon'
-        ? `moon of ${byId.get(def.parent ?? '')?.name ?? ''}`
-        : def.kind.charAt(0).toUpperCase() + def.kind.slice(1);
+      const sub =
+        def.kind === 'moon'
+          ? `moon of ${byId.get(def.parent ?? '')?.name ?? ''}`
+          : def.kind.charAt(0).toUpperCase() + def.kind.slice(1);
       showTooltip(def.name, sub);
       return;
     }
@@ -598,7 +657,8 @@ function doPick(): void {
 
 canvas.addEventListener('pointermove', (ev) => {
   pointerOnCanvas = true;
-  pointerPx = ev.clientX; pointerPy = ev.clientY;
+  pointerPx = ev.clientX;
+  pointerPy = ev.clientY;
   pointerNdc.set(
     (ev.clientX / window.innerWidth) * 2 - 1,
     -(ev.clientY / window.innerHeight) * 2 + 1,
@@ -608,17 +668,27 @@ canvas.addEventListener('pointermove', (ev) => {
   lastPickMs = now;
   doPick();
 });
-canvas.addEventListener('pointerleave', () => { pointerOnCanvas = false; hideTooltip(); });
-canvas.addEventListener('pointerdown', () => { picking = true; hideTooltip(); });
-window.addEventListener('pointerup', () => { picking = false; });
+canvas.addEventListener('pointerleave', () => {
+  pointerOnCanvas = false;
+  hideTooltip();
+});
+canvas.addEventListener('pointerdown', () => {
+  picking = true;
+  hideTooltip();
+});
+window.addEventListener('pointerup', () => {
+  picking = false;
+});
 
 // --- Click-to-pick: fly to a clicked body ---------------------------------
 // A genuine click (press + release with no meaningful drag) on a body starts
 // an eased flight to it and arms the follow so it stays centered on landing.
 // Dragging to orbit / panning never triggers it (distance threshold).
-let pressX = 0, pressY = 0;
+let pressX = 0,
+  pressY = 0;
 canvas.addEventListener('pointerdown', (ev) => {
-  pressX = ev.clientX; pressY = ev.clientY;
+  pressX = ev.clientX;
+  pressY = ev.clientY;
 });
 canvas.addEventListener('pointerup', (ev) => {
   if (Math.hypot(ev.clientX - pressX, ev.clientY - pressY) > 6) return; // drag, not a click
@@ -725,9 +795,8 @@ function frame(): void {
     // reads correctly at any speed. Planets are only a little faster than the
     // camera's lerp can track, so the view stays steady.
     const entry = built.bodies.get(followId);
-    const lockEntry = entry && moonParent.has(followId)
-      ? built.bodies.get(moonParent.get(followId)!)
-      : entry;
+    const lockEntry =
+      entry && moonParent.has(followId) ? built.bodies.get(moonParent.get(followId)!) : entry;
     if (lockEntry) built.controls.target.lerp(lockEntry.worldPos, 0.2);
     built.controls.update();
   } else {

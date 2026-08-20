@@ -37,10 +37,7 @@ export interface Constellation {
  *   Dec +90       -> [ 0, 1, 0]   (north pole, straight up)
  *   Dec -90       -> [ 0,-1, 0]
  */
-export function raDecToUnit(
-  raHours: number,
-  decDeg: number,
-): [number, number, number] {
+export function raDecToUnit(raHours: number, decDeg: number): [number, number, number] {
   const d2r = Math.PI / 180;
   const ra = raHours * 15 * d2r;
   const dec = decDeg * d2r;
@@ -66,7 +63,18 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Rigel', raHours: 5.2423, decDeg: -8.2016 },
       { name: 'Meissa', raHours: 5.585, decDeg: 9.9351 },
     ],
-    lines: [[0, 1], [1, 2], [0, 4], [2, 3], [3, 4], [4, 5], [2, 6], [5, 6], [1, 7], [7, 0]],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [0, 4],
+      [2, 3],
+      [3, 4],
+      [4, 5],
+      [2, 6],
+      [5, 6],
+      [1, 7],
+      [7, 0],
+    ],
   },
   {
     name: 'Ursa Major',
@@ -79,7 +87,15 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Mizar', raHours: 13.3993, decDeg: 54.9255 },
       { name: 'Alkaid', raHours: 13.7923, decDeg: 49.3133 },
     ],
-    lines: [[0, 1], [1, 2], [2, 3], [3, 0], [3, 4], [4, 5], [5, 6]],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 0],
+      [3, 4],
+      [4, 5],
+      [5, 6],
+    ],
   },
   {
     name: 'Ursa Minor',
@@ -92,7 +108,15 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Pherkad', raHours: 15.3167, decDeg: 71.8348 },
       { name: 'Yildun', raHours: 17.5375, decDeg: 86.586 },
     ],
-    lines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 2], [2, 6]],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 4],
+      [4, 5],
+      [5, 2],
+      [2, 6],
+    ],
   },
   {
     name: 'Cassiopeia',
@@ -103,7 +127,12 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Ruchbah', raHours: 1.4303, decDeg: 60.2358 },
       { name: 'Segin', raHours: 1.9068, decDeg: 63.6705 },
     ],
-    lines: [[0, 1], [1, 2], [2, 3], [3, 4]],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 4],
+    ],
   },
   {
     name: 'Cygnus',
@@ -114,7 +143,12 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Gienah', raHours: 20.7702, decDeg: 33.9651 },
       { name: 'Delta Cyg', raHours: 19.7492, decDeg: 45.131 },
     ],
-    lines: [[0, 1], [1, 2], [1, 3], [1, 4]],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [1, 3],
+      [1, 4],
+    ],
   },
   {
     name: 'Leo',
@@ -127,7 +161,15 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Chertan', raHours: 11.2376, decDeg: 15.4298 },
       { name: 'Denebola', raHours: 11.8171, decDeg: 14.5732 },
     ],
-    lines: [[3, 2], [2, 1], [1, 0], [0, 5], [1, 4], [4, 6], [6, 5]],
+    lines: [
+      [3, 2],
+      [2, 1],
+      [1, 0],
+      [0, 5],
+      [1, 4],
+      [4, 6],
+      [6, 5],
+    ],
   },
   {
     name: 'Canis Major',
@@ -138,7 +180,12 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Adhara', raHours: 6.9773, decDeg: -28.9724 },
       { name: 'Aludra', raHours: 7.4015, decDeg: -29.303 },
     ],
-    lines: [[1, 0], [0, 2], [2, 3], [2, 4]],
+    lines: [
+      [1, 0],
+      [0, 2],
+      [2, 3],
+      [2, 4],
+    ],
   },
   {
     name: 'Scorpius',
@@ -155,7 +202,18 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Sargas', raHours: 17.622, decDeg: -42.9987 },
       { name: 'Shaula', raHours: 17.5602, decDeg: -37.1041 },
     ],
-    lines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10]],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 4],
+      [4, 5],
+      [5, 6],
+      [6, 7],
+      [7, 8],
+      [8, 9],
+      [9, 10],
+    ],
   },
   {
     name: 'Gemini',
@@ -167,7 +225,14 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Tejat', raHours: 6.3834, decDeg: 22.5101 },
       { name: 'Alhena', raHours: 6.6278, decDeg: 16.3993 },
     ],
-    lines: [[0, 1], [0, 4], [4, 5], [1, 2], [2, 3], [3, 5]],
+    lines: [
+      [0, 1],
+      [0, 4],
+      [4, 5],
+      [1, 2],
+      [2, 3],
+      [3, 5],
+    ],
   },
   {
     name: 'Taurus',
@@ -177,7 +242,11 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Epsilon Tau', raHours: 4.4775, decDeg: 12.4868 },
       { name: 'Zeta Tau', raHours: 5.6248, decDeg: 21.1436 },
     ],
-    lines: [[2, 0], [0, 3], [3, 1]],
+    lines: [
+      [2, 0],
+      [0, 3],
+      [3, 1],
+    ],
   },
   {
     name: 'Lyra',
@@ -188,7 +257,13 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Sheliak', raHours: 18.8342, decDeg: 33.3639 },
       { name: 'Sulafat', raHours: 18.982, decDeg: 32.6905 },
     ],
-    lines: [[0, 2], [2, 1], [1, 3], [3, 4], [4, 2]],
+    lines: [
+      [0, 2],
+      [2, 1],
+      [1, 3],
+      [3, 4],
+      [4, 2],
+    ],
   },
   {
     name: 'Aquila',
@@ -197,7 +272,10 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Altair', raHours: 19.8464, decDeg: 8.8683 },
       { name: 'Alshain', raHours: 19.9221, decDeg: 6.4078 },
     ],
-    lines: [[0, 1], [1, 2]],
+    lines: [
+      [0, 1],
+      [1, 2],
+    ],
   },
   {
     name: 'Aries',
@@ -206,6 +284,9 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Sheratan', raHours: 1.9114, decDeg: 20.8082 },
       { name: 'Mesarthim', raHours: 1.8971, decDeg: 19.2932 },
     ],
-    lines: [[0, 1], [1, 2]],
+    lines: [
+      [0, 1],
+      [1, 2],
+    ],
   },
 ];

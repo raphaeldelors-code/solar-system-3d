@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  raDecToUnit, CONSTELLATIONS,
-} from '../src/data/constellations';
+import { raDecToUnit, CONSTELLATIONS } from '../src/data/constellations';
 
 describe('raDecToUnit', () => {
   it('maps the equatorial pole straight up', () => {

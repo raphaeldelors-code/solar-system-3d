@@ -3,15 +3,25 @@
 Guidance for AI agents (and humans) working in this repo.
 
 ## Commands
+
 ```bash
 npm install          # once
 npm test             # vitest, node-only, fast — run before EVERY commit
 npm run dev          # vite dev server → http://localhost:5173
 npm run build        # tsc --noEmit (strict) + vite build — must stay green
+npm run lint         # ESLint (src/tests TS + public/sw.js JS) — must stay green
+npm run format:check # Prettier style check — must stay green
+npm run format       # Prettier --write . (run after manual edits to stay CI-green)
 ```
+
 No other test/build tooling is configured. Do not add it casually.
+ESLint is a flat config (`eslint.config.js`): `js.configs.recommended` +
+`typescript-eslint` for `.ts`, plain JS rules for `public/sw.js`/scripts, with
+`eslint-config-prettier` last so style rules defer to Prettier. Lint is
+deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
 
 ## Architecture invariants
+
 - `src/sim/` and `src/data/` are **pure TS**: no `three`, no DOM. Everything in
   `tests/` relies on this. If you find DOM/three imports there, refactor out.
 - All three.js / DOM code lives in `src/render/` and `src/main.ts`.
@@ -22,7 +32,7 @@ No other test/build tooling is configured. Do not add it casually.
   else should need to change (scene, orbit lines, and follow dropdown
   all derive from `ALL_BODIES`).
 - **Belts** (`src/data/belts.ts`): small-body populations (asteroid +
-  Kuiper) are a *separate* seeded table — `BELTS` → `sampleBelt()` —
+  Kuiper) are a _separate_ seeded table — `BELTS` → `sampleBelt()` —
   because instanced fields don't fit `BodyDefinition`. Rendering lives in
   `src/render/belts.ts` (one InstancedMesh per belt); the data layer stays
   pure (no `three`/DOM) and fully deterministic (mulberry32 seed).
@@ -35,12 +45,12 @@ No other test/build tooling is configured. Do not add it casually.
   epochs (`tests/fixtures/ground_truth.json`).
 - **Geocentric Moon** (`src/sim/moon.ts`, pure): Meeus ch.47 lunar
   longitude/latitude/distance (60-term L,R + 60-term B periodic tables)
-  referred to the mean equinox *of date*; `moonGeocentricJ2000()` precesses it
+  referred to the mean equinox _of date_; `moonGeocentricJ2000()` precesses it
   to the J2000 ecliptic via Meeus ch.22.1 so it composes with the heliocentric
   planet vectors. Gotcha: ch.47's sigma_B/1e6 is ALREADY in degrees — never
   multiply by R2D again.
 - **Shadows** (`src/render/shadows.ts`): the Sun's `PointLight` is a shadow
-  caster (PCFSoft cube map). Every body mesh casts+receives *except* the star
+  caster (PCFSoft cube map). Every body mesh casts+receives _except_ the star
   itself (a sphere centered on a point light would occlude the whole shadow
   pass). Rings use a lit `MeshStandardMaterial` and cast+receive — `RingGeometry`
   is a true annulus so no solid-disc alpha artifact. Belt InstancedMeshes
@@ -84,6 +94,7 @@ No other test/build tooling is configured. Do not add it casually.
   "Reload page" button is the escape hatch if a restore never fires.
 
 ## Code style
+
 - TypeScript strict (`tsconfig.json` is strict — do not loosen it).
 - No runtime dependencies beyond `three`. Dev deps: vite, vitest, typescript.
   Before adding any dependency, check whether it's truly needed.
@@ -92,6 +103,7 @@ No other test/build tooling is configured. Do not add it casually.
   Do not introduce `Math.random()` in `src/render/textures.ts`.
 
 ## Git conventions
+
 - Small, frequent commits; **push after each commit** (user requirement).
 - Conventional-commit style: `feat(sim): ...`, `fix(render): ...`,
   `docs: ...`, `test: ...`, `chore: ...`.
@@ -99,9 +111,11 @@ No other test/build tooling is configured. Do not add it casually.
 - Branch `main` is the working branch; open PRs only when the user asks.
 
 ## Quality gates (before declaring any task done)
+
 1. `npm test` green.
 2. `npm run build` green (type errors fail the build).
-3. For user-visible changes: verify in `npm run dev` (or at least confirm the
+3. `npm run lint` and `npm run format:check` green (also enforced in CI).
+4. For user-visible changes: verify in `npm run dev` (or at least confirm the
    built page serves via `npm run preview`).
-4. Update `todo.md` and, if the change alters architecture, this file and
+5. Update `todo.md` and, if the change alters architecture, this file and
    `plans/`.

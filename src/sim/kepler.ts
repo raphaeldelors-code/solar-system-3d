@@ -36,10 +36,7 @@ export function solveKepler(M: number, e: number, tol = 1e-10): number {
 type ResolvedElements = Omit<Required<Omit<OrbitalElements, 'rates'>>, 'periodicM'>;
 
 /** Elements at a given time (applies optional secular rates). */
-export function elementsAt(
-  el: OrbitalElements,
-  daysSinceJ2000: number,
-): ResolvedElements {
+export function elementsAt(el: OrbitalElements, daysSinceJ2000: number): ResolvedElements {
   const c = daysSinceJ2000 / JULIAN_CENTURY_DAYS;
   const r = el.rates;
   return {
@@ -72,7 +69,11 @@ export function periodicMOffset(el: OrbitalElements, daysSinceJ2000: number): nu
 }
 
 /** Resolved elements at a given time, allocation-free (see `ResolvedElements`). */
-export function elementsAtInto(el: OrbitalElements, daysSinceJ2000: number, out: ResolvedElements): void {
+export function elementsAtInto(
+  el: OrbitalElements,
+  daysSinceJ2000: number,
+  out: ResolvedElements,
+): void {
   const c = daysSinceJ2000 / JULIAN_CENTURY_DAYS;
   const r = el.rates;
   out.a = el.a + (r?.a ?? 0) * c;
@@ -106,8 +107,10 @@ export function positionAtInto(el: OrbitalElements, daysSinceJ2000: number, out:
   const inc = el.i + (el.rates?.i ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS);
   const node = el.node + (el.rates?.node ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS);
   const peri = el.peri + (el.rates?.peri ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS);
-  const M0 = el.M0 + (el.rates?.M0 ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS)
-    + periodicMOffset(el, daysSinceJ2000);
+  const M0 =
+    el.M0 +
+    (el.rates?.M0 ?? 0) * (daysSinceJ2000 / JULIAN_CENTURY_DAYS) +
+    periodicMOffset(el, daysSinceJ2000);
   return positionAtMeanAnomalyInto(e, ee, inc, node, peri, M0, el.n, daysSinceJ2000, out);
 }
 
@@ -115,17 +118,32 @@ export function positionAtInto(el: OrbitalElements, daysSinceJ2000: number, out:
  * Position given an explicit mean anomaly M (**radians**) with elements
  * already resolved at the desired epoch. Used for orbit-line sampling.
  */
-export function positionAtMeanAnomaly(
-  e: ResolvedElements,
-  M: number,
-): Vec3 {
-  return positionAtMeanAnomalyInto(e.a, e.e, e.i, e.node, e.peri, e.M0, e.n, 0, { x: 0, y: 0, z: 0 }, M);
+export function positionAtMeanAnomaly(e: ResolvedElements, M: number): Vec3 {
+  return positionAtMeanAnomalyInto(
+    e.a,
+    e.e,
+    e.i,
+    e.node,
+    e.peri,
+    e.M0,
+    e.n,
+    0,
+    { x: 0, y: 0, z: 0 },
+    M,
+  );
 }
 
 /** Core rotation math, allocation-free. `M` optional: default = M0 + n·tDays. */
 export function positionAtMeanAnomalyInto(
-  a: number, e: number, iDeg: number, nodeDeg: number, periDeg: number,
-  M0Deg: number, n: number, daysSinceJ2000: number, out: Vec3,
+  a: number,
+  e: number,
+  iDeg: number,
+  nodeDeg: number,
+  periDeg: number,
+  M0Deg: number,
+  n: number,
+  daysSinceJ2000: number,
+  out: Vec3,
   MOverride?: number,
 ): Vec3 {
   const M = MOverride ?? (M0Deg + n * daysSinceJ2000) * DEG;
@@ -137,13 +155,16 @@ export function positionAtMeanAnomalyInto(
   const O = nodeDeg * DEG;
   const inc = iDeg * DEG;
 
-  const cosO = Math.cos(O), sinO = Math.sin(O);
-  const cosw = Math.cos(w), sinw = Math.sin(w);
-  const cosi = Math.cos(inc), sini = Math.sin(inc);
+  const cosO = Math.cos(O),
+    sinO = Math.sin(O);
+  const cosw = Math.cos(w),
+    sinw = Math.sin(w);
+  const cosi = Math.cos(inc),
+    sini = Math.sin(inc);
 
   out.x = (cosO * cosw - sinO * sinw * cosi) * xp + (-cosO * sinw - sinO * cosw * cosi) * yp;
   out.y = (sinO * cosw + cosO * sinw * cosi) * xp + (-sinO * sinw + cosO * cosw * cosi) * yp;
-  out.z = (sinw * sini) * xp + (cosw * sini) * yp;
+  out.z = sinw * sini * xp + cosw * sini * yp;
   return out;
 }
 
@@ -164,7 +185,7 @@ export function sampleOrbit(el: OrbitalElements, daysSinceJ2000: number, samples
   const e = elementsAt(el, daysSinceJ2000);
   const pts: Vec3[] = [];
   for (let k = 0; k <= samples; k++) {
-    const M = k * (2 * Math.PI / samples);
+    const M = k * ((2 * Math.PI) / samples);
     pts.push(positionAtMeanAnomaly(e, M));
   }
   return pts;

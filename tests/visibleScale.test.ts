@@ -8,12 +8,7 @@ import {
   moonDistance,
 } from '../src/render/visibleScale';
 import { SUN_SHADOWS } from '../src/render/shadows';
-import {
-  SUN,
-  PLANETS,
-  DWARF_PLANETS,
-  MOONS,
-} from '../src/data/bodies';
+import { SUN, PLANETS, DWARF_PLANETS, MOONS } from '../src/data/bodies';
 import { BELTS } from '../src/data/belts';
 
 /**
@@ -72,8 +67,7 @@ const moonsOf = (pid: string) =>
   }));
 
 // --- envelope / corridor (must match solve_scale.py) ------------------------
-const ext = (p: Planet): number =>
-  p.ringOuter > 0 ? p.r * p.ringOuter : p.r;
+const ext = (p: Planet): number => (p.ringOuter > 0 ? p.r * p.ringOuter : p.r);
 
 const off = new Map<string, number>(); // per-moon offset = max(base(a apo), floor)
 const floor = new Map<string, number>();
@@ -88,13 +82,14 @@ for (const p of planets) {
   const regs = moonsOf(p.id)
     .filter((m) => !IRREG.has(m.id))
     .sort((x, y) => x.ak - y.ak);
-  const irr = moonsOf(p.id).filter((m) => IRREG.has(m.id)).sort((x, y) => x.ak - y.ak);
+  const irr = moonsOf(p.id)
+    .filter((m) => IRREG.has(m.id))
+    .sort((x, y) => x.ak - y.ak);
   const seq = [...regs, ...irr];
   for (let k = 0; k < seq.length; k++) {
     const m = seq[k];
-    let fl = k === 0
-      ? ext(p) + m.r + GAP_BODY
-      : off.get(seq[k - 1].id)! + seq[k - 1].r + m.r + GAP_MOON;
+    let fl =
+      k === 0 ? ext(p) + m.r + GAP_BODY : off.get(seq[k - 1].id)! + seq[k - 1].r + m.r + GAP_MOON;
     // eccentric moons: perigee must still clear the parent surface
     fl = Math.max(fl, (ext(p) + m.r + GAP_BODY * 0.5) / Math.max(1e-9, 1 - m.e));
     floor.set(m.id, fl);
@@ -148,10 +143,10 @@ function dvis(id: string, dkm: number): number {
 const SOLVER_ANCHORS: Array<{ id: string; a: number; d: number }> = [
   { id: 'mercury', a: 0.387098, d: 5.0 },
   { id: 'venus', a: 0.723321, d: 9.724486 },
-  { id: 'earth', a: 1.000000, d: 15.051293 },
+  { id: 'earth', a: 1.0, d: 15.051293 },
   { id: 'mars', a: 1.523712, d: 23.211311 },
   { id: 'ceres', a: 2.7675, d: 28.814579 },
-  { id: 'jupiter', a: 5.202480, d: 43.956733 },
+  { id: 'jupiter', a: 5.20248, d: 43.956733 },
   { id: 'saturn', a: 9.541499, d: 66.964136 },
   { id: 'uranus', a: 19.187979, d: 84.022651 },
   { id: 'neptune', a: 30.069528, d: 102.130054 },
@@ -217,8 +212,12 @@ describe('visibleScale — solver floor/envelope invariants', () => {
 
   it('sibling moons: inner apoapsis and outer perigee keep a surface gap', () => {
     for (const p of planets) {
-      const regs = moonsOf(p.id).filter((m) => !IRREG.has(m.id)).sort((a, b) => a.ak - b.ak);
-      const irr = moonsOf(p.id).filter((m) => IRREG.has(m.id)).sort((a, b) => a.ak - b.ak);
+      const regs = moonsOf(p.id)
+        .filter((m) => !IRREG.has(m.id))
+        .sort((a, b) => a.ak - b.ak);
+      const irr = moonsOf(p.id)
+        .filter((m) => IRREG.has(m.id))
+        .sort((a, b) => a.ak - b.ak);
       const seq = [...regs, ...irr];
       for (let k = 0; k < seq.length - 1; k++) {
         const m1 = seq[k];
@@ -239,8 +238,9 @@ describe('visibleScale — solver floor/envelope invariants', () => {
     // below the solved floor (1.978), so the floor clamp must engage.
     const phobos = MOONS.find((m) => m.id === 'phobos')!;
     const pPeri = phobos.elements!.a * (1 - phobos.elements!.e);
-    expect(moonDistance('phobos', pPeri), 'floor engages')
-      .toBeGreaterThan(baseMoonDistance(pPeri) + 0.5);
+    expect(moonDistance('phobos', pPeri), 'floor engages').toBeGreaterThan(
+      baseMoonDistance(pPeri) + 0.5,
+    );
     // The displayed orbit is always bounded by [floor, cap - r] (cap when set).
     for (const p of planets) {
       const cap = corridor(p.id);

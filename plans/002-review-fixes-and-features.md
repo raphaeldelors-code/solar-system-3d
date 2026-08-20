@@ -3,20 +3,23 @@
 Date: 2026-08-18 · Status: **IN PROGRESS** · Branch: `main` (deployed to GitHub Pages on push)
 
 ## Background
+
 After the honest review (see conversation), the user approved this scope.
 Spin (review fix #1) was verified already implemented (`applySpin`, main.ts:650) — dropped.
 Hohmann missions and from-here viewpoints (features 2, 5) were declined.
 
 ## Quality gates (per AGENTS.md, every step)
+
 1. `npm test` green · 2. `npm run build` green · 3. browser-verify user-visible changes
-4. commit (conventional) + `git push origin main` **between each step**
-5. keep `todo.md` + this file updated
+2. commit (conventional) + `git push origin main` **between each step**
+3. keep `todo.md` + this file updated
 
 ---
 
 ## Phase A — Fixes
 
 ### A1. `fix(render)`: kill per-frame Vector3 allocation in `updatePositions` ✅ DONE
+
 - `eclipticToScene` allocated a `new THREE.Vector3` per body per frame (~36/frame); belt
   update allocated 5 objects × ~3200 instances/frame.
 - Added module-level scratch (`UPDATE_POS_SCRATCH`/`BELT_*`) + `positionAtInto`/
@@ -26,6 +29,7 @@ Hohmann missions and from-here viewpoints (features 2, 5) were declined.
   spread (3200 instances), moon–Earth distance stable, 0 JS errors.
 
 ### A2. `fix(sim)`: JPL secular rates + long-range accuracy tests
+
 - Add `rates` (per century) for all 8 planets from JPL SSD "approximate positions",
   **Table 2a: 3000 BC – 3000 AD** (source: `https://ssd.jpl.nasa.gov/planets/approx_pos.html`).
   JPL table → app mapping: `peri = long.peri − long.node`, `M0 = L − long.peri`,
@@ -41,12 +45,14 @@ Hohmann missions and from-here viewpoints (features 2, 5) were declined.
     (positions finite, Earth r ∈ [0.98, 1.02] AU).
 
 ### A3. `fix(web)`: share meta + WebGL context-loss recovery
+
 - `index.html`: add `og:` + `twitter:` meta tags; generate `public/og-image.png`
   (1200×630, stdlib PNG script in `scripts/` like `make_icons.py`).
 - `main.ts`: `webglcontextlost` → preventDefault + overlay "Context lost, reloading…";
   `webglcontextrestored` → reload.
 
 ### A4. `fix(tools)`: ESLint + Prettier (user-approved; CI gets a lint step)
+
 - Flat `eslint.config.mjs` with `typescript-eslint` recommended; `.prettierrc`;
   scripts `lint` / `format`; run once, fix findings, commit.
 - `.github/workflows/ci.yml`: add `npm run lint` before test.
@@ -54,6 +60,7 @@ Hohmann missions and from-here viewpoints (features 2, 5) were declined.
 ## Phase B — Features
 
 ### B1. `feat(sim)`: celestial event engine — **the killer feature**
+
 - `src/sim/events.ts` (pure): detect over [t0, t0+50y]:
   - Solar/lunar eclipses: geocentric Sun–Moon angular separation vs apparent-radius
     thresholds (synodic-window search: candidate new/full moons from Moon mean
@@ -68,6 +75,7 @@ Hohmann missions and from-here viewpoints (features 2, 5) were declined.
   (recomputed on time jumps > 1 y); click → `clock.setDate` + `flyTo` the involved body.
 
 ### B2. `feat(nav)`: body search + clean satellite menu (replaces ugly follow `<select>`)
+
 - Custom combobox in the panel: input with typeahead (name + aliases like
   "earth's moon", parent names) + grouped dropdown tree (planet header, indented
   moons with satellite dot), keyboard nav (↑/↓/Enter/Esc), click select.
@@ -76,6 +84,7 @@ Hohmann missions and from-here viewpoints (features 2, 5) were declined.
   unchanged (`f` param). Remove the native `#follow` select.
 
 ### B3. `feat(render)`: true-scale tour ("wow moment")
+
 - `⚖ Real scale` button in the anchor row: 3 s eased morph
   `scale(s) = lerp(VISIBLE, TRUE, ease(s))` (factory in `scene.ts` returning a
   `VisualScale`), with staged captions (sizes exaggerated ~×N, distances compressed →
@@ -84,6 +93,7 @@ Hohmann missions and from-here viewpoints (features 2, 5) were declined.
 - Unit test the blend factory (pure part); browser-verify the morph.
 
 ### B4. `feat(render)`: real NASA textures committed to `public/textures/`
+
 - ~10 major bodies (sun, mercury, venus, earth, moon, mars, jupiter, saturn,
   uranus, neptune) + Galilean moons + titan/triton if available, 1k equirectangular.
 - Source with license: prefer NASA PD (visibleearth) else Solar System Scope (CC BY 4.0).
@@ -92,11 +102,13 @@ Hohmann missions and from-here viewpoints (features 2, 5) were declined.
 - Verify: file sizes sane (< ~8 MB total), browser shows real Earth/Mars.
 
 ## Phase C — Wrap-up
+
 - Update `todo.md`, `AGENTS.md` (new modules: events, searchIndex, scale tour), this file.
 - Full gate run + live-site verification of the deployed build.
 - Final commit + push.
 
 ## Risks / notes
+
 - JPL horizons API is 404-blocked from this sandbox — ground truth for A2/B1 comes
   from the JPL elements page + web-verified real event dates, not the API.
 - Texture licensing: CC BY needs the credits file; NASA PD needs nothing but we

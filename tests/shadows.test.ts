@@ -4,9 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import {
-  SUN_SHADOWS, configureSunShadows, setBodyShadowFlags,
-} from '../src/render/shadows';
+import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from '../src/render/shadows';
 
 describe('SUN_SHADOWS constants', () => {
   it('covers the farthest shadow-caster in both scales', () => {

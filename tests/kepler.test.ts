@@ -44,8 +44,13 @@ describe('positionAt (real elements)', () => {
   // M0 = L - varpi, peri = varpi - node; node=0 for Earth).
   // Verified against Meeus "Astronomical Algorithms" solar theory.
   const earth = {
-    a: 1.00000261, e: 0.01671123, i: -0.00001531,
-    node: 0.0, peri: 102.93768193, M0: -2.47311, n: 0.98560912,
+    a: 1.00000261,
+    e: 0.01671123,
+    i: -0.00001531,
+    node: 0.0,
+    peri: 102.93768193,
+    M0: -2.47311,
+    n: 0.98560912,
   };
 
   it('Earth is at ~0.983 AU from the Sun at J2000 (perihelion ~Jan 3)', () => {
@@ -73,10 +78,16 @@ describe('positionAt (real elements)', () => {
 
   it('Mars is between 1.381 and 1.666 AU (perihelion..aphelion)', () => {
     const mars = {
-      a: 1.52371034, e: 0.09339410, i: 1.84969142,
-      node: 49.55953891, peri: -73.5031685, M0: 19.39019754, n: 0.52402078,
+      a: 1.52371034,
+      e: 0.0933941,
+      i: 1.84969142,
+      node: 49.55953891,
+      peri: -73.5031685,
+      M0: 19.39019754,
+      n: 0.52402078,
     };
-    let min = Infinity, max = -Infinity;
+    let min = Infinity,
+      max = -Infinity;
     for (let d = 0; d < 687; d += 5) {
       const p = positionAt(mars, d);
       const r = Math.hypot(p.x, p.y, p.z);

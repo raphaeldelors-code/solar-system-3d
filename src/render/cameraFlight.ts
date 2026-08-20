@@ -88,7 +88,9 @@ export function easeInOutCubic(x: number): number {
 
 /** Unit vector from `a` to `b` ([0,1,0] if they coincide). */
 export function dirTo(a: Vec3, b: Vec3): Vec3 {
-  const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+  const dx = b[0] - a[0],
+    dy = b[1] - a[1],
+    dz = b[2] - a[2];
   const len = Math.hypot(dx, dy, dz);
   if (len < 1e-9) return [0, 1, 0];
   return [dx / len, dy / len, dz / len];

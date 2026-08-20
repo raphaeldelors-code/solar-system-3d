@@ -25,10 +25,7 @@ export interface OrbitReadout {
  * Readout for a body at `daysSinceJ2000`, or null when the body has no orbit
  * (the star) or a degenerate mean motion (n = 0).
  */
-export function orbitReadout(
-  def: BodyDefinition,
-  daysSinceJ2000: number,
-): OrbitReadout | null {
+export function orbitReadout(def: BodyDefinition, daysSinceJ2000: number): OrbitReadout | null {
   const el = def.elements;
   if (!el) return null;
   const e = elementsAt(el, daysSinceJ2000);

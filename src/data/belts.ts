@@ -102,7 +102,9 @@ export function sampleBelt(belt: BeltDefinition): BeltObject[] {
     const periodDays = 365.25 * Math.pow(a, 1.5); // Kepler's third law
     out.push({
       elements: {
-        a, e, i,
+        a,
+        e,
+        i,
         node: range(0, 360),
         peri: range(0, 360),
         M0: range(0, 360),
