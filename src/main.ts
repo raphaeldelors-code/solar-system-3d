@@ -99,6 +99,8 @@ const shareBtn = document.getElementById('share') as HTMLButtonElement;
 const screenshotBtn = document.getElementById('screenshot') as HTMLButtonElement;
 const tooltipEl = document.getElementById('tooltip') as HTMLDivElement;
 const infoEl = document.getElementById('info') as HTMLDivElement;
+const glLostEl = document.getElementById('gl-lost') as HTMLDivElement;
+const glReloadBtn = document.getElementById('gl-reload') as HTMLButtonElement;
 const infoNameEl = document.getElementById('info-name') as HTMLDivElement;
 const infoPeriodEl = document.getElementById('info-period') as HTMLSpanElement;
 const infoDistanceEl = document.getElementById('info-distance') as HTMLSpanElement;
@@ -125,6 +127,11 @@ let followId = '';
 let selectedSatelliteId = '';
 let lastDays = clock.t;
 let lastMs = performance.now();
+// True while the WebGL context is down (driver reset / tab reclaimed). The
+// render loop keeps ticking its rAF chain but skips all sim + GPU work until
+// the browser fires `webglcontextrestored`, so a lost context costs nothing
+// and the view comes back on its own (no forced reload).
+let contextLost = false;
 // Active camera flight (anchor / picked-body). `null` when no flight is in
 // progress; the render loop advances it and hands control back to the free
 // OrbitControls when it lands.
@@ -634,6 +641,12 @@ canvas.addEventListener('pointerup', (ev) => {
 function frame(): void {
   requestAnimationFrame(frame);
 
+  // GPU context is down (see the webglcontextlost/restored handlers at the
+  // bottom): stop doing sim + GPU work while it's out. We deliberately keep
+  // the rAF chain alive instead of tearing it down — on restore the next
+  // frame just resumes, with zero re-init or forced reload.
+  if (contextLost) return;
+
   const nowMs = performance.now();
   const dtReal = Math.min(0.1, (nowMs - lastMs) / 1000);
   lastMs = nowMs;
@@ -742,3 +755,34 @@ function frame(): void {
   updateInfo();
 }
 requestAnimationFrame(frame);
+
+// --- WebGL context loss / restore -----------------------------------------
+// three.js registers its OWN webglcontextlost/restored listeners on the
+// canvas: it preventDefaults the loss (so the browser keeps the context alive
+// for recovery), flags its internal _isContextLost (making render() a no-op
+// while down), and on restore re-initializes GPU state. These app-level
+// listeners layer the UX on top: pause the render loop + show the overlay
+// while the context is out, and hide the overlay and resume when it comes
+// back. We do NOT touch the renderer here — three.js owns that path.
+canvas.addEventListener('webglcontextlost', (ev: Event) => {
+  // Three.js preventDefaults its own listener; we just observe the loss.
+  ev.preventDefault();
+  contextLost = true;
+  glLostEl.hidden = false;
+  glLostEl.classList.add('show');
+});
+
+canvas.addEventListener('webglcontextrestored', () => {
+  contextLost = false;
+  glLostEl.hidden = true;
+  glLostEl.classList.remove('show');
+  // Resync the renderer to the (possibly) current viewport after the browser
+  // recreates the underlying context, so the first resumed frame isn't stale.
+  built.renderer.setSize(window.innerWidth, window.innerHeight);
+  lastMs = performance.now(); // don't apply a huge dt to the sim on resume
+});
+
+// Escape hatch in case the browser never fires a restore (rare, but e.g. some
+// mobile drivers). A manual reload always works and is what a user would do
+// by hand anyway.
+glReloadBtn.addEventListener('click', () => window.location.reload());
