@@ -197,6 +197,32 @@ deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
 - Determinism matters: procedural textures use a seeded RNG keyed on body id.
   Do not introduce `Math.random()` in `src/render/textures.ts`.
 
+## Workflow: plan first, commit per feature
+
+Mandatory for any multi-feature request (two or more user-visible changes).
+It exists because of 2026-08-21: three features were implemented in one
+working tree and had to be split into three commits _afterwards_ — three
+hand-reconstructed intermediate states, each re-gated, and several hours of
+fragile surgery. Do not repeat that.
+
+1. **Plan before code.** First write `plans/0NN-<slug>.md`: an explicit
+   commit list — ONE feature per commit, in dependency order, each with its
+   conventional-commit subject and a short design note. Add one line per
+   feature to `todo.md` referencing the plan (e.g. `- [ ] P2 … — plan 003`).
+   `todo.md` is a thin index; the detail lives in the plan file so it never
+   bloats into a changelog.
+2. **One feature in the tree at a time.** Feature N is implemented, gate-
+   checked (all four gates below), committed and pushed BEFORE the first
+   line of feature N+1 is written.
+3. **Never retro-split.** Do not accumulate several features in one working
+   tree and split them post-hoc. If a session must end mid-way, commit what
+   is complete and gate-green and leave nothing half-baked in the tree.
+4. **`todo.md` status discipline.** Tasks are added with `- [ ]` when they
+   are planned; each is flipped to `- [x]` with its commit hash in the SAME
+   commit as the feature (commit → note the hash → `git commit --amend` the
+   hash into `todo.md` → push). A task is `- [x]` only after gates + commit
+   - push — never before.
+
 ## Git conventions
 
 - Small, frequent commits; **push after each commit** (user requirement).
