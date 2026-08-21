@@ -120,6 +120,36 @@ deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
   `frame()` loop skip all sim+GPU work while down (the rAF chain stays alive,
   so the view self-resumes on restore — no forced reload). A manual
   "Reload page" button is the escape hatch if a restore never fires.
+- **Camera pick landing is top-down** (`src/render/cameraFlight.ts`):
+  `frameBody()` lands DIRECTLY OVERHEAD — a pure 90° straight-down view along
+  the ecliptic north pole (camera on +Y, looking −Y at the body's world
+  position). This is the ONE standard for BOTH search-bar picks and
+  click-picks (user decision 2026-08-20); satellites still frame their
+  parent planet. Do not reintroduce bearing-relative landing (the old
+  "keep the current side" behaviour was inconsistent across pick paths).
+  Flight path (`makeFlight`) is unchanged — only the destination anchor.
+- **Constellation sky** (`src/render/scene.ts` + `src/data/constellations.ts`):
+  the dome is STATIC (the camera moves, not the sky). Each figure is ONE
+  `LineSegments` with its own material so opacities can fade independently,
+  plus a name sprite at its centroid. The per-frame highlight is driven by
+  `constellationEmphasis()` — pure math, a fixed angular band around the
+  camera forward (full emphasis < 15°, faded out by 40°) — throttled to a
+  few Hz and gated on camera-pose change, so idle frames cost nothing.
+  Keep the math pure (no `three` in the emphasis/center functions) so it
+  stays unit-tested; the per-constellation split is what makes independent
+  fading possible — don't merge the line meshes back into one.
+- **True-scale tour** (`main.ts` tour block + `scene.ts` scale morph):
+  the ⚖ Real-scale tour is a TRANSIENT state (deliberately NOT url-encoded):
+  a 3 s eased blend `lerpScale(VISIBLE_SCALE, TRUE_SCALE, p)` applied to
+  positions, belts and orbit lines, with `applyScaleMorph()` blending baked
+  body radii. Parking at p=1 sets `scale = TRUE_SCALE` so the select, URL and
+  anchor framing all agree — and the p=1 blend is EXACTLY `TRUE_SCALE`, so
+  nothing snaps. Any manual camera input ends the tour. Orbit-line
+  re-projection (`reprojectOrbitLine`) maps each sample's heliocentric radius
+  through the scale's distance function and re-scales the stored unit
+  direction — the line must ALWAYS use the same distance factor as the body
+  position (the D1 moon-line bug was exactly this: a `/km` where positions
+  use `/d`).
 
 ## Code style
 

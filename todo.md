@@ -14,7 +14,7 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] A4 fix(tools): ESLint + Prettier + CI lint step — flat `eslint.config.js` (TS+JS, Prettier-aware), `.prettierrc.json`, `lint`/`format`/`format:check` npm scripts, CI lint + format-check steps, one-time Prettier format sweep (34 files)
 - [x] B1 feat(sim): celestial event engine (eclipses, transits, conjunctions, oppositions, Saturn edge-on) + Events UI
 - [x] B2 feat(nav): body search combobox + clean grouped satellite menu
-- [ ] B3 feat(render): true-scale tour (3 s morph + captions + return)
+- [x] B3 feat(render): true-scale tour (3 s morph + captions + return) — `4e7ec45`. "⚖ Real scale" eases the whole scene visible↔true (sizes, distances, belts, orbit lines) over 3 s with staged captions; "↩ Return" reverses from wherever (even mid-morph). Parking at p=1 sets scale=TRUE_SCALE (authoritative for select/URL/framing; the p=1 blend IS TRUE_SCALE so nothing snaps). Tour is transient (not url-encoded); any manual camera input ends it. UI: index.html #scale-tour / #scale-return / #scale-caption.
 - [ ] B4 feat(render): real NASA/SSS textures committed + LICENSE credits
 - [ ] C: update AGENTS.md, final gates, live-site verify
 
