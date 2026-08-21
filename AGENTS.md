@@ -84,6 +84,22 @@ deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
   writers (no ImageMagick in this sandbox — don't add PIL). Mobile:
   `touch-action: none` on the canvas, safe-area insets, coarse-pointer hit
   targets, and a collapsible control panel (auto-collapsed under 560 px).
+- **Celestial events** (`src/sim/events.ts`, pure): deterministic scanner over a
+  time window (default 0.5 d step, refines at 0.05 d) that finds solar/lunar
+  eclipses, planetary transits (Mercury/Venus across the Sun), Sun–planet
+  conjunctions, planet oppositions, and Saturn ring edge-on crossings. All
+  geometry is geocentric ecliptic J2000 from the same `positionAt`/`moon.ts`
+  math as the rest of the sim — no new ephemeris model. Solar eclipses use
+  surface parallax (observer radius of Earth / lunar distance, ≈1.46°) not
+  geocenter disc-overlap, and are classified total/annular/partial by
+  apparent radii. Saturn edge-on uses the fixed IAU spin pole
+  (RA 40.588°, Dec 83.537° J2000) rotated to the ecliptic with R_x(−ε);
+  validated against JPL Horizons DE441 (2025-03-24 true zero). `findEvents()`
+  is the aggregate entry point (pure, sorted, typed `CelestialEvent`); the UI
+  wiring lives in `main.ts` (✦ Events toggle, ±1/5/10-yr range, clickable
+  list → jumps sim clock + camera). Ground-truth dates pinned in
+  `tests/events.test.ts` (transits, Saturn oppositions, Saturn edge-on 2009/
+  2025/2038-39, solar eclipse dates 2018–2025).
 - **WebGL context loss** (`main.ts` + `#gl-lost` overlay in `index.html`):
   three.js already owns the low-level recovery (it `preventDefault`s
   `webglcontextlost`, no-ops `render()` via its `_isContextLost` flag, and
