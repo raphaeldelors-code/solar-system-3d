@@ -167,6 +167,17 @@
         margin: 6px 0 0;
         font-family: var(--mono);
       }
+      /* ---- True-scale tour caption (B3) ---- */
+      #scale-caption {
+        margin: 4px 0 2px;
+        padding: 6px 8px;
+        border-left: 2px solid var(--accent);
+        background: rgba(110, 168, 255, 0.08);
+        border-radius: 0 6px 6px 0;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: #dce8f7;
+      }
       #time.flash {
         animation: time-flash 1.2s ease-out;
       }
@@ -405,7 +416,7 @@
         border-color: #6ea8ff;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-CV_-k8ES.js"></script>
+    <script type="module" crossorigin src="./assets/index-BsTh3d-8.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -488,7 +499,18 @@
             <option value="visible">Visible (default)</option>
             <option value="true">True scale</option>
           </select>
+          <button
+            id="scale-tour"
+            type="button"
+            title="Morph live to true physical scale (3 s), then back"
+          >
+            ⚖ Real scale
+          </button>
+          <button id="scale-return" type="button" hidden title="Return to the normal view">
+            ↩ Return
+          </button>
         </div>
+        <div id="scale-caption" hidden></div>
         <div class="row">
           <label><input id="orbits" type="checkbox" checked /> Orbits</label>
           <label><input id="labels" type="checkbox" checked /> Labels</label>
