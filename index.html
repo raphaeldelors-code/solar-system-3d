@@ -287,12 +287,43 @@
         border-color: #6ea8ff;
         color: #eaf2ff;
       }
-      /* Real/Visible scale toggle (B3): one control, two states. */
-      #panel button.toggle {
+      /* Real/Visible scale switch: BOTH options always visible; the active
+         one is lit so the current state reads at a glance. */
+      #scale-switch {
         flex: 1;
-        text-align: center;
+        display: flex;
+        min-width: 0;
+      }
+      #scale-switch .seg {
+        flex: 1 1 0;
+        min-width: 0;
         white-space: nowrap;
+        text-align: center;
         letter-spacing: 0.02em;
+        border-radius: 0;
+        opacity: 0.6;
+        transition:
+          opacity 120ms ease,
+          background 120ms ease;
+      }
+      #scale-switch .seg:first-child {
+        border-top-left-radius: 6px;
+        border-bottom-left-radius: 6px;
+        border-right-width: 0;
+      }
+      #scale-switch .seg:last-child {
+        border-top-right-radius: 6px;
+        border-bottom-right-radius: 6px;
+      }
+      #scale-switch .seg.active {
+        background: #2b4a7a;
+        border-color: #6ea8ff;
+        color: #eaf2ff;
+        opacity: 1;
+      }
+      #scale-switch .seg:focus-visible {
+        outline: 2px solid #6ea8ff;
+        outline-offset: -2px;
       }
       #panel .anchor-row {
         flex-wrap: wrap;
@@ -438,7 +469,7 @@
         border-color: #6ea8ff;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-CjGrBEJP.js"></script>
+    <script type="module" crossorigin src="./assets/index-D8REJ8Ce.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -525,14 +556,28 @@
         </div>
         <div class="row">
           <label>Scale</label>
-          <button
-            id="scale-toggle"
-            type="button"
-            class="toggle"
-            title="Morph to true physical scale — sizes and distances to the same ratio"
-          >
-            ⚖ Real scale
-          </button>
+          <div id="scale-switch" role="radiogroup" aria-label="Scale">
+            <button
+              id="scale-visible"
+              type="button"
+              class="seg active"
+              role="radio"
+              aria-checked="true"
+              title="The default view — distances compressed and sizes exaggerated so everything fits on screen"
+            >
+              Visible scale
+            </button>
+            <button
+              id="scale-real"
+              type="button"
+              class="seg"
+              role="radio"
+              aria-checked="false"
+              title="True physical scale — sizes and distances to the same ratio"
+            >
+              Real scale
+            </button>
+          </div>
         </div>
         <div id="scale-caption" hidden></div>
         <div class="row">
