@@ -140,25 +140,53 @@ deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
 - **Constellation sky** (`src/render/scene.ts` + `src/data/constellations.ts`):
   the dome is STATIC (the camera moves, not the sky). Each figure is ONE
   `LineSegments` with its own material so opacities can fade independently,
-  plus a name sprite at its centroid. The per-frame highlight is driven by
-  `constellationEmphasis()` — pure math, a fixed angular band around the
-  camera forward (full emphasis < 15°, faded out by 40°) — throttled to a
-  few Hz and gated on camera-pose change, so idle frames cost nothing.
-  Keep the math pure (no `three` in the emphasis/center functions) so it
-  stays unit-tested; the per-constellation split is what makes independent
-  fading possible — don't merge the line meshes back into one.
-- **True-scale tour** (`main.ts` tour block + `scene.ts` scale morph):
-  the ⚖ Real-scale tour is a TRANSIENT state (deliberately NOT url-encoded):
-  a 3 s eased blend `lerpScale(VISIBLE_SCALE, TRUE_SCALE, p)` applied to
-  positions, belts and orbit lines, with `applyScaleMorph()` blending baked
-  body radii. Parking at p=1 sets `scale = TRUE_SCALE` so the select, URL and
-  anchor framing all agree — and the p=1 blend is EXACTLY `TRUE_SCALE`, so
-  nothing snaps. Any manual camera input ends the tour. Orbit-line
+  plus a name sprite (spaced serif capitals + glow + flourish, from
+  `makeConstellationNameTexture`) placed BESIDE the figure:
+  `constellationLabelPose()` computes the star cloud's principal axis and
+  pushes the label a fixed angular margin past the centroid along it. The
+  per-frame highlight is driven by `constellationEmphasis()` — pure math, a
+  fixed angular band around the camera forward (full emphasis < 15°, faded
+  out by 40°) — throttled to a few Hz and gated on camera-pose change, so
+  idle frames cost nothing. Name and lines share the SAME emphasis value:
+  it resolves through the name-based `CONSTELLATION_NAME_INDEX` (do NOT go
+  back to sequential child indexing — labels come after the line segments in
+  each group, which caused an off-by-one where label k faded with figure
+  k+1). Keep the math pure (no `three` in the emphasis/center/pose
+  functions) so it stays unit-tested; the per-constellation split is what
+  makes independent fading possible — don't merge the line meshes back into
+  one.
+- **True-scale toggle** (`main.ts` morph block + `scene.ts` scale morph):
+  the single ⚖ Real-scale / Visible-scale button (`#scale-toggle`, replaced
+  the old select + tour/return buttons in B3) is a TRANSIENT morph state
+  (deliberately NOT url-encoded — only the terminal `scale` is):
+  `morph = { p, dir, reframed }`, a 3 s eased blend
+  `lerpScale(VISIBLE_SCALE, TRUE_SCALE, p)` applied to positions, belts and
+  orbit lines, with `applyScaleMorph()` blending baked body radii. Toggling
+  mid-morph REVERSES from the current p (no snap); a URL-restored
+  `scale=true` load starts a morph BACK to visible. Parking at p=1 sets
+  `scale = TRUE_SCALE` so URL and anchor framing agree — and the p=1 blend
+  is EXACTLY `TRUE_SCALE`, so nothing snaps. `syncScaleUI()` keeps the
+  button label + `.active` class in sync and runs at startup. Body labels
+  are NEVER faded by the morph (`applyScaleMorph` sets opacity 1): at true
+  scale planets are sub-pixel dots and the labels are the only way to tell
+  them apart — the Labels toggle is their single on/off. Orbit-line
   re-projection (`reprojectOrbitLine`) maps each sample's heliocentric radius
   through the scale's distance function and re-scales the stored unit
   direction — the line must ALWAYS use the same distance factor as the body
   position (the D1 moon-line bug was exactly this: a `/km` where positions
   use `/d`).
+- **Moon orbit line tracks the live path** (`src/render/scene.ts`): the
+  Moon's drawn orbit loop is NOT a fixed ellipse — Meeus ch.47's node line
+  regresses (~18.6 y) and apse precesses (~8.85 y) — so it is sampled once
+  at a PLACEHOLDER epoch (`t0 = 0`) and re-sampled IN-PLACE by
+  `resampleMoonOrbitLine()` in the frame loop, throttled to ~4 Hz
+  (`lastMoonResampleMs`), at the LIVE sim time. Date jumps (picker, "Now",
+  event rows) call `resampleMoonNow()` so the first frame after a jump is
+  already correct. Never bake the epoch at load time — the original bug was
+  `t0 = (5000 * (Date.now() - J2000)) / 86400000`, a stray 5000× that sampled
+  the path ~132,000 y in the future (the "Moon not on its orbit line" bug).
+  It writes the same position/unit-dir/km buffers `reprojectOrbitLine`
+  reads, so the scale morph's re-projection stays consistent for free.
 
 ## Code style
 

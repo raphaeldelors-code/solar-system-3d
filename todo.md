@@ -14,9 +14,9 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] A4 fix(tools): ESLint + Prettier + CI lint step — flat `eslint.config.js` (TS+JS, Prettier-aware), `.prettierrc.json`, `lint`/`format`/`format:check` npm scripts, CI lint + format-check steps, one-time Prettier format sweep (34 files)
 - [x] B1 feat(sim): celestial event engine (eclipses, transits, conjunctions, oppositions, Saturn edge-on) + Events UI
 - [x] B2 feat(nav): body search combobox + clean grouped satellite menu
-- [x] B3 feat(render): true-scale tour (3 s morph + captions + return) — `4e7ec45`. "⚖ Real scale" eases the whole scene visible↔true (sizes, distances, belts, orbit lines) over 3 s with staged captions; "↩ Return" reverses from wherever (even mid-morph). Parking at p=1 sets scale=TRUE_SCALE (authoritative for select/URL/framing; the p=1 blend IS TRUE_SCALE so nothing snaps). Tour is transient (not url-encoded); any manual camera input ends it. UI: index.html #scale-tour / #scale-return / #scale-caption.
+- [x] B3 feat(render): true-scale tour (3 s morph + captions + return) — `4e7ec45`. "⚖ Real scale" eases the whole scene visible↔true (sizes, distances, belts, orbit lines) over 3 s with staged captions; "↩ Return" reverses from wherever (even mid-morph). Parking at p=1 sets scale=TRUE_SCALE (authoritative for select/URL/framing; the p=1 blend IS TRUE_SCALE so nothing snaps). Tour is transient (not url-encoded); any manual camera input ends it. UI: index.html #scale-tour / #scale-return / #scale-caption. SUPERSEDED by the single toggle (user queue 2026-08-21, first item).
 - [ ] B4 feat(render): real NASA/SSS textures committed + LICENSE credits
-- [ ] C: update AGENTS.md, final gates, live-site verify
+- [x] C: update AGENTS.md (toggle, moon live-resample, constellation label invariants), final gates, live-site verify — 2026-08-21 (E1–E3 docs)
 
 ## User queue — 2026-08-20 (before B3)
 
@@ -26,6 +26,12 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] D4 feat(render): constellation highlight — ONE LineSegments per figure (13, own material); per-frame emphasis = fixed angular band around the view axis (full <15°, faded out by 40°), pure math in constellationEmphasis (unit-tested); throttled ~5 Hz + pose-gated (13 dot-products when the camera actually moves — no perf cost while idle). Constellation name + line fade together.
 - [x] D5 feat(ui): Events panel as a collapsible toggle — existing ✨ button collapses the whole Events section; state now PERSISTED in the URL (`ev=1/0`) and restored on load (recomputes the list when a shared link opens the panel)
 - [x] D6 feat(ui): date picker on top of Events — `<input type="date">` in the Time row, two-way synced with the sim clock (fmtDate updates it every frame, change jumps the clock keeping the current time of day, re-flashes the date readout, refreshes events if open); focus-guarded so the per-frame sync never clobbers an in-progress edit
+
+## User queue — 2026-08-21
+
+- [x] E1 feat(ui): single Real/Visible scale TOGGLE — replaced the Visible/True select + "⚖ Real scale" + "↩ Return" with one `#scale-toggle` button (B3 redesign, per user request). Morphs visible↔true over 3 s in either direction, reverses smoothly mid-morph, works from a URL-restored scale=true load (morphs back to visible). `syncScaleUI()` syncs label + `.active` and runs at startup. Labels now stay fully legible at EVERY scale (removed the true-scale fade in `applyScaleMorph` — planets are sub-pixel at true scale, labels are the only way to tell them apart). `6630eca`
+- [x] E2 fix(render): Moon orbit line — Moon was not following its orbit line. ROOT CAUSE: line baked at `t0 = (5000 * (Date.now() - J2000)) / 86400000` — stray 5000× sampled the Meeus ch.47 geocentric path ~132,000 y in the future; plus the path precesses (node ~18.6 y, apse ~8.85 y) so any static line drifts. Now sampled at placeholder epoch + re-sampled IN-PLACE (`resampleMoonOrbitLine`) at live sim time, throttled ~4 Hz in the frame loop (~1 ms / 129 samples); date jumps call `resampleMoonNow()`. Writes the same buffers `reprojectOrbitLine` uses, so the scale morph stays consistent. 5 regression tests. `e71c3e9`
+- [x] E3 feat(render): constellation names in elegant letters BESIDE each figure — `makeConstellationNameTexture()` (spaced serif capitals, starlight glow, hairline flourish; font auto-scaled so all 13 names share one glyph size) + `constellationLabelPose()` (fixed angular margin past the centroid along the star cloud's principal axis — beside, not on top). Same emphasis fade as the figure lines, now resolved through name-based `CONSTELLATION_NAME_INDEX` — fixes an off-by-one where label k faded with figure k+1 (labels come after the 12 line segments in each group). 5 regression tests. `b952d4f`
 
 ## Declined (user decision 2026-08-18)
 
