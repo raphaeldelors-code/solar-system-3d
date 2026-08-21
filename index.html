@@ -180,6 +180,74 @@
           text-shadow: none;
         }
       }
+      /* ---- Body search combobox (B2) ---- */
+      #find-wrap {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+      }
+      #find {
+        width: 100%;
+        box-sizing: border-box;
+        background: #1a2334;
+        color: #cfd8e3;
+        border: 1px solid #33415e;
+        border-radius: 6px;
+        padding: 3px 8px;
+        font: inherit;
+      }
+      #find::placeholder {
+        color: #6d7f9c;
+      }
+      #find:focus {
+        outline: none;
+        border-color: #6ea8ff;
+      }
+      #find-list {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 20;
+        max-height: 280px;
+        overflow-y: auto;
+        background: rgba(13, 18, 32, 0.97);
+        border: 1px solid #33415e;
+        border-radius: 8px;
+        padding: 4px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      }
+      #find-list .fr {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 5px 8px;
+        border-radius: 5px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      #find-list .fr.active,
+      #find-list .fr:hover {
+        background: #2b4a7a;
+      }
+      #find-list .fr-free {
+        opacity: 0.7;
+      }
+      #find-list .fr-name {
+        font-weight: 600;
+        color: #e8f0fb;
+      }
+      #find-list .fr-sub {
+        font-size: 11px;
+        color: #9fb4d4;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #find-list .fr-empty {
+        color: #6d7f9c;
+        padding: 6px 8px;
+        font-size: 11px;
+      }
       #panel label {
         flex: 0 0 auto;
         opacity: 0.85;
@@ -337,7 +405,7 @@
         border-color: #6ea8ff;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-KpweKGsE.js"></script>
+    <script type="module" crossorigin src="./assets/index-CVk2Gigm.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -403,10 +471,16 @@
           <p class="ev-note">Click an event to jump there. Model: Kepler + geocentric Moon.</p>
         </div>
         <div class="row">
-          <label>Follow</label>
-          <select id="follow">
-            <option value="">Free camera</option>
-          </select>
+          <label>Find</label>
+          <div id="find-wrap">
+            <input
+              id="find"
+              type="text"
+              placeholder="Free camera — type to search"
+              autocomplete="off"
+            />
+            <div id="find-list" hidden></div>
+          </div>
         </div>
         <div class="row">
           <label>Scale</label>
