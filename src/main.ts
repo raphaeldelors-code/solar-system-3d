@@ -222,7 +222,11 @@ interface ScaleMorph {
 }
 
 let morph: ScaleMorph | null = null;
-const scaleToggleEl = document.getElementById('scale-toggle') as HTMLButtonElement | null;
+// Segment switch (plan 003 P2): BOTH options are always on screen — the lit
+// one is the mode the view is in or heading to. Replaced the old single
+// label-flipping button whose state had to be read off the text.
+const scaleRealEl = document.getElementById('scale-real') as HTMLButtonElement | null;
+const scaleVisibleEl = document.getElementById('scale-visible') as HTMLButtonElement | null;
 const scaleCaptionEl = document.getElementById('scale-caption') as HTMLDivElement | null;
 
 /** Staged narration — thresholds on the eased "how real" value. */
@@ -242,14 +246,25 @@ function morphCaption(p: number): string {
   return text;
 }
 
+/** The switch mode the view is in, or heading to while a morph runs. */
+function scaleTarget(): 'real' | 'visible' {
+  if (morph) {
+    // While moving, light the DESTINATION (the option being clicked);
+    // when parked (dir 0), light where we landed (p=1 ⇒ real).
+    if (morph.dir === 0) return morph.p >= 0.5 ? 'real' : 'visible';
+    return morph.dir === 1 ? 'real' : 'visible';
+  }
+  return scale === TRUE_SCALE ? 'real' : 'visible';
+}
+
 function syncScaleUI(): void {
-  if (!scaleToggleEl) return;
-  const real = scale === TRUE_SCALE;
-  scaleToggleEl.textContent = real ? '⚖ Visible scale' : '⚖ Real scale';
-  scaleToggleEl.classList.toggle('active', real);
-  scaleToggleEl.title = real
-    ? 'Morph back to the exaggerated view where everything fits on screen'
-    : 'Morph to true physical scale — sizes and distances to the same ratio';
+  const real = scaleTarget() === 'real';
+  for (const el of [scaleRealEl, scaleVisibleEl]) {
+    if (!el) continue;
+    const active = el === scaleRealEl ? real : !real;
+    el.classList.toggle('active', active);
+    el.setAttribute('aria-checked', String(active));
+  }
   if (!scaleCaptionEl) return;
   scaleCaptionEl.hidden = !morph;
   if (morph) {
@@ -282,13 +297,18 @@ function morphEnd(): void {
   syncUrl();
 }
 
-/** Flip between visible and real scale, morphing either direction. */
-function toggleScale(): void {
+/**
+ * Drive the scale switch toward `target`. Clicking the option already
+ * lit does nothing (idempotent); clicking the other one reverses a
+ * mid-morph from the current progress instead of restarting it.
+ */
+function requestScale(target: 'real' | 'visible'): void {
+  if (scaleTarget() === target) return;
   if (morph && morph.dir !== 0) {
     // Mid-morph: reverse from the current progress (p stays as-is).
-    morph.dir = morph.p < 0.5 ? 1 : -1;
+    morph.dir = target === 'real' ? 1 : -1;
     morph.reframed = false;
-  } else if (!morph && scale !== TRUE_SCALE) {
+  } else if (target === 'real') {
     // Visible (or mid-restore) state: head to real scale from p=0.
     flight = null; // cancel any in-progress flight; the camera stays free
     stopSkyTour();
@@ -463,9 +483,11 @@ function wireAnchorButtons(): void {
     }
     syncUrl();
   });
-  // Real-scale toggle (B3): one control, two states. Flipping it morphs
-  // between the visible and true layouts (reverses mid-morph).
-  scaleToggleEl?.addEventListener('click', toggleScale);
+  // Real/Visible scale switch (B3, plan 003 P2): both options always
+  // visible; clicking the unlit one morphs there (reverses mid-morph),
+  // clicking the lit one is a no-op.
+  scaleRealEl?.addEventListener('click', () => requestScale('real'));
+  scaleVisibleEl?.addEventListener('click', () => requestScale('visible'));
 }
 
 function applyToggles(): void {
