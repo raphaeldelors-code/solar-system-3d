@@ -79,7 +79,13 @@ export function buildBeltField(def: BeltDefinition): BeltField {
  *
  * Allocation-free: reuses module-level scratch (single-threaded loop).
  */
-export function updateBeltField(field: BeltField, tDays: number, scale: VisualScale): void {
+export function updateBeltField(
+  field: BeltField,
+  tDays: number,
+  scale: VisualScale,
+  /** Rock size multiplier (visible-mode dots → sub-pixel at true scale). */
+  sizeFactor = 1,
+): void {
   const { objects, mesh } = field;
   const m = BELT_MATRIX;
   const pos = BELT_POS;
@@ -99,7 +105,7 @@ export function updateBeltField(field: BeltField, tDays: number, scale: VisualSc
 
     euler.set(o.spin[0] + tDays * 0.05, o.spin[1], o.spin[2]);
     quat.setFromEuler(euler);
-    scl.setScalar(o.size);
+    scl.setScalar(Math.max(1e-6, o.size * sizeFactor));
     m.compose(pos, quat, scl);
     mesh.setMatrixAt(i, m);
   }

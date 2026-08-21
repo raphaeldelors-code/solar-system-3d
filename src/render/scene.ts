@@ -50,6 +50,12 @@ export interface VisualScale {
   moonDistance: (km: number, moonId?: string) => number;
   /** Suggested camera distance when following a body of this km radius. */
   followDistanceKm: (km: number) => number;
+  /**
+   * Multiplier applied to belt rock instance sizes (1 = visible-mode dots,
+   * ~0 at true scale where km-sized asteroids are sub-pixel). Used by the
+   * true-scale tour (B3) to morph belt visibility with the rest of the scene.
+   */
+  beltSizeFactor?: number;
 }
 
 /**
@@ -64,6 +70,7 @@ export const VISIBLE_SCALE: VisualScale = {
   planetDistance,
   moonDistance: (km, moonId) => (moonId ? moonDistance(moonId, km) : null) ?? baseMoonDistance(km),
   followDistanceKm,
+  beltSizeFactor: 1,
 };
 
 /** True physical scale (distances and sizes to the same ratio). */
@@ -73,7 +80,31 @@ export const TRUE_SCALE: VisualScale = {
   planetDistance: (au) => au,
   moonDistance: (km) => (km / AU_TO_KM) * AU,
   followDistanceKm: (km) => Math.max(1.5, (km / AU_TO_KM) * 8),
+  // km-sized belt rocks are far below a pixel at AU distances — vanish them
+  // at true scale (the B3 tour morphs this factor toward 0).
+  beltSizeFactor: 0,
 };
+
+/**
+ * True-scale tour (B3) blend: linearly interpolate every mapping of one
+ * `VisualScale` toward another at progress `p` (0 → exactly `from`,
+ * 1 → exactly `to`). Pure (no DOM, no three) and unit-tested — see
+ * `tests/scaleBlend.test.ts`. The tour builds this fresh each frame as
+ * `lerpScale(baseScale, TRUE_SCALE, p)` and hands it to `updatePositions` /
+ * `updateBeltFields` / `reprojectOrbitLine` so bodies, belts and orbit lines
+ * all move in lockstep with the eased progress.
+ */
+export function lerpScale(from: VisualScale, to: VisualScale, p: number): VisualScale {
+  const L = (a: number, b: number): number => a + (b - a) * p;
+  return {
+    bodyRadiusKm: (km) => L(from.bodyRadiusKm(km), to.bodyRadiusKm(km)),
+    moonRadiusKm: (km) => L(from.moonRadiusKm(km), to.moonRadiusKm(km)),
+    planetDistance: (au) => L(from.planetDistance(au), to.planetDistance(au)),
+    moonDistance: (km, moonId) => L(from.moonDistance(km, moonId), to.moonDistance(km, moonId)),
+    followDistanceKm: (km) => L(from.followDistanceKm(km), to.followDistanceKm(km)),
+    beltSizeFactor: L(from.beltSizeFactor ?? 1, to.beltSizeFactor ?? 0),
+  };
+}
 
 export interface SceneBody {
   def: BodyDefinition;
@@ -85,6 +116,12 @@ export interface SceneBody {
   label: THREE.Sprite;
   /** Orbit line (planets in scene frame; moons in parent local frame). */
   orbit: THREE.Line | null;
+  /**
+   * Ring mesh (Saturn/…), a child of the pivot. Stored so the true-scale
+   * tour (B3) can morph the rings with the body (both scale from the
+   * built-in visible-mode radius).
+   */
+  ringsMesh: THREE.Mesh | null;
   /**
    * Pulsing glow ring highlighting the selected satellite (child of the
    * pivot so it tilts with the body; hidden unless this body is the
@@ -99,6 +136,18 @@ export interface SceneBody {
   worldPos: THREE.Vector3;
   /** This body's rendered radius in scene units (for camera framing). */
   sceneRadius: number;
+  /**
+   * This body's scene radius at VISIBLE_SCALE, independent of the build
+   * scale. Together with `trueRadius` it lets the true-scale tour (B3)
+   * reproduce the EXACT radius under the blended scale at any progress.
+   */
+  visibleRadius: number;
+  /**
+   * This body's scene radius at TRUE_SCALE, independent of the build scale.
+   */
+  trueRadius: number;
+  /** This body's rendered radius at build time (the mesh's baked radius). */
+  builtRadius: number;
   /**
    * Full width (scene units) to frame when the camera flies to this body:
    * the diameter for a plain body, or the ring's OUTER diameter for a
@@ -162,6 +211,22 @@ function makeOrbitLine(
     opacity: 0.45,
   });
   const line = new THREE.Line(geo, mat);
+  // True-scale tour (B3) morphs orbit lines live: store each sample's
+  // heliocentric radius + unit direction so `updateOrbitLines` can
+  // re-project the line through ANY scale without rebuilding geometry.
+  const n = samples.length;
+  const radii = new Float32Array(n);
+  const unitDirs = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const s = samples[i];
+    radii[i] = Math.hypot(s.x, s.y, s.z);
+    const d = eclipticToScene(s).normalize();
+    unitDirs[i * 3] = d.x;
+    unitDirs[i * 3 + 1] = d.y;
+    unitDirs[i * 3 + 2] = d.z;
+  }
+  line.userData.radii = radii;
+  line.userData.unitDirs = unitDirs;
   line.userData.geo = geo;
   line.userData.mat = mat;
   return line;
@@ -258,6 +323,19 @@ export function buildScene(
       : isMoon
         ? scale.moonRadiusKm(def.radiusKm)
         : scale.bodyRadiusKm(def.radiusKm);
+    // Scale-independent radii for the true-scale tour (B3): the tour blends
+    // between the visible-mode and true-mode layouts live, so each body
+    // needs BOTH radii (the baked mesh radius is `r`, the build scale).
+    const trueRadius = isStar
+      ? (def.radiusKm / AU_TO_KM) * 1.15
+      : isMoon
+        ? TRUE_SCALE.moonRadiusKm(def.radiusKm)
+        : TRUE_SCALE.bodyRadiusKm(def.radiusKm);
+    const visibleRadius = isStar
+      ? SUN_R
+      : isMoon
+        ? VISIBLE_SCALE.moonRadiusKm(def.radiusKm)
+        : VISIBLE_SCALE.bodyRadiusKm(def.radiusKm);
 
     const geo = new THREE.SphereGeometry(r, 48, 32);
     const surfaceTex = makeSurfaceTexture(def);
@@ -299,6 +377,7 @@ export function buildScene(
     disposables.push(hlGeo, hlMat);
 
     // Rings.
+    let ringsMesh: THREE.Mesh | null = null;
     if (def.rings) {
       const inner = r * def.rings.inner,
         outer = r * def.rings.outer;
@@ -315,11 +394,12 @@ export function buildScene(
         roughness: 0.9,
         metalness: 0,
       });
-      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.rotation.x = -Math.PI / 2;
-      ringMesh.castShadow = true;
-      ringMesh.receiveShadow = true;
-      pivot.add(ringMesh);
+      const rm = new THREE.Mesh(ringGeo, ringMat);
+      rm.rotation.x = -Math.PI / 2;
+      rm.castShadow = true;
+      rm.receiveShadow = true;
+      pivot.add(rm);
+      ringsMesh = rm;
       disposables.push(ringGeo, ringMat);
     }
 
@@ -349,16 +429,26 @@ export function buildScene(
         // body stays glued to the drawn line.
         const t0 = (5000 * (Date.now() - J2000_UTC)) / 86400000;
         const pts: THREE.Vector3[] = [];
+        const radii = new Float32Array(129);
+        const unitDirs = new Float32Array(129 * 3);
         for (let k = 0; k <= 128; k++) {
           const p = moonGeocentricJ2000(t0 + (k / 128) * 27.55455);
           const d = Math.hypot(p[0], p[1], p[2]); // AU (geocentric)
           const km = d * AU_KM;
           const s = eclipticToScene({ x: p[0], y: p[1], z: p[2] });
           // Same per-point factor the body uses in updatePositions
-          // (moonDistance(km) / d, d in AU), so the Moon sits ON its line.
-          // Dividing by km instead of d would collapse the line to
-          // sub-pixel size (off by a factor of AU_KM).
-          pts.push(s.multiplyScalar(scale.moonDistance(km, 'moon') / Math.max(1e-9, d)));
+          // (moonDistance(km) / d, d in AU) so the body sits ON the line.
+          // NOTE: dividing by km (not d) would collapse the line to
+          // sub-pixel size (off by AU_KM) — the "missing moon orbit" bug.
+          pts.push(s.clone().multiplyScalar(scale.moonDistance(km, 'moon') / Math.max(1e-9, d)));
+          // True-scale tour (B3): keep the parent-distance in km (the
+          // moonDistance domain) + unit direction so the line can be
+          // re-projected through the blend scale without resampling.
+          radii[k] = km;
+          const u = s.normalize();
+          unitDirs[k * 3] = u.x;
+          unitDirs[k * 3 + 1] = u.y;
+          unitDirs[k * 3 + 2] = u.z;
         }
         const geo = new THREE.BufferGeometry().setFromPoints(pts);
         const mat = new THREE.LineBasicMaterial({
@@ -369,6 +459,8 @@ export function buildScene(
         orbit = new THREE.Line(geo, mat);
         orbit.userData.geo = geo;
         orbit.userData.mat = mat;
+        orbit.userData.radii = radii;
+        orbit.userData.unitDirs = unitDirs;
         disposables.push(geo, mat);
       } else {
         orbit = makeOrbitLine(def.elements, distMap);
@@ -392,10 +484,14 @@ export function buildScene(
       label,
       orbit,
       orbitEmphasis,
+      ringsMesh,
       parent,
       spin: 0,
       worldPos: new THREE.Vector3(),
       sceneRadius: r,
+      visibleRadius,
+      trueRadius,
+      builtRadius: r,
       frameExtent,
     };
     map.set(def.id, entry);
@@ -697,8 +793,75 @@ export function updateBeltFields(
   scale: VisualScale,
 ): void {
   for (const field of built.belts) {
-    updateBeltField(field, tDays, scale);
+    updateBeltField(field, tDays, scale, scale.beltSizeFactor);
   }
+}
+
+/**
+ * True-scale tour (B3): set every body's rendered size to the radius it has
+ * under the blended layout at progress `p` (0 = VISIBLE_SCALE radii,
+ * 1 = TRUE_SCALE radii), and keep the per-body bookkeeping
+ * (`sceneRadius`, orbit highlight, label position/opacity) in sync so
+ * framing + highlighting stay correct mid-morph. `p` is the tour's eased
+ * "how true" value — the same value that drives `lerpScale` for positions.
+ * Pure three.js, no DOM.
+ *
+ * The radius is blended `visibleRadius ↔ trueRadius` by `p` directly (NOT
+ * scaled from the baked mesh), so the morphed size is exactly what the
+ * blended scale layout dictates at every progress — including when the scene
+ * was built at TRUE_SCALE (p=1 at start) and the return leg blends it back
+ * down to the visible radii (p=0).
+ */
+export function applyScaleMorph(built: BuiltScene, p: number): void {
+  for (const entry of built.bodies.values()) {
+    const r = entry.visibleRadius + (entry.trueRadius - entry.visibleRadius) * p;
+    const s = Math.max(1e-7, r / entry.builtRadius);
+    entry.mesh.scale.setScalar(s);
+    if (entry.ringsMesh) entry.ringsMesh.scale.setScalar(s);
+    entry.orbitEmphasis.scale.setScalar(Math.max(1e-3, r));
+    // Label floats just above the (morphing) body; its size tracks the disc
+    // with the same rule the build uses (stars keep their fixed 3.4 base).
+    const ls = entry.def.kind === 'star' ? 3.4 : Math.max(1.3, r * 2.4);
+    entry.label.scale.set(ls, ls * 0.25, 1);
+    entry.label.position.y = r + ls * 0.35;
+    // Fade labels out as bodies shrink to dots — at true scale the text is
+    // bigger than the planet it names.
+    (entry.label.material as THREE.SpriteMaterial).opacity =
+      p < 0.55 ? 1 : Math.max(0, 1 - (p - 0.55) / 0.3);
+    entry.sceneRadius = r;
+  }
+}
+
+/**
+ * Re-project one orbit line through an intermediate scale (true-scale tour,
+ * B3). The line was built from `sampleOrbit` with each sample's radius
+ * (AU for planets, km for moons — the distMap's domain) + unit scene
+ * direction stored in `userData`; re-mapping every point to
+ * `unitDir * distMap(r)` reproduces exactly what `makeOrbitLine` would
+ * draw, so the body (whose positions use the same per-point mapping)
+ * stays glued to the line at any morph progress.
+ */
+export function reprojectOrbitLine(
+  orbit: THREE.Line,
+  scale: VisualScale,
+  moonId: string | null,
+): void {
+  const radii = orbit.userData.radii as Float32Array | undefined;
+  const dirs = orbit.userData.unitDirs as Float32Array | undefined;
+  const geo = orbit.userData.geo as THREE.BufferGeometry | undefined;
+  if (!radii || !dirs || !geo) return;
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const n = radii.length;
+  for (let i = 0; i < n; i++) {
+    const r = radii[i];
+    // Point magnitude is the MAPPED distance in scene units (no /r — the
+    // stored dirs are already unit vectors, and dividing by r would shrink
+    // outer orbits and grow inner ones).
+    const mapped = moonId ? scale.moonDistance(r, moonId) : scale.planetDistance(r);
+    pos.setXYZ(i, dirs[i * 3] * mapped, dirs[i * 3 + 1] * mapped, dirs[i * 3 + 2] * mapped);
+  }
+  pos.needsUpdate = true;
+  geo.computeBoundingSphere();
 }
 
 /** Per-frame spin advance; call with dt in sim days. */
