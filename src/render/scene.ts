@@ -672,6 +672,28 @@ export const CONSTELLATION_BASE_OPACITY = 0.32;
 export const CONSTELLATION_PEAK_OPACITY = 0.95;
 
 /**
+ * Name-label geometry (plan 003 P3). The label position is a CONSTANT
+ * angular gap past the figure's far edge (margin = halfExtent +
+ * CONSTELLATION_LABEL_GAP_RAD) — the old 0.35 rad floor ignored figure
+ * size, so compact figures (Aquila, Lyra, Aries) had their names floating
+ * ~11° away while the largest figures (Leo, Scorpius) were overlapped.
+ * The sprite is sized ~the figure's own angular span (floor 0.2 rad ⇒
+ * ~3° tall text at the sky anchor) instead of the old 0.5 rad full width
+ * (7.2° tall — a label that filled 15% of the 50° close-up FOV).
+ */
+export const CONSTELLATION_LABEL_GAP_RAD = 0.12; // 6.9° past the far edge
+export const CONSTELLATION_LABEL_MIN_WIDTH_RAD = 0.2; // sprite floor (≈3° text)
+export const CONSTELLATION_LABEL_SPAN = 0.8; // fullW as fraction of halfExtent
+
+/** Angular FULL width (radians) of a constellation's name sprite. */
+export function constellationLabelWidth(c: Constellation): number {
+  return Math.max(
+    CONSTELLATION_LABEL_MIN_WIDTH_RAD,
+    constellationLabelPose(c).halfExtent * CONSTELLATION_LABEL_SPAN,
+  );
+}
+
+/**
  * Build the decorative constellation sky: ONE `THREE.LineSegments` per
  * constellation (so each figure can fade independently in the D4 highlight),
  * the shared star-dot `THREE.Points`, and one name-label sprite per figure
@@ -714,14 +736,15 @@ export function buildConstellations(): THREE.Group {
     lines.name = `constellation-lines:${c.name}`;
     group.add(lines);
 
-    // Name label (D3): elegant lettering placed BESIDE the figure — an exact
-    // angular offset past the centroid along the figure's long axis, so it
-    // sits at the figure's end rather than on top of its stars (D7). The
-    // sprite is sized to the figure's angular extent so longer constellations
-    // (Ursa Major) get room and compact ones (Lyra) stay tidy. depthTest off
-    // so the sky reads cleanly in front of / behind planets alike.
+    // Name label (D3/D7, plan 003 P3): elegant lettering placed BESIDE
+    // the figure — a CONSTANT angular gap past the figure's far edge along
+    // its long axis, so the name hugs the figure instead of floating in
+    // empty sky (the old 0.35 rad floor) or overlapping it (big figures).
+    // The sprite is ~the figure's own angular span (see
+    // constellationLabelWidth). depthTest off so the sky reads cleanly in
+    // front of / behind planets alike.
     const pose = constellationLabelPose(c);
-    const [lx, ly, lz] = pose.labelDir(Math.max(0.35, pose.halfExtent * 1.15));
+    const [lx, ly, lz] = pose.labelDir(pose.halfExtent + CONSTELLATION_LABEL_GAP_RAD);
     const labelTex = makeConstellationNameTexture(c.name);
     const labelMat = new THREE.SpriteMaterial({
       map: labelTex,
@@ -731,9 +754,9 @@ export function buildConstellations(): THREE.Group {
     });
     const label = new THREE.Sprite(labelMat);
     // Texture is 4:1; the sprite's world width spans the figure's angular
-    // extent (so it clears the figure) at the dome radius.
-    const halfW = Math.max(0.5, pose.halfExtent * 1.5) * (CONSTELLATION_RADIUS - 90);
-    label.scale.set(halfW, halfW / 4, 1);
+    // extent (so the name fits the figure) at the dome radius.
+    const fullW = constellationLabelWidth(c) * (CONSTELLATION_RADIUS - 90);
+    label.scale.set(fullW, fullW / 4, 1);
     label.position.set(
       lx * (CONSTELLATION_RADIUS - 90),
       ly * (CONSTELLATION_RADIUS - 90),
