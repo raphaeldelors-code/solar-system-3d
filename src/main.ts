@@ -14,12 +14,16 @@ import {
   updateBeltFields,
   satelliteExtentScene,
   updateSatelliteHighlight,
+  constellationCenter,
+  constellationEmphasis,
+  updateConstellationHighlight,
   VISIBLE_SCALE,
   TRUE_SCALE,
   CONSTELLATION_RADIUS,
   type BuiltScene,
   type VisualScale,
 } from './render/scene';
+import { CONSTELLATIONS } from './data/constellations';
 import {
   frameBody,
   frameSystem,
@@ -96,6 +100,38 @@ function advanceSkyTour(dtSeconds: number): void {
 // user picking a body / another anchor).
 for (const ev of ['pointerdown', 'wheel', 'keydown', 'touchstart']) {
   window.addEventListener(ev, stopSkyTour, { passive: true });
+}
+
+// --- Constellation proximity highlight (D4) ------------------------------
+// The dome is static and the camera moves, so each figure's center DIRECTION
+// is precomputed once; per frame it's one dot-product per constellation
+// (13 total) between that direction and the camera's view axis. Throttled
+// to ~5 Hz and skipped entirely when the camera pose is unchanged — the
+// feature costs nothing while idle.
+const CONSTELLATION_CENTER_DIRS = CONSTELLATIONS.map((c) => constellationCenter(c));
+const CONSTELLATION_EMPHASES = new Float32Array(CONSTELLATIONS.length);
+const HIGHLIGHT_INTERVAL_MS = 200; // ~5 Hz
+let lastHighlightMs = 0;
+let lastHighlightPoseKey = '';
+const HIGHLIGHT_FWD = new THREE.Vector3();
+
+function updateConstellationHighlightThrottled(nowMs: number): void {
+  if (nowMs - lastHighlightMs < HIGHLIGHT_INTERVAL_MS) return;
+  const cp = built.camera.position;
+  const key = `${cp.x.toFixed(2)}|${cp.y.toFixed(2)}|${cp.z.toFixed(2)}|${built.camera.quaternion.w.toFixed(3)}`;
+  if (key === lastHighlightPoseKey) return;
+  lastHighlightMs = nowMs;
+  lastHighlightPoseKey = key;
+  // Camera forward = its local −Z expressed in world space.
+  HIGHLIGHT_FWD.set(0, 0, -1).applyQuaternion(built.camera.quaternion);
+  const vx = HIGHLIGHT_FWD.x,
+    vy = HIGHLIGHT_FWD.y,
+    vz = HIGHLIGHT_FWD.z;
+  for (let i = 0; i < CONSTELLATION_CENTER_DIRS.length; i++) {
+    const d = CONSTELLATION_CENTER_DIRS[i];
+    CONSTELLATION_EMPHASES[i] = constellationEmphasis(d, [vx, vy, vz]);
+  }
+  updateConstellationHighlight(built.constellations, CONSTELLATION_EMPHASES);
 }
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
@@ -311,6 +347,11 @@ function applyToggles(): void {
   for (const entry of built.bodies.values()) {
     if (entry.orbit) (entry.orbit.material as THREE.Material).visible = orbitsEl.checked;
     entry.label.visible = labelsEl.checked;
+  }
+  // Constellation NAME labels follow the Labels toggle (D3); the sky lines
+  // and star dots are always present — they are the sky itself.
+  for (const child of built.constellations.children) {
+    if (child.name.startsWith('constellation-label:')) child.visible = labelsEl.checked;
   }
   for (const field of built.belts) {
     field.mesh.visible = beltsEl.checked;
@@ -992,6 +1033,11 @@ function frame(): void {
   } else {
     built.controls.update();
   }
+
+  // Constellation proximity highlight (D4): fade each figure by how close its
+  // center is to the view center. Throttled + pose-gated, so idle frames cost
+  // nothing. Runs after the camera pose for this frame is finalized.
+  updateConstellationHighlightThrottled(nowMs);
 
   // Pulsing highlight on the selected satellite (driven by wall-clock time so
   // the pulse is smooth and independent of the sim speed / direction).

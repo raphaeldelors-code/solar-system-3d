@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { raDecToUnit, CONSTELLATIONS } from '../src/data/constellations';
+import { constellationCenter, constellationEmphasis } from '../src/render/scene';
 
 describe('raDecToUnit', () => {
   it('maps the equatorial pole straight up', () => {
@@ -90,5 +91,65 @@ describe('known-figure sanity', () => {
     const pol = umi.stars.find((s) => s.name === 'Polaris')!;
     const [, y] = raDecToUnit(pol.raHours, pol.decDeg);
     expect(y).toBeGreaterThan(0.9999);
+  });
+});
+
+describe('constellationCenter', () => {
+  it('is a unit vector pointing at the figure', () => {
+    for (const c of CONSTELLATIONS) {
+      const [x, y, z] = constellationCenter(c);
+      expect(Math.hypot(x, y, z), c.name).toBeCloseTo(1, 12);
+    }
+  });
+  it('matches the mean star direction (Orion, near +x/−z sky)', () => {
+    const orion = CONSTELLATIONS.find((c) => c.name === 'Orion')!;
+    const [cx, cy, cz] = constellationCenter(orion);
+    // Independent recomputation from the raw star data.
+    let mx = 0,
+      my = 0,
+      mz = 0;
+    for (const s of orion.stars) {
+      const [sx, sy, sz] = raDecToUnit(s.raHours, s.decDeg);
+      mx += sx;
+      my += sy;
+      mz += sz;
+    }
+    const len = Math.hypot(mx, my, mz);
+    expect(cx).toBeCloseTo(mx / len, 12);
+    expect(cy).toBeCloseTo(my / len, 12);
+    expect(cz).toBeCloseTo(mz / len, 12);
+  });
+  it('Ursa Minor sits near the north celestial pole', () => {
+    // Its 7 stars span declination 71.8°…89.3°, so the centroid direction is
+    // a few degrees off the pole — but unmistakably a north-pole figure.
+    const umi = CONSTELLATIONS.find((c) => c.name === 'Ursa Minor')!;
+    const [, y] = constellationCenter(umi);
+    expect(y).toBeGreaterThan(0.98);
+  });
+});
+
+describe('constellationEmphasis', () => {
+  const at = (deg: number) => {
+    const a = (deg * Math.PI) / 180;
+    return constellationEmphasis([Math.sin(a), Math.cos(a), 0], [0, 1, 0]);
+  };
+  it('is 1 when the figure is dead center', () => {
+    expect(constellationEmphasis([0, 0, 1], [0, 0, 1])).toBeCloseTo(1, 12);
+    expect(at(0)).toBeCloseTo(1, 12);
+  });
+  it('is 0 at/behind the fade ring (40°) and for the whole sky behind', () => {
+    expect(at(40)).toBeCloseTo(0, 9);
+    expect(at(60)).toBeCloseTo(0, 12);
+    expect(constellationEmphasis([0, 0, -1], [0, 0, 1])).toBeCloseTo(0, 12);
+  });
+  it('is full inside the inner band (15°) and linear in between', () => {
+    expect(at(10)).toBeCloseTo(1, 9);
+    expect(at(15)).toBeCloseTo(1, 9);
+    // band midpoint (15+40)/2 = 27.5° => exactly half emphasis
+    expect(at(27.5)).toBeCloseTo(0.5, 9);
+    // rises monotonically toward the center
+    expect(at(45)).toBeLessThan(at(30));
+    expect(at(30)).toBeLessThan(at(20));
+    expect(at(20)).toBeLessThan(at(10));
   });
 });

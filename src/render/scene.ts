@@ -20,7 +20,7 @@ import { makeSurfaceTexture, makeLabelTexture } from './textures';
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
-import { CONSTELLATIONS, raDecToUnit } from '../data/constellations';
+import { CONSTELLATIONS, raDecToUnit, type Constellation } from '../data/constellations';
 import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows';
 import {
   SUN_R,
@@ -447,19 +447,69 @@ export function buildScene(
 export const CONSTELLATION_RADIUS = 4800;
 
 /**
- * Build the decorative constellation lines + star markers. Pure three.js
- * construction over the data in `src/data/constellations.ts`.
+ * Unit direction of a constellation's center (mean of its stars' scene-space
+ * unit vectors). The dome is static and the CAMERA moves, so this direction
+ * is precomputable once: per-frame highlight work is then one dot-product
+ * per constellation between the camera's view axis and this (13 total).
+ */
+export function constellationCenter(c: Constellation): [number, number, number] {
+  let x = 0,
+    y = 0,
+    z = 0;
+  for (const s of c.stars) {
+    const [sx, sy, sz] = raDecToUnit(s.raHours, s.decDeg);
+    x += sx;
+    y += sy;
+    z += sz;
+  }
+  const len = Math.hypot(x, y, z) || 1;
+  return [x / len, y / len, z / len];
+}
+
+/**
+ * View emphasis for the proximity highlight (D4): how close a constellation
+ * is to the "central view", from 0 (at/behind the fade ring) to 1 (dead
+ * center). `viewDir` is the camera's forward unit vector, `center` the
+ * figure's precomputed unit direction. The falloff is a FIXED angular band
+ * — independent of the camera's zoom — so the highlight reads the same at
+ * any FOV: full emphasis within {@link CONSTELLATION_HILITE_IN_DEG} of the
+ * view center, linearly fading to zero by
+ * {@link CONSTELLATION_HILITE_OUT_DEG}. Pure — unit-tested in Node.
+ */
+export const CONSTELLATION_HILITE_IN_DEG = 15;
+export const CONSTELLATION_HILITE_OUT_DEG = 40;
+export function constellationEmphasis(
+  center: readonly [number, number, number],
+  viewDir: readonly [number, number, number],
+): number {
+  const dot = center[0] * viewDir[0] + center[1] * viewDir[1] + center[2] * viewDir[2];
+  const d2r = Math.PI / 180;
+  // Angular distance from the view axis (0 at center, 180 behind).
+  const deg = Math.acos(Math.min(1, Math.max(-1, dot))) / d2r;
+  if (deg <= CONSTELLATION_HILITE_IN_DEG) return 1;
+  if (deg >= CONSTELLATION_HILITE_OUT_DEG) return 0;
+  return (
+    (CONSTELLATION_HILITE_OUT_DEG - deg) /
+    (CONSTELLATION_HILITE_OUT_DEG - CONSTELLATION_HILITE_IN_DEG)
+  );
+}
+
+/** Baseline line opacity when a constellation is at the view edge (D4). */
+export const CONSTELLATION_BASE_OPACITY = 0.32;
+/** Peak line opacity when a constellation is dead center in the view (D4). */
+export const CONSTELLATION_PEAK_OPACITY = 0.95;
+
+/**
+ * Build the decorative constellation sky: ONE `THREE.LineSegments` per
+ * constellation (so each figure can fade independently in the D4 highlight),
+ * the shared star-dot `THREE.Points`, and one name-label sprite per figure
+ * (D3) sitting just inside the dome at the figure's center. Static dome —
+ * the camera moves, the sky does not.
  */
 export function buildConstellations(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'constellations';
 
-  const lineMat = new THREE.LineBasicMaterial({
-    color: 0x8fb0ff,
-    transparent: true,
-    opacity: 0.32,
-    depthWrite: false,
-  });
   const dotMat = new THREE.PointsMaterial({
     color: 0xcfe0ff,
     size: 3.2,
@@ -469,24 +519,52 @@ export function buildConstellations(): THREE.Group {
     depthWrite: false,
   });
 
-  const lineVerts: number[] = [];
   const dotVerts: number[] = [];
   for (const c of CONSTELLATIONS) {
     const pos = c.stars.map((s) => {
       const [x, y, z] = raDecToUnit(s.raHours, s.decDeg);
       return [x * CONSTELLATION_RADIUS, y * CONSTELLATION_RADIUS, z * CONSTELLATION_RADIUS];
     });
-    for (const [a, b] of c.lines) {
-      lineVerts.push(...pos[a], ...pos[b]);
-    }
+    // Each figure gets its own geometry + material so the proximity
+    // highlight (D4) can fade it without touching the other 12.
+    const lineVerts: number[] = [];
+    for (const [a, b] of c.lines) lineVerts.push(...pos[a], ...pos[b]);
+
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lineVerts, 3));
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x8fb0ff,
+      transparent: true,
+      opacity: CONSTELLATION_BASE_OPACITY,
+      depthWrite: false,
+    });
+    const lines = new THREE.LineSegments(lineGeo, lineMat);
+    lines.name = `constellation-lines:${c.name}`;
+    group.add(lines);
+
+    // Name label (D3): a sprite at the figure's center, just inside the
+    // dome. depthTest off so the sky reads cleanly in front of / behind
+    // planets alike — it is a sky annotation, like the body labels.
+    const [cx, cy, cz] = constellationCenter(c);
+    const labelTex = makeLabelTexture(c.name);
+    const labelMat = new THREE.SpriteMaterial({
+      map: labelTex,
+      depthTest: false,
+      transparent: true,
+      opacity: CONSTELLATION_BASE_OPACITY,
+    });
+    const label = new THREE.Sprite(labelMat);
+    label.scale.set(60, 15, 1); // dome is 4800 across — small relative to it
+    label.position.set(
+      cx * (CONSTELLATION_RADIUS - 120),
+      cy * (CONSTELLATION_RADIUS - 120),
+      cz * (CONSTELLATION_RADIUS - 120),
+    );
+    label.name = `constellation-label:${c.name}`;
+    group.add(label);
+
     for (const p of pos) dotVerts.push(...p);
   }
-
-  const lineGeo = new THREE.BufferGeometry();
-  lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lineVerts, 3));
-  const lines = new THREE.LineSegments(lineGeo, lineMat);
-  lines.name = 'constellation-lines';
-  group.add(lines);
 
   const dotGeo = new THREE.BufferGeometry();
   dotGeo.setAttribute('position', new THREE.Float32BufferAttribute(dotVerts, 3));
@@ -496,12 +574,45 @@ export function buildConstellations(): THREE.Group {
 
   // Expose for disposal.
   group.userData.dispose = () => {
-    lineGeo.dispose();
-    lineMat.dispose();
+    for (const child of group.children) {
+      const o = child as THREE.Object3D;
+      if (o instanceof THREE.LineSegments) {
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
+      } else if (o instanceof THREE.Sprite) {
+        (o.material as THREE.SpriteMaterial).map?.dispose();
+        o.material.dispose();
+      }
+    }
     dotGeo.dispose();
     dotMat.dispose();
   };
   return group;
+}
+
+/**
+ * D4: fade each constellation's lines + name label by how close its center
+ * is to the camera's view axis. `emphases[i]` must be the per-constellation
+ * `constellationEmphasis` output (view-center proximity, 0..1). Cheap: only
+ * writes a float per material. Driven from the frame loop at ~5 Hz and
+ * only when the camera actually moved.
+ */
+export function updateConstellationHighlight(
+  group: THREE.Group,
+  emphases: ArrayLike<number>,
+): void {
+  let i = 0;
+  for (const child of group.children) {
+    const name = child.name ?? '';
+    const isLines = name.startsWith('constellation-lines:');
+    const isLabel = name.startsWith('constellation-label:');
+    if (!isLines && !isLabel) continue;
+    const emph = emphases[i] ?? 0;
+    const t =
+      CONSTELLATION_BASE_OPACITY + (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph;
+    ((child as THREE.LineSegments | THREE.Sprite).material as THREE.Material).opacity = t;
+    if (isLines) i++;
+  }
 }
 
 /**
