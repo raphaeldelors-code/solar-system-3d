@@ -351,9 +351,14 @@ export function buildScene(
         const pts: THREE.Vector3[] = [];
         for (let k = 0; k <= 128; k++) {
           const p = moonGeocentricJ2000(t0 + (k / 128) * 27.55455);
-          const km = Math.hypot(p[0], p[1], p[2]) * AU_KM;
+          const d = Math.hypot(p[0], p[1], p[2]); // AU (geocentric)
+          const km = d * AU_KM;
           const s = eclipticToScene({ x: p[0], y: p[1], z: p[2] });
-          pts.push(s.multiplyScalar(scale.moonDistance(km, 'moon') / Math.max(1e-9, km)));
+          // Same per-point factor the body uses in updatePositions
+          // (moonDistance(km) / d, d in AU), so the Moon sits ON its line.
+          // Dividing by km instead of d would collapse the line to
+          // sub-pixel size (off by a factor of AU_KM).
+          pts.push(s.multiplyScalar(scale.moonDistance(km, 'moon') / Math.max(1e-9, d)));
         }
         const geo = new THREE.BufferGeometry().setFromPoints(pts);
         const mat = new THREE.LineBasicMaterial({

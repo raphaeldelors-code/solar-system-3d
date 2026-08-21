@@ -18,6 +18,15 @@ loader, constellation tour, tooltips, screenshot button).
 - [ ] B4 feat(render): real NASA/SSS textures committed + LICENSE credits
 - [ ] C: update AGENTS.md, final gates, live-site verify
 
+## User queue — 2026-08-20 (before B3)
+
+- [ ] D1 fix(render): moon orbit line regression — line no longer shown (B3 orbit-line rework)
+- [ ] D2 fix(render): consistent camera anchors — search-bar pick + click-pick both use the same eased flight; NEW standard landing = pure 90° straight-down along the ECLIPTIC NORTH POLE (camera directly overhead, body centered, target at body) — user decision 2026-08-20. frameBody gains a top-down variant (or a `fromNorth: true` flag) used by camAnchorForBody; satellites still frame their parent planet.
+- [ ] D3 feat(render): constellation name labels (static sprite at each constellation centroid)
+- [ ] D4 feat(render): constellation highlight — per-constellation line opacity fades in/out with view-center proximity
+- [ ] D5 feat(ui): Events panel as a collapsible toggle (show/hide whole panel)
+- [ ] D6 feat(ui): date picker on top of Events — synced with sim clock, jump-to-date, live update as time advances
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
