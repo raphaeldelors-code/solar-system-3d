@@ -14,6 +14,9 @@ import {
   updateBeltFields,
   satelliteExtentScene,
   updateSatelliteHighlight,
+  lerpScale,
+  applyScaleMorph,
+  reprojectOrbitLine,
   VISIBLE_SCALE,
   TRUE_SCALE,
   CONSTELLATION_RADIUS,
@@ -26,6 +29,7 @@ import {
   frameConstellations,
   stepFlight,
   makeFlight,
+  easeInOutCubic,
   type CamAnchor,
   type Flight,
 } from './render/cameraFlight';
@@ -157,6 +161,98 @@ let contextLost = false;
 // OrbitControls when it lands.
 let flight: Flight | null = null;
 
+// --- True-scale tour (B3) ----------------------------------------------------
+// A transient (NOT url-encoded) 3 s eased morph between the default
+// "visible" layout and true physical scale. The render loop advances
+// `tour.p` ("how true", 0 = visible, 1 = true) each frame and applies the
+// blended scale `lerpScale(VISIBLE, TRUE, ease(p))` to body positions, belts
+// and orbit lines, plus the blended radii via `applyScaleMorph`. "⚖ Real
+// scale" morphs in; "↩ Return" morphs back from wherever we are (so it also
+// reverses mid-morph). At p=1 we park at true scale: `scale` becomes
+// TRUE_SCALE so the select / URL / anchor framing all agree, and the blend
+// at p=1 IS exactly TRUE_SCALE, so nothing snaps.
+const TOUR_DUR = 3.0; // seconds, each way
+
+interface ScaleTour {
+  /** "How true" 0..1 (eased with easeInOutCubic when applied). */
+  p: number;
+  /** +1 morphing toward true, -1 morphing back, 0 parked at true scale. */
+  dir: 1 | -1 | 0;
+  /** Set once the post-arrival "System" reframe flight has been started. */
+  reframed: boolean;
+}
+
+let tour: ScaleTour | null = null;
+const tourEl = document.getElementById('scale-tour') as HTMLButtonElement | null;
+const tourReturnEl = document.getElementById('scale-return') as HTMLButtonElement | null;
+const tourCaptionEl = document.getElementById('scale-caption') as HTMLDivElement | null;
+
+/** Staged narration — thresholds on the eased "how true" value. */
+const TOUR_CAPTIONS: [at: number, text: string][] = [
+  [0.0, 'Morphing to true scale…'],
+  [
+    0.2,
+    'Sizes snap to reality — the default view exaggerates radii ~300× (Sun) to ~40,000× (Earth).',
+  ],
+  [0.5, 'Distances snap to reality — Earth is 150 million km from the Sun, not 15 units.'],
+  [0.8, 'At true scale Neptune is 4.5 BILLION km out. Most of this view is empty space.'],
+];
+
+function tourCaption(p: number): string {
+  let text = TOUR_CAPTIONS[0][1];
+  for (const [at, t] of TOUR_CAPTIONS) if (p >= at) text = t;
+  return text;
+}
+
+function syncTourUI(): void {
+  if (tourEl) tourEl.hidden = tour !== null;
+  if (tourReturnEl) tourReturnEl.hidden = tour === null;
+  if (!tourCaptionEl) return;
+  tourCaptionEl.hidden = tour === null;
+  if (tour) {
+    tourCaptionEl.textContent =
+      tour.dir === -1
+        ? 'Returning to the normal view…'
+        : tour.dir === 0
+          ? 'True scale — distances and sizes to the same ratio. “↩ Return” to go back.'
+          : tourCaption(easeInOutCubic(tour.p));
+  }
+}
+
+/** Reached an end of the current leg: park at true, or drop the tour at p=0. */
+function tourEnd(): void {
+  if (!tour) return;
+  if (tour.p >= 1) {
+    // Park at true scale. Positions/orbits already sit exactly on TRUE_SCALE
+    // at p=1; keep the tour ALIVE at p=1 so `applyScaleMorph` keeps driving
+    // body radii (the baked meshes are still the visible-mode geometry), and
+    // make `scale` authoritative for the select, URL and anchor framing.
+    tour = { p: 1, dir: 0, reframed: false };
+    scale = TRUE_SCALE;
+  } else {
+    // p=0: the blended layout equals the baked visible-mode scene exactly,
+    // so the tour can be dropped with no visual change.
+    tour = null;
+    scale = VISIBLE_SCALE;
+  }
+  syncTourUI();
+  syncUrl();
+}
+
+function startTour(): void {
+  if (tour || scale !== VISIBLE_SCALE) return; // only from the normal view
+  flight = null; // cancel any in-progress flight; the camera stays free
+  stopSkyTour();
+  tour = { p: 0, dir: 1, reframed: false };
+  syncTourUI();
+}
+
+function reverseTour(): void {
+  if (!tour) return;
+  tour.dir = -1; // also reverses the parked-at-true state (dir 0 → -1)
+  syncTourUI();
+}
+
 function rebuildScene(newScale: VisualScale): BuiltScene {
   if (built) built.dispose();
   built = buildScene(canvas, ALL_BODIES, newScale);
@@ -247,12 +343,7 @@ function camAnchorForBody(id: string): CamAnchor | null {
     planet.frameExtent,
     satExtent > 0 ? 2 * satExtent + planet.sceneRadius : 0,
   );
-  return frameBody(
-    [built.camera.position.x, built.camera.position.y, built.camera.position.z],
-    [planet.worldPos.x, planet.worldPos.y, planet.worldPos.z],
-    extent,
-    FOV_DEG,
-  );
+  return frameBody([planet.worldPos.x, planet.worldPos.y, planet.worldPos.z], extent, FOV_DEG);
 }
 
 /**
@@ -310,6 +401,10 @@ function wireAnchorButtons(): void {
     }
     syncUrl();
   });
+  // True-scale tour (B3): "⚖ Real scale" morphs the whole view to true
+  // physical scale; "↩ Return" morphs back (also reverses mid-morph).
+  tourEl?.addEventListener('click', () => startTour());
+  tourReturnEl?.addEventListener('click', () => reverseTour());
 }
 
 function applyToggles(): void {
@@ -643,6 +738,13 @@ document.addEventListener('pointerdown', (ev) => {
 });
 
 scaleEl.addEventListener('change', () => {
+  // A manual scale switch supersedes the true-scale tour: end it cleanly
+  // (parks / returns instantly to match the requested mode) so the tour and
+  // the select can never fight over the active scale.
+  if (tour) {
+    tour = null;
+    syncTourUI();
+  }
   scale = scaleEl.value === 'true' ? TRUE_SCALE : VISIBLE_SCALE;
   rebuildScene(scale);
   syncUrl();
@@ -920,11 +1022,62 @@ function frame(): void {
   const dtDays = clock.t - lastDays;
   lastDays = clock.t;
 
-  updatePositions(built, clock.t, scale);
+  // --- True-scale tour (B3): advance the morph and derive the frame's scale.
+  // `frameScale` is what positions/belts/orbits use this frame; outside a
+  // tour it is exactly the static `scale`. Body RADII are driven separately
+  // by applyScaleMorph (the baked mesh is always the build-scale geometry).
+  let frameScale: VisualScale = scale;
+  if (tour) {
+    if (tour.dir !== 0) {
+      // Ease the 3 s leg. `tour.p` is the raw 0..1 position; the EASED value
+      // drives both the layout blend and the body radii so everything
+      // moves in lockstep.
+      tour.p = Math.min(1, Math.max(0, tour.p + (tour.dir * dtReal) / TOUR_DUR));
+      if ((tour.dir === 1 && tour.p >= 1) || (tour.dir === -1 && tour.p <= 0)) {
+        tourEnd();
+      }
+    }
+    const e = tour.dir === 0 ? 1 : easeInOutCubic(tour.p);
+    frameScale = lerpScale(VISIBLE_SCALE, TRUE_SCALE, e);
+    applyScaleMorph(built, e);
+    // Re-project every orbit line through the blend so lines stay glued to
+    // the bodies at any progress (cheap: 256 pts/line, no geometry alloc).
+    // Only moons route through the moonDistance mapping — planets use
+    // planetDistance (passing a planet id as moonId would mis-scale it).
+    for (const entry of built.bodies.values()) {
+      if (entry.orbit)
+        reprojectOrbitLine(entry.orbit, frameScale, entry.parent ? entry.def.id : null);
+    }
+    // On the last frame of a leg, reframe the camera: a fresh "System" fit
+    // in the NEW layout (the old framing is meaningless across the scale
+    // change), eased over 1.2 s so it lands as a graceful pull-in / push-out.
+    // Reversing mid-leg cancels any in-flight reframe (user intent wins).
+    if (tour.dir === 0) {
+      if (!tour.reframed) {
+        tour.reframed = true;
+        flight = makeFlight(
+          [built.camera.position.x, built.camera.position.y, built.camera.position.z],
+          [built.controls.target.x, built.controls.target.y, built.controls.target.z],
+          camAnchorFor('system'),
+          1.2,
+          null,
+          built.camera.fov,
+          FOV_DEG,
+        );
+        built.controls.enabled = false;
+      }
+    } else if (flight && tour.reframed) {
+      flight = null; // mid-leg reversal: drop the reframe, hand back to controls
+      built.controls.enabled = true;
+      built.controls.update();
+    }
+  }
+
+  updatePositions(built, clock.t, frameScale);
   // The belt population (2,100 Kepler solves + matrix composes) is the
   // heaviest per-frame CPU cost. When the sim is paused nothing moves, so
   // skip it entirely — belt matrices were already written on the last tick.
-  if (!clock.isPaused) updateBeltFields(built, clock.t, scale);
+  if (!clock.isPaused) updateBeltFields(built, clock.t, frameScale);
   applySpin(built, dtDays);
 
   if (flight) {
