@@ -109,25 +109,18 @@ function add(a: Vec3, b: Vec3): Vec3 {
 const BODY_FILL = 0.9;
 
 /**
- * Frame a single body of world position `center` from the current camera
- * position. `extent` is the body's full width in scene units (diameter for a
+ * Frame a single body of world position `center`, viewed from DIRECTLY
+ * OVERHEAD — a pure 90° straight-down landing along the ecliptic north pole
+ * (camera on the +Y side, looking down −Y at the body). This is the standard
+ * pick landing: search-bar picks and direct click picks both end here, so a
+ * body always presents the same top-down view no matter where the camera was
+ * before. `extent` is the body's full width in scene units (diameter for a
  * plain body, or the ring's outer diameter for a ringed planet, so the whole
- * body + rings land in frame). The destination keeps the current view bearing
- * (so it flies/rotates in from where you already are, rather than snapping to
- * an arbitrary angle) and pulls in until the body fills most of the view —
- * the "almost full screen" the user asked for on pick.
+ * body + rings land in frame). The flight path itself is unchanged (the eased
+ * accelerate/cruise/decelerate in `makeFlight`) — only the landing bearing is
+ * fixed to overhead.
  */
-export function frameBody(
-  currentPos: Vec3,
-  center: Vec3,
-  extent: number,
-  fovDeg: number,
-): CamAnchor {
-  // Keep the camera on the SAME side it already is: the bearing runs from
-  // the body back toward the current camera position, so the fly-to rotates
-  // in from the viewer's present vantage instead of swinging around the
-  // far side of the body.
-  const dir = dirTo(center, currentPos);
+export function frameBody(center: Vec3, extent: number, fovDeg: number): CamAnchor {
   const vHalf = (fovDeg * Math.PI) / 360; // half vertical fov
   // A body of width `extent` at distance `dist` fills
   //   extent / (2 * tan(vHalf) * dist)
@@ -137,7 +130,7 @@ export function frameBody(
   // sub-unit body's surface.
   const dist = Math.max(extent / (2 * BODY_FILL * Math.tan(vHalf)), 0.35);
   return {
-    pos: [center[0] + dir[0] * dist, center[1] + dir[1] * dist, center[2] + dir[2] * dist],
+    pos: [center[0], center[1] + dist, center[2]],
     target: center,
   };
 }

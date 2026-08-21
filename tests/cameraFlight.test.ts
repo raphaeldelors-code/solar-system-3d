@@ -9,6 +9,7 @@ import {
   makeFlight,
   type Flight,
   type CamAnchor,
+  type Vec3,
 } from '../src/render/cameraFlight';
 
 const approx = (got: number, want: number, tol = 1e-6) =>
@@ -46,19 +47,28 @@ describe('dirTo', () => {
 });
 
 describe('frameBody', () => {
-  it('looks at the body and keeps the current bearing', () => {
-    const anchor: CamAnchor = frameBody([10, 0, 0], [0, 0, 0], 1, 50);
+  it('lands directly overhead: pure 90° straight-down along the ecliptic north pole', () => {
+    const center: Vec3 = [3, 0, -4];
+    const anchor: CamAnchor = frameBody(center, 1, 50);
     // target is the body
-    expect(anchor.target).toEqual([0, 0, 0]);
-    // camera is along the SAME bearing (from body toward current pos) => +x
-    approx(anchor.pos[0], Math.hypot(anchor.pos[0], anchor.pos[1], anchor.pos[2]), 1e-9);
-    approx(anchor.pos[1], 0);
-    approx(anchor.pos[2], 0);
+    expect(anchor.target).toEqual([3, 0, -4]);
+    // camera sits on the +Y side of the body: same x/z, higher y — a pure
+    // top-down view (view direction = −Y), whatever the orbit phase is.
+    approx(anchor.pos[0], 3, 1e-9);
+    approx(anchor.pos[2], -4, 1e-9);
+    expect(anchor.pos[1]).toBeGreaterThan(center[1]);
+  });
+  it('offset is exactly vertical (no horizontal bearing)', () => {
+    const a = frameBody([0, 0, 0], 1, 50);
+    expect(a.pos[0] - a.target[0]).toBe(0);
+    expect(a.pos[2] - a.target[2]).toBe(0);
+    expect(a.pos[1] - a.target[1]).toBeGreaterThan(0);
   });
   it('bigger body => camera farther away', () => {
-    const near = frameBody([10, 0, 0], [0, 0, 0], 1, 50);
-    const far = frameBody([10, 0, 0], [0, 0, 0], 5, 50);
-    const d = (a: CamAnchor) => Math.hypot(a.pos[0], a.pos[1], a.pos[2]);
+    const near = frameBody([0, 0, 0], 1, 50);
+    const far = frameBody([0, 0, 0], 5, 50);
+    const d = (a: CamAnchor) =>
+      Math.hypot(a.pos[0] - a.target[0], a.pos[1] - a.target[1], a.pos[2] - a.target[2]);
     expect(d(far)).toBeGreaterThan(d(near));
   });
 });

@@ -247,12 +247,7 @@ function camAnchorForBody(id: string): CamAnchor | null {
     planet.frameExtent,
     satExtent > 0 ? 2 * satExtent + planet.sceneRadius : 0,
   );
-  return frameBody(
-    [built.camera.position.x, built.camera.position.y, built.camera.position.z],
-    [planet.worldPos.x, planet.worldPos.y, planet.worldPos.z],
-    extent,
-    FOV_DEG,
-  );
+  return frameBody([planet.worldPos.x, planet.worldPos.y, planet.worldPos.z], extent, FOV_DEG);
 }
 
 /**
