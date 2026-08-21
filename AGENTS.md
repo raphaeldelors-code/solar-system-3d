@@ -218,10 +218,10 @@ fragile surgery. Do not repeat that.
    tree and split them post-hoc. If a session must end mid-way, commit what
    is complete and gate-green and leave nothing half-baked in the tree.
 4. **`todo.md` status discipline.** Tasks are added with `- [ ]` when they
-   are planned; each is flipped to `- [x]` with its commit hash in the SAME
-   commit as the feature (commit → note the hash → `git commit --amend` the
-   hash into `todo.md` → push). A task is `- [x]` only after gates + commit
-   - push — never before.
+   are planned; each is flipped to `- [x]` with its commit hash in a small
+   follow-up `docs:` commit — the hash only exists AFTER the feature commit,
+   and `--amend` invalidates any hash already recorded (don't use it for
+   this). A task is `- [x]` only after gates + commit + push — never before.
 
 ## Git conventions
 

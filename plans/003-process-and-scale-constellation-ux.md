@@ -174,7 +174,9 @@ with presence while the emphasis ordering is preserved.
 - [ ] full gates green (`npm test` / `npm run build` / `npm run lint` /
       `npm run format:check`)
 - [ ] conventional commit, pushed
-- [ ] `todo.md` line flipped `[x]` with the commit hash (same commit)
+- [ ] `todo.md` line flipped `[x]` with the commit hash — in a small
+      follow-up `docs:` commit (the hash only exists after the feature commit;
+      `--amend` would invalidate the recorded hash)
 - [ ] only then start the next feature
 
 Final: live-site verify (bundle contains the new switch markup, old button
