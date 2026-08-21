@@ -13,7 +13,7 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] A3 fix(web): og: meta + og-image + webglcontextlost handler — `og:`/twitter tags + 1200×630 `public/og-image.png` (`scripts/make_og_image.py`, pure stdlib) + graceful `webglcontextlost`/`restored` pause-overlay in `main.ts`
 - [x] A4 fix(tools): ESLint + Prettier + CI lint step — flat `eslint.config.js` (TS+JS, Prettier-aware), `.prettierrc.json`, `lint`/`format`/`format:check` npm scripts, CI lint + format-check steps, one-time Prettier format sweep (34 files)
 - [x] B1 feat(sim): celestial event engine (eclipses, transits, conjunctions, oppositions, Saturn edge-on) + Events UI
-- [ ] B2 feat(nav): body search combobox + clean grouped satellite menu
+- [x] B2 feat(nav): body search combobox + clean grouped satellite menu
 - [ ] B3 feat(render): true-scale tour (3 s morph + captions + return)
 - [ ] B4 feat(render): real NASA/SSS textures committed + LICENSE credits
 - [ ] C: update AGENTS.md, final gates, live-site verify

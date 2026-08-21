@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { SimClock } from './sim/clock';
 import { ALL_BODIES } from './data/bodies';
+import { searchBodies, groupedBodyMenu, type SearchHit } from './data/searchIndex';
 import {
   buildScene,
   updatePositions,
@@ -104,7 +105,8 @@ const speedValueEl = document.getElementById('speed-value') as HTMLSpanElement;
 const pauseBtn = document.getElementById('pause') as HTMLButtonElement;
 const reverseBtn = document.getElementById('reverse') as HTMLButtonElement;
 const nowBtn = document.getElementById('now') as HTMLButtonElement;
-const followEl = document.getElementById('follow') as HTMLSelectElement;
+const findInputEl = document.getElementById('find') as HTMLInputElement;
+const findListEl = document.getElementById('find-list') as HTMLDivElement;
 const scaleEl = document.getElementById('scale') as HTMLSelectElement;
 const orbitsEl = document.getElementById('orbits') as HTMLInputElement;
 const labelsEl = document.getElementById('labels') as HTMLInputElement;
@@ -265,7 +267,7 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
   // For satellites the CAMERA locks to the parent planet (see followLockId),
   // while the follow/selection stays on the moon for info + highlight.
   followId = bodyId ?? '';
-  followEl.value = followId;
+  setFindValue(followId);
   selectedSatelliteId = bodyId && moonParent.has(bodyId) ? bodyId : '';
   // A Sky landing kicks off the panoramic tour; any other flight cancels it.
   stopSkyTour();
@@ -517,12 +519,83 @@ eventsRangeEl.addEventListener('change', () => {
   refreshEvents();
 });
 
-followEl.addEventListener('change', () => {
-  const id = followEl.value;
+// --- Body search combobox (B2) --------------------------------------------
+// Replaces the old native `#follow` select: a typeahead input with a
+// grouped dropdown (planet → its moons), keyboard nav (↑/↓/Enter/Esc) and
+// click-to-select. Selecting a body flies the camera exactly like a pick;
+// the empty query / "Free camera" row drops the follow. The `f` URL param
+// is unchanged — `followId` remains the single source of truth.
+
+const findMenu = groupedBodyMenu(ALL_BODIES); // display order, unfiltered
+let findActiveIdx = -1; // highlighted row in the open dropdown
+let findHits: SearchHit[] = []; // current dropdown rows (hits only)
+
+function findLabel(id: string): string {
+  return id === '' ? 'Free camera' : (byId.get(id)?.name ?? id);
+}
+
+/** Reflect the current follow into the input (called by flyTo + URL restore). */
+function setFindValue(id: string): void {
+  findInputEl.value = findLabel(id);
+}
+
+function findClose(): void {
+  findListEl.hidden = true;
+  findActiveIdx = -1;
+}
+
+function findMarkActive(): void {
+  const rows = findListEl.querySelectorAll<HTMLElement>('.fr');
+  rows.forEach((r, i) => r.classList.toggle('active', i === findActiveIdx));
+  rows[findActiveIdx]?.scrollIntoView({ block: 'nearest' });
+}
+
+function findRender(query: string): void {
+  findHits = searchBodies(ALL_BODIES, query);
+  findListEl.replaceChildren();
+  const frag = document.createDocumentFragment();
+  if (!query.trim()) {
+    // Unfiltered: the full grouped menu (Sun → planets → moons → dwarfs).
+    const free = document.createElement('div');
+    free.className = 'fr fr-free';
+    free.innerHTML =
+      '<span class="fr-name">Free camera</span><span class="fr-sub">orbit wherever</span>';
+    free.addEventListener('click', () => findPick(''));
+    frag.appendChild(free);
+    for (const e of findMenu) {
+      const row = document.createElement('div');
+      row.className = 'fr';
+      row.innerHTML = `<span class="fr-name">${e.name}</span><span class="fr-sub">${e.sub}</span>`;
+      row.addEventListener('click', () => findPick(e.id));
+      frag.appendChild(row);
+    }
+  } else if (findHits.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'fr-empty';
+    empty.textContent = 'No bodies match';
+    frag.appendChild(empty);
+  } else {
+    for (const h of findHits) {
+      const row = document.createElement('div');
+      row.className = 'fr';
+      const sub = h.parentName ? `moon of ${h.parentName}` : h.kind;
+      row.innerHTML = `<span class="fr-name">${h.name}</span><span class="fr-sub">${sub}</span>`;
+      row.addEventListener('click', () => findPick(h.id));
+      frag.appendChild(row);
+    }
+  }
+  findListEl.appendChild(frag);
+  findActiveIdx = 0;
+  findMarkActive();
+  findListEl.hidden = false;
+}
+
+/** Select a body from the dropdown (or '' = free camera) and fly to it. */
+function findPick(id: string): void {
+  findInputEl.value = findLabel(id);
+  findClose();
+  findInputEl.blur();
   if (id) {
-    // Picking a body in the list flies the camera to it with the same eased
-    // travel (accelerate → cruise → decelerate + FOV ease) as a click-pick
-    // and the Sky/System anchors, then follows it. No instant jump.
     const dest = camAnchorForBody(id);
     if (dest) {
       flyTo(dest, 1.4, id);
@@ -533,6 +606,40 @@ followEl.addEventListener('change', () => {
   followId = '';
   updateInfo();
   syncUrl();
+}
+
+findInputEl.addEventListener('focus', () => findRender(findInputEl.value));
+findInputEl.addEventListener('input', () => {
+  // Any edit breaks "exactly one body" — re-open as a search from the
+  // typed text so the user can pick what they mean.
+  findRender(findInputEl.value);
+});
+findInputEl.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') {
+    ev.preventDefault();
+    // Esc closes the list; pressed again (list closed), it drops the follow.
+    if (!findListEl.hidden) findClose();
+    else findPick('');
+    return;
+  }
+  if (findListEl.hidden) return;
+  const rows = findListEl.querySelectorAll<HTMLElement>('.fr');
+  if (ev.key === 'ArrowDown') {
+    ev.preventDefault();
+    findActiveIdx = Math.min(rows.length - 1, findActiveIdx + 1);
+    findMarkActive();
+  } else if (ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    findActiveIdx = Math.max(0, findActiveIdx - 1);
+    findMarkActive();
+  } else if (ev.key === 'Enter') {
+    ev.preventDefault();
+    const active = rows[findActiveIdx];
+    if (active) active.click();
+  }
+});
+document.addEventListener('pointerdown', (ev) => {
+  if (!findListEl.hidden && !(ev.target as Element | null)?.closest('#find-wrap')) findClose();
 });
 
 scaleEl.addEventListener('change', () => {
@@ -559,33 +666,6 @@ window.addEventListener('resize', () => {
   built.camera.updateProjectionMatrix();
   built.renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
-// Populate the follow dropdown, grouping each satellite directly under its
-// planet (indented) instead of dumping all 22 moons at the bottom: ALL_BODIES
-// lists moons last, but the menu reads better as planet → its satellites.
-{
-  const moonsByParent = new Map<string, (typeof ALL_BODIES)[number][]>();
-  for (const b of ALL_BODIES) {
-    if (b.kind === 'moon' && b.parent) {
-      const list = moonsByParent.get(b.parent) ?? [];
-      list.push(b);
-      moonsByParent.set(b.parent, list);
-    }
-  }
-  for (const b of ALL_BODIES) {
-    if (b.kind === 'moon') continue; // emitted under its planet below
-    const opt = document.createElement('option');
-    opt.value = b.id;
-    opt.textContent = b.name;
-    followEl.appendChild(opt);
-    for (const m of moonsByParent.get(b.id) ?? []) {
-      const mo = document.createElement('option');
-      mo.value = m.id;
-      mo.textContent = `    · ${m.name}`;
-      followEl.appendChild(mo);
-    }
-  }
-}
 
 // --- Shareable URL state ----------------------------------------------------
 // Restore state from the query string (time, speed, follow, scale, toggles,
@@ -615,7 +695,7 @@ if (urlState.paused != null) {
   pauseBtn.textContent = urlState.paused ? 'Resume' : 'Pause';
 }
 if (urlState.follow && byId.has(urlState.follow)) {
-  followEl.value = urlState.follow;
+  setFindValue(urlState.follow);
   followId = urlState.follow;
   // Restoring a satellite selection re-arms its highlight ring too.
   selectedSatelliteId = moonParent.has(urlState.follow) ? urlState.follow : '';

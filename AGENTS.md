@@ -66,6 +66,18 @@ deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
   injectable; unit-tested in `tests/realTextures.test.ts`. Note: three.js
   `Material.needsUpdate` is a setter-only accessor (no getter) — assert on the
   write, never read it back.
+- **Body search combobox** (`src/data/searchIndex.ts`, pure): the panel's
+  "Find" input replaces the old native `#follow` select. `searchBodies()`
+  is a case-insensitive substring matcher over `ALL_BODIES` with three
+  alias sources — own name, kind label, and parent name — so "moon of
+  mars" or a bare "mars" land on its satellites; a small `ALIASES` table
+  adds colloquial names (luna, world, morning star). `groupedBodyMenu()`
+  yields the display order (Sun → each planet with its moons → dwarf
+  planets) used both for the unfiltered dropdown and as the tie-break
+  order for empty queries. Selection drives the same `followId`/`flyTo`
+  state as before, so the `f` URL param is unchanged. UI wiring +
+  keyboard nav (↑/↓/Enter/Esc, click-outside close) live in `main.ts`;
+  ground-truth behaviour pinned in `tests/searchIndex.test.ts`.
 - **Shareable URL state** (`src/state/urlState.ts`): pure (only the WHATWG
   `URL` API) — `parseAppState(href)` / `encodeAppState(href, state)` round-trip
   time, speed, follow, scale, toggles, pause, and camera into the query string.
