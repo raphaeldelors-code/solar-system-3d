@@ -287,6 +287,13 @@
         border-color: #6ea8ff;
         color: #eaf2ff;
       }
+      /* Real/Visible scale toggle (B3): one control, two states. */
+      #panel button.toggle {
+        flex: 1;
+        text-align: center;
+        white-space: nowrap;
+        letter-spacing: 0.02em;
+      }
       #panel .anchor-row {
         flex-wrap: wrap;
       }
@@ -517,19 +524,13 @@
         </div>
         <div class="row">
           <label>Scale</label>
-          <select id="scale">
-            <option value="visible">Visible (default)</option>
-            <option value="true">True scale</option>
-          </select>
           <button
-            id="scale-tour"
+            id="scale-toggle"
             type="button"
-            title="Morph live to true physical scale (3 s), then back"
+            class="toggle"
+            title="Morph to true physical scale — sizes and distances to the same ratio"
           >
             ⚖ Real scale
-          </button>
-          <button id="scale-return" type="button" hidden title="Return to the normal view">
-            ↩ Return
           </button>
         </div>
         <div id="scale-caption" hidden></div>

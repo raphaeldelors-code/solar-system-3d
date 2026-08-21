@@ -147,7 +147,6 @@ const reverseBtn = document.getElementById('reverse') as HTMLButtonElement;
 const nowBtn = document.getElementById('now') as HTMLButtonElement;
 const findInputEl = document.getElementById('find') as HTMLInputElement;
 const findListEl = document.getElementById('find-list') as HTMLDivElement;
-const scaleEl = document.getElementById('scale') as HTMLSelectElement;
 const orbitsEl = document.getElementById('orbits') as HTMLInputElement;
 const labelsEl = document.getElementById('labels') as HTMLInputElement;
 const beltsEl = document.getElementById('belts') as HTMLInputElement;
@@ -198,96 +197,107 @@ let contextLost = false;
 // OrbitControls when it lands.
 let flight: Flight | null = null;
 
-// --- True-scale tour (B3) ----------------------------------------------------
-// A transient (NOT url-encoded) 3 s eased morph between the default
-// "visible" layout and true physical scale. The render loop advances
-// `tour.p` ("how true", 0 = visible, 1 = true) each frame and applies the
-// blended scale `lerpScale(VISIBLE, TRUE, ease(p))` to body positions, belts
-// and orbit lines, plus the blended radii via `applyScaleMorph`. "⚖ Real
-// scale" morphs in; "↩ Return" morphs back from wherever we are (so it also
-// reverses mid-morph). At p=1 we park at true scale: `scale` becomes
-// TRUE_SCALE so the select / URL / anchor framing all agree, and the blend
-// at p=1 IS exactly TRUE_SCALE, so nothing snaps.
-const TOUR_DUR = 3.0; // seconds, each way
+// --- Scale toggle (B3) ------------------------------------------------------
+// One control, two states: "Visible scale" (the default exaggerated layout)
+// and "Real scale" (true physical sizes + distances). Flipping it runs a
+// 3 s eased MORPH between the two — the render loop advances `morph`
+// (0 = visible, 1 = real) each frame and applies the blended scale
+// `lerpScale(VISIBLE_SCALE, TRUE_SCALE, ease(p))` to body positions, belts
+// and orbit lines, plus the blended radii via `applyScaleMorph`. Flipping
+// mid-morph reverses smoothly from the current progress (dir = target - p).
+// The baked mesh is always visible-mode geometry, so the morph (or a parked
+// real-scale state) must keep driving `applyScaleMorph` every frame.
+const MORPH_DUR = 3.0; // seconds, each way
 
-interface ScaleTour {
-  /** "How true" 0..1 (eased with easeInOutCubic when applied). */
+interface ScaleMorph {
+  /** "How real" 0..1 (eased with easeInOutCubic when applied). */
   p: number;
-  /** +1 morphing toward true, -1 morphing back, 0 parked at true scale. */
+  /** Direction of travel: +1 → real scale, -1 → visible scale. 0 = parked. */
   dir: 1 | -1 | 0;
   /** Set once the post-arrival "System" reframe flight has been started. */
   reframed: boolean;
 }
 
-let tour: ScaleTour | null = null;
-const tourEl = document.getElementById('scale-tour') as HTMLButtonElement | null;
-const tourReturnEl = document.getElementById('scale-return') as HTMLButtonElement | null;
-const tourCaptionEl = document.getElementById('scale-caption') as HTMLDivElement | null;
+let morph: ScaleMorph | null = null;
+const scaleToggleEl = document.getElementById('scale-toggle') as HTMLButtonElement | null;
+const scaleCaptionEl = document.getElementById('scale-caption') as HTMLDivElement | null;
 
-/** Staged narration — thresholds on the eased "how true" value. */
-const TOUR_CAPTIONS: [at: number, text: string][] = [
-  [0.0, 'Morphing to true scale…'],
+/** Staged narration — thresholds on the eased "how real" value. */
+const MORPH_CAPTIONS: [at: number, text: string][] = [
+  [0.0, 'Morphing to real scale…'],
   [
     0.2,
     'Sizes snap to reality — the default view exaggerates radii ~300× (Sun) to ~40,000× (Earth).',
   ],
   [0.5, 'Distances snap to reality — Earth is 150 million km from the Sun, not 15 units.'],
-  [0.8, 'At true scale Neptune is 4.5 BILLION km out. Most of this view is empty space.'],
+  [0.8, 'At real scale Neptune is 4.5 BILLION km out. Most of this view is empty space.'],
 ];
 
-function tourCaption(p: number): string {
-  let text = TOUR_CAPTIONS[0][1];
-  for (const [at, t] of TOUR_CAPTIONS) if (p >= at) text = t;
+function morphCaption(p: number): string {
+  let text = MORPH_CAPTIONS[0][1];
+  for (const [at, t] of MORPH_CAPTIONS) if (p >= at) text = t;
   return text;
 }
 
-function syncTourUI(): void {
-  if (tourEl) tourEl.hidden = tour !== null;
-  if (tourReturnEl) tourReturnEl.hidden = tour === null;
-  if (!tourCaptionEl) return;
-  tourCaptionEl.hidden = tour === null;
-  if (tour) {
-    tourCaptionEl.textContent =
-      tour.dir === -1
-        ? 'Returning to the normal view…'
-        : tour.dir === 0
-          ? 'True scale — distances and sizes to the same ratio. “↩ Return” to go back.'
-          : tourCaption(easeInOutCubic(tour.p));
+function syncScaleUI(): void {
+  if (!scaleToggleEl) return;
+  const real = scale === TRUE_SCALE;
+  scaleToggleEl.textContent = real ? '⚖ Visible scale' : '⚖ Real scale';
+  scaleToggleEl.classList.toggle('active', real);
+  scaleToggleEl.title = real
+    ? 'Morph back to the exaggerated view where everything fits on screen'
+    : 'Morph to true physical scale — sizes and distances to the same ratio';
+  if (!scaleCaptionEl) return;
+  scaleCaptionEl.hidden = !morph;
+  if (morph) {
+    scaleCaptionEl.textContent =
+      morph.dir === -1
+        ? 'Returning to the visible view…'
+        : morph.dir === 0
+          ? 'Real scale — sizes and distances to the same ratio. Toggle back any time.'
+          : morphCaption(easeInOutCubic(morph.p));
   }
 }
 
-/** Reached an end of the current leg: park at true, or drop the tour at p=0. */
-function tourEnd(): void {
-  if (!tour) return;
-  if (tour.p >= 1) {
-    // Park at true scale. Positions/orbits already sit exactly on TRUE_SCALE
-    // at p=1; keep the tour ALIVE at p=1 so `applyScaleMorph` keeps driving
+/** Reached an end of the current morph leg: park, or drop the morph at p=0. */
+function morphEnd(): void {
+  if (!morph) return;
+  if (morph.p >= 1) {
+    // Park at real scale. Positions/orbits already sit exactly on TRUE_SCALE
+    // at p=1; keep the morph ALIVE at p=1 so `applyScaleMorph` keeps driving
     // body radii (the baked meshes are still the visible-mode geometry), and
-    // make `scale` authoritative for the select, URL and anchor framing.
-    tour = { p: 1, dir: 0, reframed: false };
+    // make `scale` authoritative for the URL and anchor framing.
+    morph = { p: 1, dir: 0, reframed: false };
     scale = TRUE_SCALE;
   } else {
     // p=0: the blended layout equals the baked visible-mode scene exactly,
-    // so the tour can be dropped with no visual change.
-    tour = null;
+    // so the morph can be dropped with no visual change.
+    morph = null;
     scale = VISIBLE_SCALE;
   }
-  syncTourUI();
+  syncScaleUI();
   syncUrl();
 }
 
-function startTour(): void {
-  if (tour || scale !== VISIBLE_SCALE) return; // only from the normal view
-  flight = null; // cancel any in-progress flight; the camera stays free
-  stopSkyTour();
-  tour = { p: 0, dir: 1, reframed: false };
-  syncTourUI();
-}
-
-function reverseTour(): void {
-  if (!tour) return;
-  tour.dir = -1; // also reverses the parked-at-true state (dir 0 → -1)
-  syncTourUI();
+/** Flip between visible and real scale, morphing either direction. */
+function toggleScale(): void {
+  if (morph && morph.dir !== 0) {
+    // Mid-morph: reverse from the current progress (p stays as-is).
+    morph.dir = morph.p < 0.5 ? 1 : -1;
+    morph.reframed = false;
+  } else if (!morph && scale !== TRUE_SCALE) {
+    // Visible (or mid-restore) state: head to real scale from p=0.
+    flight = null; // cancel any in-progress flight; the camera stays free
+    stopSkyTour();
+    morph = { p: 0, dir: 1, reframed: false };
+  } else {
+    // At real scale (parked p=1, or a URL-restored true-scale load with no
+    // morph): head back to visible from p=1.
+    flight = null;
+    stopSkyTour();
+    morph = { p: 1, dir: -1, reframed: false };
+  }
+  syncScaleUI();
 }
 
 function rebuildScene(newScale: VisualScale): BuiltScene {
@@ -438,10 +448,9 @@ function wireAnchorButtons(): void {
     }
     syncUrl();
   });
-  // True-scale tour (B3): "⚖ Real scale" morphs the whole view to true
-  // physical scale; "↩ Return" morphs back (also reverses mid-morph).
-  tourEl?.addEventListener('click', () => startTour());
-  tourReturnEl?.addEventListener('click', () => reverseTour());
+  // Real-scale toggle (B3): one control, two states. Flipping it morphs
+  // between the visible and true layouts (reverses mid-morph).
+  scaleToggleEl?.addEventListener('click', toggleScale);
 }
 
 function applyToggles(): void {
@@ -813,19 +822,6 @@ document.addEventListener('pointerdown', (ev) => {
   if (!findListEl.hidden && !(ev.target as Element | null)?.closest('#find-wrap')) findClose();
 });
 
-scaleEl.addEventListener('change', () => {
-  // A manual scale switch supersedes the true-scale tour: end it cleanly
-  // (parks / returns instantly to match the requested mode) so the tour and
-  // the select can never fight over the active scale.
-  if (tour) {
-    tour = null;
-    syncTourUI();
-  }
-  scale = scaleEl.value === 'true' ? TRUE_SCALE : VISIBLE_SCALE;
-  rebuildScene(scale);
-  syncUrl();
-});
-
 orbitsEl.addEventListener('change', () => {
   applyToggles();
   syncUrl();
@@ -862,8 +858,9 @@ if (urlState.reversed != null) {
   reverseBtn.textContent = urlState.reversed ? 'Reverse ←' : 'Reverse →';
 }
 if (urlState.scale) {
-  scaleEl.value = urlState.scale;
-  scale = scaleEl.value === 'true' ? TRUE_SCALE : VISIBLE_SCALE;
+  // The initial rebuildScene(scale) bakes the scene at this scale; the
+  // toggle morphs from there live (no rebuild needed).
+  scale = urlState.scale === 'true' ? TRUE_SCALE : VISIBLE_SCALE;
 }
 if (urlState.orbits != null) orbitsEl.checked = urlState.orbits;
 if (urlState.labels != null) labelsEl.checked = urlState.labels;
@@ -961,6 +958,8 @@ screenshotBtn.addEventListener('click', async () => {
 
 rebuildScene(scale);
 wireAnchorButtons();
+// Reflect a URL-restored scale in the toggle (label + active state).
+syncScaleUI();
 // Apply the shared camera last (rebuildScene may have re-framed the follow target).
 if (urlState.cam) {
   built.camera.position.set(...urlState.cam.pos);
@@ -1105,22 +1104,23 @@ function frame(): void {
   const dtDays = clock.t - lastDays;
   lastDays = clock.t;
 
-  // --- True-scale tour (B3): advance the morph and derive the frame's scale.
-  // `frameScale` is what positions/belts/orbits use this frame; outside a
-  // tour it is exactly the static `scale`. Body RADII are driven separately
-  // by applyScaleMorph (the baked mesh is always the build-scale geometry).
+  // --- Real-scale morph (B3): advance the toggle morph and derive this
+  // frame's scale. `frameScale` is what positions/belts/orbits use; outside
+  // a morph it is exactly the static `scale`. Body RADII are driven
+  // separately by applyScaleMorph (the baked mesh is always the build-scale
+  // geometry).
   let frameScale: VisualScale = scale;
-  if (tour) {
-    if (tour.dir !== 0) {
-      // Ease the 3 s leg. `tour.p` is the raw 0..1 position; the EASED value
-      // drives both the layout blend and the body radii so everything
+  if (morph) {
+    if (morph.dir !== 0) {
+      // Ease the 3 s leg. `morph.p` is the raw 0..1 position; the EASED
+      // value drives both the layout blend and the body radii so everything
       // moves in lockstep.
-      tour.p = Math.min(1, Math.max(0, tour.p + (tour.dir * dtReal) / TOUR_DUR));
-      if ((tour.dir === 1 && tour.p >= 1) || (tour.dir === -1 && tour.p <= 0)) {
-        tourEnd();
+      morph.p = Math.min(1, Math.max(0, morph.p + (morph.dir * dtReal) / MORPH_DUR));
+      if ((morph.dir === 1 && morph.p >= 1) || (morph.dir === -1 && morph.p <= 0)) {
+        morphEnd();
       }
     }
-    const e = tour.dir === 0 ? 1 : easeInOutCubic(tour.p);
+    const e = morph.dir === 0 ? 1 : easeInOutCubic(morph.p);
     frameScale = lerpScale(VISIBLE_SCALE, TRUE_SCALE, e);
     applyScaleMorph(built, e);
     // Re-project every orbit line through the blend so lines stay glued to
@@ -1135,9 +1135,9 @@ function frame(): void {
     // in the NEW layout (the old framing is meaningless across the scale
     // change), eased over 1.2 s so it lands as a graceful pull-in / push-out.
     // Reversing mid-leg cancels any in-flight reframe (user intent wins).
-    if (tour.dir === 0) {
-      if (!tour.reframed) {
-        tour.reframed = true;
+    if (morph.dir === 0) {
+      if (!morph.reframed) {
+        morph.reframed = true;
         flight = makeFlight(
           [built.camera.position.x, built.camera.position.y, built.camera.position.z],
           [built.controls.target.x, built.controls.target.y, built.controls.target.z],
@@ -1149,7 +1149,7 @@ function frame(): void {
         );
         built.controls.enabled = false;
       }
-    } else if (flight && tour.reframed) {
+    } else if (flight && morph.reframed) {
       flight = null; // mid-leg reversal: drop the reframe, hand back to controls
       built.controls.enabled = true;
       built.controls.update();

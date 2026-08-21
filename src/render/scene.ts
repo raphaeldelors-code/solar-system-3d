@@ -824,10 +824,11 @@ export function applyScaleMorph(built: BuiltScene, p: number): void {
     const ls = entry.def.kind === 'star' ? 3.4 : Math.max(1.3, r * 2.4);
     entry.label.scale.set(ls, ls * 0.25, 1);
     entry.label.position.y = r + ls * 0.35;
-    // Fade labels out as bodies shrink to dots — at true scale the text is
-    // bigger than the planet it names.
-    (entry.label.material as THREE.SpriteMaterial).opacity =
-      p < 0.55 ? 1 : Math.max(0, 1 - (p - 0.55) / 0.3);
+    // Labels stay fully legible at EVERY scale. At true scale the planets
+    // are sub-pixel dots and the (floor-sized) labels are the only way to
+    // tell them apart, so we never fade them out here — the Labels toggle in
+    // main.ts (applyToggles) is the single on/off.
+    (entry.label.material as THREE.SpriteMaterial).opacity = 1;
     entry.sceneRadius = r;
   }
 }
