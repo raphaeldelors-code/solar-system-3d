@@ -20,6 +20,7 @@ import {
   lerpScale,
   applyScaleMorph,
   reprojectOrbitLine,
+  resampleMoonOrbitLine,
   VISIBLE_SCALE,
   TRUE_SCALE,
   CONSTELLATION_RADIUS,
@@ -187,6 +188,8 @@ let followId = '';
 let selectedSatelliteId = '';
 let lastDays = clock.t;
 let lastMs = performance.now();
+// Throttle for the per-frame Moon orbit-line resample (see the frame loop).
+let lastMoonResampleMs = 0;
 // True while the WebGL context is down (driver reset / tab reclaimed). The
 // render loop keeps ticking its rAF chain but skips all sim + GPU work until
 // the browser fires `webglcontextrestored`, so a lost context costs nothing
@@ -298,6 +301,18 @@ function toggleScale(): void {
     morph = { p: 1, dir: -1, reframed: false };
   }
   syncScaleUI();
+}
+
+/**
+ * Re-sample the Moon's orbit line at the live sim time RIGHT NOW (bypassing
+ * the frame-loop throttle). Called on date jumps (picker, "Now", event
+ * clicks) so the first frame after the jump already shows the line at the
+ * new epoch instead of waiting out the ~250 ms throttle.
+ */
+function resampleMoonNow(): void {
+  const moonEntry = built.bodies.get('moon');
+  if (moonEntry?.orbit) resampleMoonOrbitLine(moonEntry.orbit, clock.t, scale);
+  lastMoonResampleMs = performance.now();
 }
 
 function rebuildScene(newScale: VisualScale): BuiltScene {
@@ -526,6 +541,7 @@ function applyDatePick(): void {
   const target = new Date(Date.UTC(y, m - 1, day, cur.getUTCHours(), cur.getUTCMinutes()));
   if (Math.abs(target.getTime() - cur.getTime()) < 60_000) return; // same day
   clock.setDate(target);
+  resampleMoonNow(); // Moon orbit line jumps with the epoch
   dateEl.classList.remove('flash');
   void dateEl.offsetWidth;
   dateEl.classList.add('flash');
@@ -582,6 +598,7 @@ reverseBtn.addEventListener('click', () => {
 
 nowBtn.addEventListener('click', () => {
   clock.setDate(new Date());
+  resampleMoonNow(); // Moon orbit line jumps with the epoch
   syncUrl();
 });
 
@@ -651,6 +668,7 @@ function renderEvents(evs: SimEvent[]): void {
     row.append(dateSpan, what);
     row.addEventListener('click', () => {
       clock.setDate(new Date(ev.dateMs));
+      resampleMoonNow(); // Moon orbit line jumps with the epoch
       syncUrl();
       // Flash the date readout so the jump is obvious.
       dateEl.classList.remove('flash');
@@ -1153,6 +1171,21 @@ function frame(): void {
       flight = null; // mid-leg reversal: drop the reframe, hand back to controls
       built.controls.enabled = true;
       built.controls.update();
+    }
+  }
+
+  // Moon orbit line (moon-orbit fix): the drawn loop is sampled at a
+  // placeholder epoch and re-sampled here, throttled to ~4 Hz, at the LIVE
+  // sim time — so the line always matches the Moon's real, slowly-precessing
+  // geocentric path (129 ephemeris samples ≈ 1 ms, negligible). It writes the
+  // same position/unit-dir/km buffers `reprojectOrbitLine` uses, so it also
+  // feeds the scale morph's per-frame re-projection correctly.
+  {
+    const now = performance.now();
+    if (now - lastMoonResampleMs > 250) {
+      lastMoonResampleMs = now;
+      const moonEntry = built.bodies.get('moon');
+      if (moonEntry?.orbit) resampleMoonOrbitLine(moonEntry.orbit, clock.t, frameScale);
     }
   }
 

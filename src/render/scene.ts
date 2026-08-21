@@ -15,7 +15,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAtInto, sampleOrbit, type Vec3 } from '../sim/kepler';
 import { moonGeocentricJ2000 } from '../sim/moon';
-import { AU_KM, J2000_UTC } from '../sim/types';
+import { AU_KM } from '../sim/types';
 import { makeSurfaceTexture, makeLabelTexture } from './textures';
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
@@ -427,7 +427,13 @@ export function buildScene(
         // which carries the same tilt rotation the body position receives
         // in updatePositions - so both share the exact transform and the
         // body stays glued to the drawn line.
-        const t0 = (5000 * (Date.now() - J2000_UTC)) / 86400000;
+        // Placeholder epoch — the frame loop resamples this line at the LIVE
+        // sim time every ~250 ms (resampleMoonOrbitLine) so the drawn loop
+        // always matches the Moon's real, slowly-precessing geocentric path.
+        // (An earlier version baked the epoch at `5000 * (Date.now()-J2000)`,
+        // sampling the path ~132,000 y in the future — the "Moon not on its
+        // orbit line" bug.)
+        const t0 = 0;
         const pts: THREE.Vector3[] = [];
         const radii = new Float32Array(129);
         const unitDirs = new Float32Array(129 * 3);
@@ -860,6 +866,44 @@ export function reprojectOrbitLine(
     // outer orbits and grow inner ones).
     const mapped = moonId ? scale.moonDistance(r, moonId) : scale.planetDistance(r);
     pos.setXYZ(i, dirs[i * 3] * mapped, dirs[i * 3 + 1] * mapped, dirs[i * 3 + 2] * mapped);
+  }
+  pos.needsUpdate = true;
+  geo.computeBoundingSphere();
+}
+
+/**
+ * Resample the Moon's geocentric orbit line at the CURRENT simulation time so
+ * the drawn loop always matches the Moon's real path. The Meeus ch.47 orbit
+ * is not a fixed ellipse — its node line regresses (~18.6 y) and its apse
+ * precesses (~8.85 y) — so a line sampled once at build time drifts off the
+ * Moon as the user scrubs time (the "Moon not following its orbit line" bug).
+ * The k=0 vertex is the Moon's live position, so it sits exactly on the line.
+ *
+ * In-place: writes into the line's existing position attribute and its stored
+ * per-sample km radii / unit dirs (no geometry allocation), then re-projects
+ * through `scale` so it stays glued mid-tour too.
+ */
+export function resampleMoonOrbitLine(orbit: THREE.Line, tDays: number, scale: VisualScale): void {
+  const radii = orbit.userData.radii as Float32Array | undefined;
+  const dirs = orbit.userData.unitDirs as Float32Array | undefined;
+  const geo = orbit.userData.geo as THREE.BufferGeometry | undefined;
+  if (!radii || !dirs || !geo) return;
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const period = 27.55455; // sidereal month, days
+  for (let k = 0; k <= 128; k++) {
+    const p = moonGeocentricJ2000(tDays + (k / 128) * period);
+    const d = Math.hypot(p[0], p[1], p[2]); // AU (geocentric)
+    const km = d * AU_KM;
+    const s = eclipticToScene({ x: p[0], y: p[1], z: p[2] });
+    const u = s.normalize();
+    // Same per-point factor the body uses in updatePositions
+    // (moonDistance(km) / d, d in AU) so the Moon sits ON the line.
+    radii[k] = km;
+    dirs[k * 3] = u.x;
+    dirs[k * 3 + 1] = u.y;
+    dirs[k * 3 + 2] = u.z;
+    const mapped = scale.moonDistance(km, 'moon');
+    pos.setXYZ(k, u.x * mapped, u.y * mapped, u.z * mapped);
   }
   pos.needsUpdate = true;
   geo.computeBoundingSphere();
