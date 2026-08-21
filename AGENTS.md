@@ -120,6 +120,15 @@ deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
   `frame()` loop skip all sim+GPU work while down (the rAF chain stays alive,
   so the view self-resumes on restore — no forced reload). A manual
   "Reload page" button is the escape hatch if a restore never fires.
+- **Shareable URL state** (`src/state/urlState.ts`): `main.ts` restores the
+  full UI + camera state from the query string before building the scene, and
+  keeps the address bar in sync (debounced `history.replaceState`) afterward.
+  Pure + unit-tested (`tests/urlState.test.ts`) — no DOM, only `URL`. Keep it
+  that way; new UI state (e.g. the events-panel `ev` flag) belongs here, not
+  in ad-hoc localStorage. The true-scale tour is the one deliberate exception
+  (transient, never encoded). The date picker (`#date-pick`) is two-way
+  synced with the sim clock via `fmtDate()` — keep that sync guarded on
+  `document.activeElement` so it never clobbers an in-progress edit.
 - **Camera pick landing is top-down** (`src/render/cameraFlight.ts`):
   `frameBody()` lands DIRECTLY OVERHEAD — a pure 90° straight-down view along
   the ecliptic north pole (camera on +Y, looking −Y at the body's world

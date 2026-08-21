@@ -12,6 +12,7 @@
  *   b   = belts   on/off (1/0)
  *   p   = paused  on/off (1/0)
  *   rv  = reversed time on/off (1/0)  (forward by default)
+ *   ev  = events panel open/closed (1/0)  (closed by default)
  *   cam = "px,py,pz,tx,ty,tz" camera pos + target (6 finite numbers)
  */
 
@@ -31,6 +32,8 @@ export interface ViewState {
   labels?: boolean;
   belts?: boolean;
   paused?: boolean;
+  /** Events panel open (true) / collapsed (false). Absent = collapsed. */
+  eventsOpen?: boolean;
   /** Optional camera: position + orbit target, each a finite [x,y,z]. */
   cam?: { pos: [number, number, number]; target: [number, number, number] };
 }
@@ -84,6 +87,8 @@ export function parseAppState(href: string): ViewState {
   if (paused !== undefined) state.paused = paused;
   const reversed = flag(q.get('rv'));
   if (reversed !== undefined) state.reversed = reversed;
+  const eventsOpen = flag(q.get('ev'));
+  if (eventsOpen !== undefined) state.eventsOpen = eventsOpen;
 
   const camRaw = q.get('cam');
   if (camRaw) {
@@ -118,6 +123,7 @@ export function encodeAppState(href: string, s: ViewState): string {
   setOrDel('b', s.belts === undefined ? undefined : s.belts ? '1' : '0');
   setOrDel('p', s.paused === undefined ? undefined : s.paused ? '1' : '0');
   setOrDel('rv', s.reversed === undefined ? undefined : s.reversed ? '1' : '0');
+  setOrDel('ev', s.eventsOpen === undefined ? undefined : s.eventsOpen ? '1' : '0');
 
   if (s.cam) {
     const [px, py, pz, tx, ty, tz] = [...s.cam.pos, ...s.cam.target].map(round3);

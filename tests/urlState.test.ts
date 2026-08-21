@@ -28,6 +28,12 @@ describe('parseAppState', () => {
     expect(parseAppState(`${BASE}?rv=0`).reversed).toBe(false);
   });
 
+  it('treats an absent ev as no key (events closed by default)', () => {
+    expect('eventsOpen' in parseAppState(`${BASE}?t=1`)).toBe(false);
+    expect(parseAppState(`${BASE}?ev=1`).eventsOpen).toBe(true);
+    expect(parseAppState(`${BASE}?ev=0`).eventsOpen).toBe(false);
+  });
+
   it('parses the camera triple', () => {
     const s = parseAppState(`${BASE}?cam=1,2,3,4,5,6`);
     expect(s.cam).toEqual({ pos: [1, 2, 3], target: [4, 5, 6] });
@@ -78,6 +84,14 @@ describe('encodeAppState', () => {
     expect(u.searchParams.get('b')).toBe('0');
     expect(u.searchParams.get('p')).toBe('1');
     expect(u.searchParams.get('rv')).toBe('1');
+  });
+
+  it('encodes the events panel flag and round-trips it', () => {
+    expect(new URL(encodeAppState(BASE, { eventsOpen: true })).searchParams.get('ev')).toBe('1');
+    expect(new URL(encodeAppState(BASE, { eventsOpen: false })).searchParams.get('ev')).toBe('0');
+    expect(new URL(encodeAppState(BASE, {})).searchParams.has('ev')).toBe(false);
+    const back = parseAppState(encodeAppState(BASE, { eventsOpen: true }));
+    expect(back.eventsOpen).toBe(true);
   });
 
   it('omits undefined keys entirely', () => {

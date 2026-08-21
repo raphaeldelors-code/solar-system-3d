@@ -165,6 +165,7 @@ const eventsToggleBtn = document.getElementById('events-toggle') as HTMLButtonEl
 const eventsRangeEl = document.getElementById('events-range') as HTMLSelectElement;
 const eventsRowEl = document.getElementById('events-row') as HTMLDivElement;
 const eventsListEl = document.getElementById('events-list') as HTMLDivElement;
+const datePickEl = document.getElementById('date-pick') as HTMLInputElement;
 
 const byId = new Map(ALL_BODIES.map((b) => [b.id, b]));
 
@@ -492,6 +493,35 @@ function fmtDate(): void {
   const h = String(d.getUTCHours()).padStart(2, '0');
   const min = String(d.getUTCMinutes()).padStart(2, '0');
   dateEl.textContent = `${y}-${m}-${day} ${h}:${min} UTC`;
+  // Keep the date picker in sync (it shows the calendar day the sim clock is
+  // on). Setting .value programmatically never fires 'change', so this can't
+  // loop with the picker's own change handler. Skip while the user is
+  // actively editing the picker (it's only a date input, but don't clobber
+  // an in-progress keyboard entry).
+  if (document.activeElement !== datePickEl) {
+    const pick = `${y}-${m}-${day}`;
+    if (datePickEl.value !== pick) datePickEl.value = pick;
+  }
+}
+
+/**
+ * Jump the sim clock to the date picked in the calendar input, keeping the
+ * current time of day. Invalid / cleared input is ignored.
+ */
+function applyDatePick(): void {
+  const raw = datePickEl.value;
+  if (!raw) return;
+  const [y, m, day] = raw.split('-').map(Number);
+  if (!y || !m || !day) return;
+  const cur = clock.toDate();
+  const target = new Date(Date.UTC(y, m - 1, day, cur.getUTCHours(), cur.getUTCMinutes()));
+  if (Math.abs(target.getTime() - cur.getTime()) < 60_000) return; // same day
+  clock.setDate(target);
+  dateEl.classList.remove('flash');
+  void dateEl.offsetWidth;
+  dateEl.classList.add('flash');
+  if (eventsVisible()) refreshEvents();
+  syncUrl();
 }
 
 /** Orbit period / live distance / peri-apoapsis for the followed body. */
@@ -649,10 +679,15 @@ eventsToggleBtn.addEventListener('click', () => {
   eventsRowEl.hidden = !eventsRowEl.hidden;
   eventsToggleBtn.classList.toggle('active', !eventsRowEl.hidden);
   if (!eventsRowEl.hidden) refreshEvents();
+  syncUrl();
 });
 
 eventsRangeEl.addEventListener('change', () => {
   refreshEvents();
+});
+
+datePickEl.addEventListener('change', () => {
+  applyDatePick();
 });
 
 // --- Body search combobox (B2) --------------------------------------------
@@ -837,6 +872,12 @@ if (urlState.paused != null) {
   clock.setPaused(urlState.paused);
   pauseBtn.textContent = urlState.paused ? 'Resume' : 'Pause';
 }
+if (urlState.eventsOpen != null) {
+  eventsRowEl.hidden = !urlState.eventsOpen;
+  eventsToggleBtn.classList.toggle('active', urlState.eventsOpen);
+}
+// Restore an opened events list from a shared link.
+if (!eventsRowEl.hidden) refreshEvents();
 if (urlState.follow && byId.has(urlState.follow)) {
   setFindValue(urlState.follow);
   followId = urlState.follow;
@@ -856,6 +897,7 @@ function captureState(): ViewState {
     labels: labelsEl.checked,
     belts: beltsEl.checked,
     paused: clock.isPaused,
+    eventsOpen: !eventsRowEl.hidden,
     cam: {
       pos: [built.camera.position.x, built.camera.position.y, built.camera.position.z],
       target: [built.controls.target.x, built.controls.target.y, built.controls.target.z],
