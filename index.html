@@ -303,6 +303,21 @@
         font-variant-numeric: tabular-nums;
         color: #9fd6a8;
       }
+      #date-pick {
+        flex: 1;
+        min-width: 0;
+        background: #1a2334;
+        color: #cfd8e3;
+        border: 1px solid #33415e;
+        border-radius: 6px;
+        padding: 3px 8px;
+        font: inherit;
+        color-scheme: dark;
+      }
+      #date-pick:focus {
+        outline: none;
+        border-color: #6ea8ff;
+      }
       #panel .info {
         margin-top: 10px;
         padding-top: 8px;
@@ -416,7 +431,7 @@
         border-color: #6ea8ff;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-BsTh3d-8.js"></script>
+    <script type="module" crossorigin src="./assets/index-C2teYR56.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -448,6 +463,14 @@
             aria-label="Simulation speed magnitude (log scale). Left = slower (0.001 d/s ≈ a year in 30 minutes), middle = 1 day/s, right ≈ 316 days/s. Use the Reverse button to run time backwards."
           />
           <span id="speed-value" class="value">1.0 d/s</span>
+        </div>
+        <div class="row">
+          <label for="date-pick">Date</label>
+          <input
+            id="date-pick"
+            type="date"
+            aria-label="Jump the simulation to this calendar date (keeps the current time of day)"
+          />
         </div>
         <div class="row">
           <button id="pause">Pause</button>
