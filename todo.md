@@ -44,8 +44,8 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] P1 docs: AGENTS.md "plan first, commit per feature" workflow + this plan file + todo process section — `a38b743`
 - [x] P2 feat(ui): scale control → segment switch, both options visible, active lit — `8b65a97`
-- [ ] P3 fix(render): constellation names close to their figures (constant small gap)
-- [ ] P4 feat(render): constellation presence fades with camera distance (faint in close-ups, full in sky view)
+- [x] P3 fix(render): constellation names close to their figures (constant small gap) + compact sprite — `e04d346`
+- [x] P4 feat(render): constellation presence fades with camera distance (faint in close-ups, full in sky view) — `9023da8`
 
 ## Declined (user decision 2026-08-18)
 
