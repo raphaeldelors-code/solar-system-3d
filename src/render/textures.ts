@@ -193,6 +193,81 @@ export function makeSurfaceTexture(body: BodyDefinition): THREE.CanvasTexture {
   return tex;
 }
 
+/**
+ * Constellation name: elegant spaced serif capitals with a soft starlight
+ * glow and a hairline flourish (split line + small diamond) beneath. The
+ * font is auto-scaled so names of any length fill the same canvas width —
+ * glyphs stay a consistent visual size (a sprite scaled to match). This is
+ * the decorative sky lettering; `makeLabelTexture` is the utilitarian body
+ * label.
+ */
+export function makeConstellationNameTexture(name: string): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const text = name.toUpperCase();
+  const spacing = 0.24; // letter-spacing as a fraction of font size
+  const maxW = 464; // keep a margin inside the 512 canvas
+  // Fit the font: measure at a reference size, then scale to the target width.
+  const REF = 60;
+  ctx.font = `${REF}px Georgia, "Times New Roman", serif`;
+  const refWidths: number[] = [];
+  let refTotal = 0;
+  for (const ch of text) {
+    const w = ctx.measureText(ch).width;
+    refWidths.push(w);
+    refTotal += w + REF * spacing;
+  }
+  refTotal -= REF * spacing;
+  const fontSize = Math.min(REF, (maxW / refTotal) * REF);
+  const sp = fontSize * spacing;
+  const widths = refWidths.map((w) => (w / REF) * fontSize);
+  const total = widths.reduce((a, b) => a + b, 0) + sp * (text.length - 1);
+  const startX = 256 - total / 2;
+  ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
+  const drawText = (): void => {
+    let x = startX;
+    for (let i = 0; i < text.length; i++) {
+      ctx.fillText(text[i], x + widths[i] / 2, 50);
+      x += widths[i] + sp;
+    }
+  };
+  // Two glow passes (wide soft halo), then a crisp shadow-free core so the
+  // letterforms stay sharp on top of the halo.
+  ctx.shadowColor = 'rgba(143, 176, 255, 0.9)';
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = 'rgba(190, 210, 250, 0.9)';
+  drawText();
+  drawText();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#eef4ff';
+  drawText();
+  // Hairline flourish: two strokes broken by a small diamond under the name.
+  const y = 90;
+  ctx.strokeStyle = 'rgba(160, 185, 235, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(startX - 16, y);
+  ctx.lineTo(256 - 10, y);
+  ctx.moveTo(256 + 10, y);
+  ctx.lineTo(startX + total + 16, y);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(205, 224, 255, 0.85)';
+  ctx.beginPath();
+  ctx.moveTo(256, y - 5);
+  ctx.lineTo(261, y);
+  ctx.lineTo(256, y + 5);
+  ctx.lineTo(251, y);
+  ctx.closePath();
+  ctx.fill();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** Sprite texture with the body name, for labels. */
 export function makeLabelTexture(name: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');

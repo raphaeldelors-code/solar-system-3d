@@ -16,7 +16,7 @@ import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAtInto, sampleOrbit, type Vec3 } from '../sim/kepler';
 import { moonGeocentricJ2000 } from '../sim/moon';
 import { AU_KM } from '../sim/types';
-import { makeSurfaceTexture, makeLabelTexture } from './textures';
+import { makeSurfaceTexture, makeLabelTexture, makeConstellationNameTexture } from './textures';
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
@@ -568,6 +568,76 @@ export function constellationCenter(c: Constellation): [number, number, number] 
   return [x / len, y / len, z / len];
 }
 
+function dot3(a: number[], b: number[]): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function cross3(a: number[], b: number[]): [number, number, number] {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+function norm3(a: number[]): [number, number, number] {
+  const l = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+}
+
+export interface ConstellationLabelPose {
+  /** Figure angular half-extent (radians) along its longest axis. */
+  halfExtent: number;
+  /**
+   * Unit sky direction for the name label: `marginRad` past the centroid
+   * along the figure's long axis, so the name sits BESIDE the figure (at
+   * its end) rather than on top of its stars. Exact spherical offset.
+   */
+  labelDir: (marginRad: number) => [number, number, number];
+}
+
+/**
+ * Pure geometry for placing a constellation's name beside its figure:
+ * the star cloud's principal axis (direction of maximal spread in the
+ * tangent plane at the centroid) + the half-extent along it. Used to size
+ * the label and push it clear of the figure. Unit-tested.
+ */
+export function constellationLabelPose(c: Constellation): ConstellationLabelPose {
+  const dir = constellationCenter(c);
+  const dirs = c.stars.map((s) => raDecToUnit(s.raHours, s.decDeg));
+  // Tangent basis at the centroid (any stable reference axis works).
+  const ref = Math.abs(dir[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const t1 = norm3(cross3(dir, ref));
+  const t2 = cross3(dir, t1);
+  // 2×2 second moments of the star cloud in the tangent plane.
+  let xx = 0,
+    yy = 0,
+    xy = 0;
+  for (const d of dirs) {
+    const u = dot3(d, t1);
+    const v = dot3(d, t2);
+    xx += u * u;
+    xy += u * v;
+    yy += v * v;
+  }
+  // Eigenvector of [[xx,xy],[xy,yy]] — the principal (long) axis.
+  const theta = 0.5 * Math.atan2(2 * xy, xx - yy);
+  const p1 = Math.cos(theta);
+  const p2 = Math.sin(theta);
+  const axis: [number, number, number] = [
+    t1[0] * p1 + t2[0] * p2,
+    t1[1] * p1 + t2[1] * p2,
+    t1[2] * p1 + t2[2] * p2,
+  ];
+  // Half-extent: farthest star's projection on the long axis (≈ radians).
+  let halfExtent = 0;
+  for (const d of dirs) halfExtent = Math.max(halfExtent, Math.abs(dot3(d, axis)));
+  return {
+    halfExtent,
+    labelDir: (marginRad: number): [number, number, number] => {
+      const co = Math.cos(marginRad);
+      const so = Math.sin(marginRad);
+      return [dir[0] * co + axis[0] * so, dir[1] * co + axis[1] * so, dir[2] * co + axis[2] * so];
+    },
+  };
+}
+
 /**
  * View emphasis for the proximity highlight (D4): how close a constellation
  * is to the "central view", from 0 (at/behind the fade ring) to 1 (dead
@@ -644,11 +714,15 @@ export function buildConstellations(): THREE.Group {
     lines.name = `constellation-lines:${c.name}`;
     group.add(lines);
 
-    // Name label (D3): a sprite at the figure's center, just inside the
-    // dome. depthTest off so the sky reads cleanly in front of / behind
-    // planets alike — it is a sky annotation, like the body labels.
-    const [cx, cy, cz] = constellationCenter(c);
-    const labelTex = makeLabelTexture(c.name);
+    // Name label (D3): elegant lettering placed BESIDE the figure — an exact
+    // angular offset past the centroid along the figure's long axis, so it
+    // sits at the figure's end rather than on top of its stars (D7). The
+    // sprite is sized to the figure's angular extent so longer constellations
+    // (Ursa Major) get room and compact ones (Lyra) stay tidy. depthTest off
+    // so the sky reads cleanly in front of / behind planets alike.
+    const pose = constellationLabelPose(c);
+    const [lx, ly, lz] = pose.labelDir(Math.max(0.35, pose.halfExtent * 1.15));
+    const labelTex = makeConstellationNameTexture(c.name);
     const labelMat = new THREE.SpriteMaterial({
       map: labelTex,
       depthTest: false,
@@ -656,11 +730,14 @@ export function buildConstellations(): THREE.Group {
       opacity: CONSTELLATION_BASE_OPACITY,
     });
     const label = new THREE.Sprite(labelMat);
-    label.scale.set(60, 15, 1); // dome is 4800 across — small relative to it
+    // Texture is 4:1; the sprite's world width spans the figure's angular
+    // extent (so it clears the figure) at the dome radius.
+    const halfW = Math.max(0.5, pose.halfExtent * 1.5) * (CONSTELLATION_RADIUS - 90);
+    label.scale.set(halfW, halfW / 4, 1);
     label.position.set(
-      cx * (CONSTELLATION_RADIUS - 120),
-      cy * (CONSTELLATION_RADIUS - 120),
-      cz * (CONSTELLATION_RADIUS - 120),
+      lx * (CONSTELLATION_RADIUS - 90),
+      ly * (CONSTELLATION_RADIUS - 90),
+      lz * (CONSTELLATION_RADIUS - 90),
     );
     label.name = `constellation-label:${c.name}`;
     group.add(label);
@@ -692,6 +769,9 @@ export function buildConstellations(): THREE.Group {
   return group;
 }
 
+/** name ("Lyra") -> constellation index, for highlight lookups by child name. */
+const CONSTELLATION_NAME_INDEX = new Map(CONSTELLATIONS.map((c, i) => [c.name, i]));
+
 /**
  * D4: fade each constellation's lines + name label by how close its center
  * is to the camera's view axis. `emphases[i]` must be the per-constellation
@@ -703,17 +783,21 @@ export function updateConstellationHighlight(
   group: THREE.Group,
   emphases: ArrayLike<number>,
 ): void {
-  let i = 0;
   for (const child of group.children) {
     const name = child.name ?? '';
-    const isLines = name.startsWith('constellation-lines:');
-    const isLabel = name.startsWith('constellation-label:');
-    if (!isLines && !isLabel) continue;
-    const emph = emphases[i] ?? 0;
+    // Resolve the constellation index from the child's NAME rather than its
+    // position in the group: labels interleave after their line meshes
+    // (lines0, label0, lines1, label1, …), so a running counter would fade
+    // label k with constellation k+1's emphasis — and the last label would
+    // never brighten at all.
+    const idx = name.startsWith('constellation-')
+      ? CONSTELLATION_NAME_INDEX.get(name.slice('constellation-'.length).split(':')[1])
+      : undefined;
+    if (idx === undefined) continue;
+    const emph = emphases[idx] ?? 0;
     const t =
       CONSTELLATION_BASE_OPACITY + (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph;
     ((child as THREE.LineSegments | THREE.Sprite).material as THREE.Material).opacity = t;
-    if (isLines) i++;
   }
 }
 
