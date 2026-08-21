@@ -694,6 +694,33 @@ export function constellationLabelWidth(c: Constellation): number {
 }
 
 /**
+ * Camera-distance presence for the constellation sky (plan 003 P4). The sky
+ * is a full-sphere wraparound, so when the camera is CLOSE to a body (a
+ * planet close-up) the constellations sweep across the whole frame behind
+ * the planet and dominate the view. Instead of a constant multiplier the
+ * sky's opacity gets a MULTIPLICATIVE presence factor: 0.25× close-up →
+ * 1.0× exactly at the Sky anchor (measured 2756 for the 2026-08-21 data —
+ * frameConstellations(4800, 102.8, 50°); the camera eases to a 120° FOV
+ * there, and the sky tour holds that radius). System anchor (232) and the
+ * default camera (34) stay at the floor. Never 0: the sky stays faintly
+ * visible in close-ups so the stars don't blink out, and the smoothstep
+ * transition is symmetric — zoom in to fade it, zoom out to restore it.
+ */
+export const CONSTELLATION_PRESENCE_NEAR = 2.0;
+export const CONSTELLATION_PRESENCE_FAR = 2756.0;
+export const CONSTELLATION_PRESENCE_FLOOR = 0.25;
+
+/** Multiplicative opacity factor (0.25..1) for the constellation sky at the given camera distance. */
+export function constellationPresence(cameraDist: number): number {
+  if (cameraDist <= CONSTELLATION_PRESENCE_NEAR) return CONSTELLATION_PRESENCE_FLOOR;
+  if (cameraDist >= CONSTELLATION_PRESENCE_FAR) return 1;
+  const t =
+    (cameraDist - CONSTELLATION_PRESENCE_NEAR) /
+    (CONSTELLATION_PRESENCE_FAR - CONSTELLATION_PRESENCE_NEAR);
+  return CONSTELLATION_PRESENCE_FLOOR + (1 - CONSTELLATION_PRESENCE_FLOOR) * t * t * (3 - 2 * t);
+}
+
+/**
  * Build the decorative constellation sky: ONE `THREE.LineSegments` per
  * constellation (so each figure can fade independently in the D4 highlight),
  * the shared star-dot `THREE.Points`, and one name-label sprite per figure
@@ -801,13 +828,23 @@ const CONSTELLATION_NAME_INDEX = new Map(CONSTELLATIONS.map((c, i) => [c.name, i
  * `constellationEmphasis` output (view-center proximity, 0..1). Cheap: only
  * writes a float per material. Driven from the frame loop at ~5 Hz and
  * only when the camera actually moved.
+ *
+ * `presence` (plan 003 P4) multiplies everything — lines, name labels AND
+ * the shared star dots — so the whole sky fades together when the camera
+ * is close to a body and returns at sky-view distances (default 1).
  */
 export function updateConstellationHighlight(
   group: THREE.Group,
   emphases: ArrayLike<number>,
+  presence: number = 1,
 ): void {
   for (const child of group.children) {
     const name = child.name ?? '';
+    if (name === 'constellation-stars') {
+      // Shared star dots fade with the whole sky (plan 003 P4).
+      ((child as THREE.Points).material as THREE.Material).opacity = presence;
+      continue;
+    }
     // Resolve the constellation index from the child's NAME rather than its
     // position in the group: labels interleave after their line meshes
     // (lines0, label0, lines1, label1, …), so a running counter would fade
@@ -820,7 +857,8 @@ export function updateConstellationHighlight(
     const emph = emphases[idx] ?? 0;
     const t =
       CONSTELLATION_BASE_OPACITY + (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph;
-    ((child as THREE.LineSegments | THREE.Sprite).material as THREE.Material).opacity = t;
+    ((child as THREE.LineSegments | THREE.Sprite).material as THREE.Material).opacity =
+      t * presence;
   }
 }
 

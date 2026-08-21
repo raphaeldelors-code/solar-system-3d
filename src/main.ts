@@ -16,6 +16,7 @@ import {
   updateSatelliteHighlight,
   constellationCenter,
   constellationEmphasis,
+  constellationPresence,
   updateConstellationHighlight,
   lerpScale,
   applyScaleMorph,
@@ -136,7 +137,13 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
     const d = CONSTELLATION_CENTER_DIRS[i];
     CONSTELLATION_EMPHASES[i] = constellationEmphasis(d, [vx, vy, vz]);
   }
-  updateConstellationHighlight(built.constellations, CONSTELLATION_EMPHASES);
+  // Camera-distance presence (plan 003 P4): the sky is a full-sphere
+  // wraparound, so in a body close-up it sweeps across the whole frame and
+  // dominates. Fade the whole sky (lines, names, star dots) to 0.25× up
+  // close and back to 1.0× by the Sky-anchor distance — smooth in both
+  // directions, never fully off.
+  const presence = constellationPresence(built.camera.position.length());
+  updateConstellationHighlight(built.constellations, CONSTELLATION_EMPHASES, presence);
 }
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
