@@ -4,6 +4,7 @@ User queue 2026-08-22, items S2 + S3. Two independent render/camera fixes;
 each lands as its own commit.
 
 ## S2 — kill constellation-label see-through (label Sprites visible through
+
 planets / satellites in solar-system view)
 
 **Root cause.** Constellation name labels are `THREE.Sprite`s whose material
@@ -11,7 +12,7 @@ is built with `depthTest: false` (scene.ts ~1058, comment: "depthTest off so
 the sky reads cleanly in front of / behind planets alike"). `depthTest:false`
 means the label is drawn regardless of what is in front of it — so when a
 planet or satellite sits between the camera and a label on the dome, the
-label paints *through* the body. That is the "weird and distracting" see-through
+label paints _through_ the body. That is the "weird and distracting" see-through
 the user reported.
 
 **Why depthTest was off originally.** The labels sit at radius
@@ -55,17 +56,19 @@ full planet + satellites + a safe margin. Feels weird otherwise if it takes
 the full screen, even cutoff sometimes."
 
 **Root causes (both in `frameBody`, render/cameraFlight.ts).**
+
 1. **Top-down view.** `frameBody` places the camera at
    `[center.x, center.y + dist, center.z]` — a pure 90° straight-down along
    ecliptic north. Every planet pick lands overhead.
 2. **Wrong zoom.** `BODY_FILL = 0.9` → the framed extent fills 90% of the
    view height. For a wide satellite system (or a ringed planet framed to
    its outer ring) 90% is essentially full-screen; with a wide (landscape)
-   canvas the *horizontal* extent can exceed the frame → "cutoff". Only the
+   canvas the _horizontal_ extent can exceed the frame → "cutoff". Only the
    vertical fill is considered; the horizontal FOV (which is wider) is
    ignored.
 
 **Fix.**
+
 1. **Tilt to ~38°** (mid 30–45°). Camera offset = distance along a bearing
    with a fixed elevation above the ecliptic:
    ```
@@ -79,7 +82,7 @@ the full screen, even cutoff sometimes."
    itself (eased accelerate/cruise/decelerate in `makeFlight`/`stepFlight`)
    is unchanged — that already delivers the "travel to the planet" feel.
 2. **Fit with a safe margin, both axes.** Lower `BODY_FILL` to `0.62`
-   (~38% headroom) and compute distance from the *wider* of the vertical and
+   (~38% headroom) and compute distance from the _wider_ of the vertical and
    horizontal constraints:
    ```
    vHalf = fov/2, hHalf = atan(tan(vHalf) * aspect)
@@ -91,7 +94,7 @@ the full screen, even cutoff sometimes."
    caller (`camAnchorForBody` in main.ts) passes
    `built.camera.aspect` (or renderer size ratio). This guarantees the full
    planet + all satellite orbits (extent already includes `2·satExtent +
-   planet.sceneRadius` / outer ring) land inside the frame with margin on
+planet.sceneRadius` / outer ring) land inside the frame with margin on
    ANY canvas aspect, never full-screen, never cut off.
 
 **Callers updated.** `frameBody` is called from `camAnchorForBody` (main.ts
@@ -102,6 +105,7 @@ vertical" assertions now assert the 38° tilt: `pos.y > center.y`,
 wider aspect → distance ≥ narrower-aspect distance for the same extent).
 
 ## Verification (both, CDP headless)
+
 - Preview on 4173 + chrome-headless-shell CDP on 9223 (see `classic-sky-plates`
   skill §5). Drive the camera via the `?cam=` param and/or `window.__solar`.
 - **S2:** assert the constellation label sprites have `depthTest === true`;
@@ -113,5 +117,6 @@ wider aspect → distance ≥ narrower-aspect distance for the same extent).
   Jupiter (4 Galilean moons) + Saturn (rings) as the wide-extreme cases.
 
 ## Gates & commits
+
 Each feature: Prettier → `lint` → `vitest` → `build` green → **separate
 commit** → push → CI green → live verify. S2 first, then S3 (two commits).
