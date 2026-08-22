@@ -57,11 +57,15 @@ describe('constellationLabelPose (plan 004 Q1)', () => {
     for (const c of CONSTELLATIONS) {
       const pose = constellationLabelPose(c);
       const labelDir = pose.labelDir(constellationLabelMargin(c));
-      // Same hemisphere as the centroid: dot > 0 (all these margins are
-      // well below π/2).
+      // Same hemisphere as the centroid: dot > 0 (no wrap-around). The
+      // threshold is 0.3 (~72°), not 0.5: with the full IAU 88-constellation
+      // set (plan 005) the largest figures place their labels legitimately
+      // far from the centroid — Hydra's figure spans ~100° and its label sits
+      // 64° past the centroid (dot ≈ 0.43). A true wrap-around would be
+      // dot ≤ 0; the observed minimum across all 88 is ≈ 0.43.
       const [cx, cy, cz] = constellationCenter(c);
       const dot = labelDir[0] * cx + labelDir[1] * cy + labelDir[2] * cz;
-      expect(dot).toBeGreaterThan(0.5);
+      expect(dot).toBeGreaterThan(0.3);
     }
   });
 });

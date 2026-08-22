@@ -558,7 +558,7 @@ export const CONSTELLATION_RADIUS = 4800;
  * Unit direction of a constellation's center (mean of its stars' scene-space
  * unit vectors). The dome is static and the CAMERA moves, so this direction
  * is precomputable once: per-frame highlight work is then one dot-product
- * per constellation between the camera's view axis and this (13 total).
+ * per constellation between the camera's view axis and this (88 total).
  */
 export function constellationCenter(c: Constellation): [number, number, number] {
   let x = 0,

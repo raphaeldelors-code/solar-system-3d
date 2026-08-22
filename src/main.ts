@@ -56,9 +56,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 
 // Sky tour: after the Sky anchor's flight lands, no single static view can
-// show all 13 constellations — they cover the whole celestial sphere (decl
-// −43°…+89°, RA 0h…21h), and the tightest bounding cone has a ~106° half-angle
-// (a ~212° FOV would be needed to fit them in one frame, which is impossible).
+// show all 88 constellations — they cover the entire celestial sphere (decl
+// −90°…+90°, full RA), so no finite FOV fits them in one frame.
 // So the camera pans around the origin in a gentle panorama, sweeping every
 // constellation into view in turn; any user input stops it. `skyTour` holds
 // the camera's spherical pose around the origin.
@@ -111,7 +110,7 @@ for (const ev of ['pointerdown', 'wheel', 'keydown', 'touchstart']) {
 // --- Constellation proximity highlight (D4) ------------------------------
 // The dome is static and the camera moves, so each figure's center DIRECTION
 // is precomputed once; per frame it's one dot-product per constellation
-// (13 total) between that direction and the camera's view axis. Throttled
+// (88 total) between that direction and the camera's view axis. Throttled
 // to ~5 Hz and skipped entirely when the camera pose is unchanged — the
 // feature costs nothing while idle.
 const CONSTELLATION_CENTER_DIRS = CONSTELLATIONS.map((c) => constellationCenter(c));
