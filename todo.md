@@ -52,6 +52,10 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] Q1 fix(render): label distance anchored to the TEXT ink edge (constant 2° gap, every name) — `8399ae8`. Name side flips to the far tip; `layoutConstellationName` ink width drives `margin = halfExtent + (inkRad/2 + EDGE_GAP)`. See `plans/004-label-ink-distance-and-presence-middle.md`, Q1
 - [x] Q2 fix(render): presence floor 0.25 → 0.5 (middle between "too much" and "too low"), ramp starts at default view — `51a8a63`. See plan 004, Q2
 
+## User queue — 2026-08-22 — plan 005
+
+- [x] Full IAU 88-constellation dataset — regenerated `constellations.ts` from Stellarium `modern_iau` skyculture figures + Hipparcos catalog (col8/9 = J2000 ICRF, sub-arcsecond verified vs 9 anchor stars; 61/61 HIP cross-check). 88 constellations / 757 figure stars / 752 segments (was 13/76). Orion belt test → name-based; new per-constellation star-count table locks all 88 figures; label threshold relaxed for elongated figures (Hydra). CDP headless verify: 88 line objects + 88 labels live, per-constellation vertex counts match the file exactly, Polaris at the celestial pole to 0.001 units, no console errors. `a7648ef`. See `plans/005-full-iau-88-constellations.md`
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
