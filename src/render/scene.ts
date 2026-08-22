@@ -16,7 +16,13 @@ import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAtInto, sampleOrbit, type Vec3 } from '../sim/kepler';
 import { moonGeocentricJ2000 } from '../sim/moon';
 import { AU_KM } from '../sim/types';
-import { makeSurfaceTexture, makeLabelTexture, makeConstellationNameTexture } from './textures';
+import {
+  makeSurfaceTexture,
+  makeLabelTexture,
+  makeConstellationNameTexture,
+  layoutConstellationName,
+  CONSTELLATION_NAME_CANVAS_W,
+} from './textures';
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
@@ -582,8 +588,20 @@ function norm3(a: number[]): [number, number, number] {
 }
 
 export interface ConstellationLabelPose {
-  /** Figure angular half-extent (radians) along its longest axis. */
+  /**
+   * Figure angular half-extent (radians) along its long axis. After the
+   * label-side flip below, the FAR TIP of the figure lies on the label side
+   * (max signed projection on `axis` equals `halfExtent`), so "past the far
+   * edge" means exactly `halfExtent` past the centroid.
+   */
   halfExtent: number;
+  /**
+   * The (possibly sign-flipped) principal axis: the label side (+axis)
+   * always carries the figure's far tip, so `halfExtent` is the distance to
+   * the figure's far edge along this direction. Exposed for the
+   * "name goes past the REAL far edge" invariant (plan 004 Q1).
+   */
+  axis: [number, number, number];
   /**
    * Unit sky direction for the name label: `marginRad` past the centroid
    * along the figure's long axis, so the name sits BESIDE the figure (at
@@ -620,16 +638,32 @@ export function constellationLabelPose(c: Constellation): ConstellationLabelPose
   const theta = 0.5 * Math.atan2(2 * xy, xx - yy);
   const p1 = Math.cos(theta);
   const p2 = Math.sin(theta);
-  const axis: [number, number, number] = [
+  let axis: [number, number, number] = [
     t1[0] * p1 + t2[0] * p2,
     t1[1] * p1 + t2[1] * p2,
     t1[2] * p1 + t2[2] * p2,
   ];
-  // Half-extent: farthest star's projection on the long axis (≈ radians).
-  let halfExtent = 0;
-  for (const d of dirs) halfExtent = Math.max(halfExtent, Math.abs(dot3(d, axis)));
+  // SIGNED extents: the eigenvector's sign is arbitrary, but the label side
+  // (the +axis direction) must carry the figure's FAR TIP — otherwise the
+  // name is pushed past the near edge and floats away from the figure
+  // (plan 004 Q1: 5 of 13 figures were on the phantom side, Cygnus worst).
+  let extPlus = 0;
+  let extMinus = 0;
+  for (const d of dirs) {
+    const p = dot3(d, axis);
+    if (p > extPlus) extPlus = p;
+    if (-p > extMinus) extMinus = -p;
+  }
+  if (extMinus > extPlus) {
+    axis = [-axis[0], -axis[1], -axis[2]];
+  }
+  // Half-extent = the far tip's projection (≈ radians); after the flip the
+  // label side is the far side, so `halfExtent` IS the distance to the
+  // figure's far edge.
+  const halfExtent = Math.max(extPlus, extMinus);
   return {
     halfExtent,
+    axis,
     labelDir: (marginRad: number): [number, number, number] => {
       const co = Math.cos(marginRad);
       const so = Math.sin(marginRad);
@@ -672,18 +706,52 @@ export const CONSTELLATION_BASE_OPACITY = 0.32;
 export const CONSTELLATION_PEAK_OPACITY = 0.95;
 
 /**
- * Name-label geometry (plan 003 P3). The label position is a CONSTANT
- * angular gap past the figure's far edge (margin = halfExtent +
- * CONSTELLATION_LABEL_GAP_RAD) — the old 0.35 rad floor ignored figure
- * size, so compact figures (Aquila, Lyra, Aries) had their names floating
- * ~11° away while the largest figures (Leo, Scorpius) were overlapped.
- * The sprite is sized ~the figure's own angular span (floor 0.2 rad ⇒
- * ~3° tall text at the sky anchor) instead of the old 0.5 rad full width
- * (7.2° tall — a label that filled 15% of the 50° close-up FOV).
+ * Name-label geometry (plan 003 P3, re-anchored in plan 004 Q1). The
+ * distance is defined from what the USER SEES — the ink's near edge, not an
+ * invisible sprite-padding edge:
+ *
+ * - the label BLOCK (sprite) center sits at `constellationLabelMargin(c)` =
+ *   `halfExtent + EDGE_GAP + inkRad/2`, where `halfExtent` is the figure's
+ *   far tip on the label side (the pose flips the principal axis to carry
+ *   the far tip);
+ * - so the INK's near edge lands exactly `CONSTELLATION_LABEL_EDGE_GAP_RAD`
+ *   (~2°) past the figure's far tip — ONE constant, same visible gap for
+ *   all 13 names. The old 0.12 block gap (plan 003) looked like 1.2–5.3°
+ *   depending on how much of the 4:1 sprite the ink filled (Leo 28% …
+ *   Ursa Major 99%), and for 5 figures the name went past a phantom edge.
+ *
+ * The sprite width (`constellationLabelWidth`) is unchanged — the user is
+ * not complaining about text size, and it stays ~the figure's own span.
  */
-export const CONSTELLATION_LABEL_GAP_RAD = 0.12; // 6.9° past the far edge
+export const CONSTELLATION_LABEL_EDGE_GAP_RAD = 0.035; // ~2° from tip to ink edge
 export const CONSTELLATION_LABEL_MIN_WIDTH_RAD = 0.2; // sprite floor (≈3° text)
 export const CONSTELLATION_LABEL_SPAN = 0.8; // fullW as fraction of halfExtent
+
+/**
+ * Angular width (radians) of the ACTUAL letter ink: the ink's fraction of
+ * the 512 px canvas × the sprite's angular width (the name is centered in
+ * the canvas, so the ink spans the same FRACTION of the sprite as it does
+ * of the texture). This is the width the eye sees — the placement math must
+ * use it, not the sprite block (its padding differs per name length).
+ */
+export function constellationLabelInkWidthRad(c: Constellation): number {
+  const ink = layoutConstellationName(c.name).inkWidthPx / CONSTELLATION_NAME_CANVAS_W;
+  return ink * constellationLabelWidth(c);
+}
+
+/**
+ * Label block-center margin (radians past the figure center): far tip +
+ * constant edge gap + half the ink, so the visible lettering sits a
+ * constant `CONSTELLATION_LABEL_EDGE_GAP_RAD` past the figure's far edge
+ * for every name.
+ */
+export function constellationLabelMargin(c: Constellation): number {
+  return (
+    constellationLabelPose(c).halfExtent +
+    CONSTELLATION_LABEL_EDGE_GAP_RAD +
+    constellationLabelInkWidthRad(c) / 2
+  );
+}
 
 /** Angular FULL width (radians) of a constellation's name sprite. */
 export function constellationLabelWidth(c: Constellation): number {
@@ -763,15 +831,16 @@ export function buildConstellations(): THREE.Group {
     lines.name = `constellation-lines:${c.name}`;
     group.add(lines);
 
-    // Name label (D3/D7, plan 003 P3): elegant lettering placed BESIDE
-    // the figure — a CONSTANT angular gap past the figure's far edge along
-    // its long axis, so the name hugs the figure instead of floating in
-    // empty sky (the old 0.35 rad floor) or overlapping it (big figures).
-    // The sprite is ~the figure's own angular span (see
-    // constellationLabelWidth). depthTest off so the sky reads cleanly in
-    // front of / behind planets alike.
+    // Name label (D3/D7, plan 003 P3, re-anchored plan 004 Q1): elegant
+    // lettering placed BESIDE the figure, with a CONSTANT visible gap
+    // (CONSTELLATION_LABEL_EDGE_GAP_RAD, ~2°) from the figure's FAR TIP to
+    // the ink's near edge — the pose carries the far tip on the label side,
+    // and the margin includes half the actual letter ink, so every name
+    // reads at the same distance from its figure. The sprite is ~the
+    // figure's own angular span (see constellationLabelWidth). depthTest
+    // off so the sky reads cleanly in front of / behind planets alike.
     const pose = constellationLabelPose(c);
-    const [lx, ly, lz] = pose.labelDir(pose.halfExtent + CONSTELLATION_LABEL_GAP_RAD);
+    const [lx, ly, lz] = pose.labelDir(constellationLabelMargin(c));
     const labelTex = makeConstellationNameTexture(c.name);
     const labelMat = new THREE.SpriteMaterial({
       map: labelTex,

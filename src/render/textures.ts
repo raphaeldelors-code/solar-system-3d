@@ -194,6 +194,86 @@ export function makeSurfaceTexture(body: BodyDefinition): THREE.CanvasTexture {
 }
 
 /**
+ * Georgia uppercase advances, in thousandths of an em (approximated from
+ * Georgia's hmtx metrics). Single source of truth for constellation-name
+ * layout: the texture draws from this table AND the scene measures the ink
+ * width from it, so the lettering and the label-distance math can never
+ * drift apart (canvas `measureText` varies by platform — it must not feed
+ * the 3D placement).
+ */
+const GEORGIA_ADV: Record<string, number> = {
+  A: 690,
+  B: 665,
+  C: 725,
+  D: 725,
+  E: 620,
+  F: 580,
+  G: 770,
+  H: 755,
+  I: 350,
+  J: 430,
+  K: 720,
+  L: 565,
+  M: 945,
+  N: 760,
+  O: 775,
+  P: 635,
+  Q: 775,
+  R: 695,
+  S: 610,
+  T: 630,
+  U: 730,
+  V: 680,
+  W: 1020,
+  X: 680,
+  Y: 670,
+  Z: 600,
+};
+
+/** Canvas geometry shared by the name texture + ink measurement. */
+export const CONSTELLATION_NAME_CANVAS_W = 512;
+export const CONSTELLATION_NAME_CANVAS_H = 128;
+const NAME_FONT_CAP_PX = 60; // never scale the font above this
+const NAME_INK_MAX_PX = 464; // keep a margin inside the 512 canvas
+const NAME_LETTER_SPACING_EM = 0.24;
+
+export interface ConstellationNameLayout {
+  /** Chosen font size (px) — capped so long and short names share one scale. */
+  fontSize: number;
+  /** Canvas x of the FIRST glyph's left edge (centered in the canvas). */
+  inkStartX: number;
+  /** Ink extent across the canvas (px) — the actual letter span. */
+  inkWidthPx: number;
+  /** Per-glyph advance (px), in order. */
+  charWidths: number[];
+}
+
+/**
+ * Pure layout for a constellation name on the 512×128 canvas (plan 004 Q1):
+ * fit the name to `NAME_INK_MAX_PX` (capped at `NAME_FONT_CAP_PX`) and
+ * center it. Used by `makeConstellationNameTexture` (drawing) and
+ * `constellationLabelInkWidthRad` (placement) so the ink the user sees is
+ * exactly the ink the 3D math positions.
+ */
+export function layoutConstellationName(name: string): ConstellationNameLayout {
+  const text = name.toUpperCase();
+  const advances = text.split('').map((ch) => GEORGIA_ADV[ch] ?? 600); // em/1000
+  // Fit: total em at font size s = (Σadv + spacing·(n−1))·s/1000 ≤ MAX_PX
+  // and s ≤ CAP_PX.
+  const totalEm = advances.reduce((a, b) => a + b, 0) / 1000;
+  const spacingEm = NAME_LETTER_SPACING_EM;
+  const fontSize = Math.min(
+    NAME_FONT_CAP_PX,
+    NAME_INK_MAX_PX / (totalEm + spacingEm * (text.length - 1)),
+  );
+  const charWidths = advances.map((a) => (a / 1000) * fontSize);
+  const sp = fontSize * spacingEm;
+  const inkWidthPx = charWidths.reduce((a, b) => a + b, 0) + sp * (text.length - 1);
+  const inkStartX = CONSTELLATION_NAME_CANVAS_W / 2 - inkWidthPx / 2;
+  return { fontSize, inkStartX, inkWidthPx, charWidths };
+}
+
+/**
  * Constellation name: elegant spaced serif capitals with a soft starlight
  * glow and a hairline flourish (split line + small diamond) beneath. The
  * font is auto-scaled so names of any length fill the same canvas width —
@@ -203,36 +283,20 @@ export function makeSurfaceTexture(body: BodyDefinition): THREE.CanvasTexture {
  */
 export function makeConstellationNameTexture(name: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 128;
+  canvas.width = CONSTELLATION_NAME_CANVAS_W;
+  canvas.height = CONSTELLATION_NAME_CANVAS_H;
   const ctx = canvas.getContext('2d')!;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const text = name.toUpperCase();
-  const spacing = 0.24; // letter-spacing as a fraction of font size
-  const maxW = 464; // keep a margin inside the 512 canvas
-  // Fit the font: measure at a reference size, then scale to the target width.
-  const REF = 60;
-  ctx.font = `${REF}px Georgia, "Times New Roman", serif`;
-  const refWidths: number[] = [];
-  let refTotal = 0;
-  for (const ch of text) {
-    const w = ctx.measureText(ch).width;
-    refWidths.push(w);
-    refTotal += w + REF * spacing;
-  }
-  refTotal -= REF * spacing;
-  const fontSize = Math.min(REF, (maxW / refTotal) * REF);
-  const sp = fontSize * spacing;
-  const widths = refWidths.map((w) => (w / REF) * fontSize);
-  const total = widths.reduce((a, b) => a + b, 0) + sp * (text.length - 1);
-  const startX = 256 - total / 2;
+  const { fontSize, inkStartX, inkWidthPx, charWidths } = layoutConstellationName(name);
+  const sp = fontSize * NAME_LETTER_SPACING_EM;
   ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
   const drawText = (): void => {
-    let x = startX;
+    let x = inkStartX;
     for (let i = 0; i < text.length; i++) {
-      ctx.fillText(text[i], x + widths[i] / 2, 50);
-      x += widths[i] + sp;
+      ctx.fillText(text[i], x + charWidths[i] / 2, 50);
+      x += charWidths[i] + sp;
     }
   };
   // Two glow passes (wide soft halo), then a crisp shadow-free core so the
@@ -250,17 +314,17 @@ export function makeConstellationNameTexture(name: string): THREE.CanvasTexture 
   ctx.strokeStyle = 'rgba(160, 185, 235, 0.5)';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(startX - 16, y);
-  ctx.lineTo(256 - 10, y);
-  ctx.moveTo(256 + 10, y);
-  ctx.lineTo(startX + total + 16, y);
+  ctx.moveTo(inkStartX - 16, y);
+  ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2 - 10, y);
+  ctx.moveTo(CONSTELLATION_NAME_CANVAS_W / 2 + 10, y);
+  ctx.lineTo(inkStartX + inkWidthPx + 16, y);
   ctx.stroke();
   ctx.fillStyle = 'rgba(205, 224, 255, 0.85)';
   ctx.beginPath();
-  ctx.moveTo(256, y - 5);
-  ctx.lineTo(261, y);
-  ctx.lineTo(256, y + 5);
-  ctx.lineTo(251, y);
+  ctx.moveTo(CONSTELLATION_NAME_CANVAS_W / 2, y - 5);
+  ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2 + 5, y);
+  ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2, y + 5);
+  ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2 - 5, y);
   ctx.closePath();
   ctx.fill();
   const tex = new THREE.CanvasTexture(canvas);
