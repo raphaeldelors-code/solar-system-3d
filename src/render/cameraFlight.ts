@@ -104,33 +104,46 @@ function add(a: Vec3, b: Vec3): Vec3 {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 }
 
-/** Fraction of the view height a picked body should fill at landing —
- *  "almost full screen," with a touch of headroom so it isn't edge-to-edge. */
-const BODY_FILL = 0.9;
+/** Fraction of the view (the *smaller* axis) the framed extent should fill at
+ *  landing — ~38% of headroom all round, so the body + its satellites land
+ *  with a safe margin instead of edge-to-edge. */
+const BODY_FILL = 0.62;
+
+/** Landing elevation above the ecliptic plane, in degrees — a natural 3/4
+ *  view (mid of the 30–45° the user asked for), not a straight-down top view. */
+const BODY_ELEV_DEG = 38;
 
 /**
- * Frame a single body of world position `center`, viewed from DIRECTLY
- * OVERHEAD — a pure 90° straight-down landing along the ecliptic north pole
- * (camera on the +Y side, looking down −Y at the body). This is the standard
- * pick landing: search-bar picks and direct click picks both end here, so a
- * body always presents the same top-down view no matter where the camera was
- * before. `extent` is the body's full width in scene units (diameter for a
- * plain body, or the ring's outer diameter for a ringed planet, so the whole
- * body + rings land in frame). The flight path itself is unchanged (the eased
- * accelerate/cruise/decelerate in `makeFlight`) — only the landing bearing is
- * fixed to overhead.
+ * Frame a single body of world position `center`: land from a natural 3/4
+ * bearing at a fixed ~38° elevation above the ecliptic (camera on the +Z side,
+ * lifted +Y, looking down at the body) — the "travel to the planet and stop"
+ * landing, NOT the old pure 90° top-down. The distance is chosen so the body's
+ * full width `extent` (diameter for a plain body, or the ring's OUTER diameter
+ * for a ringed planet, so the whole body + rings land in frame) fills
+ * BODY_FILL of the *smaller* view axis — solving the framing for BOTH the
+ * vertical and horizontal FOV (whichever is tighter), so a wide satellite
+ * system never overflows a landscape canvas and never goes full-screen.
+ * `aspect` is the canvas width/height (pass the live camera's aspect).
  */
-export function frameBody(center: Vec3, extent: number, fovDeg: number): CamAnchor {
+export function frameBody(center: Vec3, extent: number, fovDeg: number, aspect = 1): CamAnchor {
   const vHalf = (fovDeg * Math.PI) / 360; // half vertical fov
-  // A body of width `extent` at distance `dist` fills
-  //   extent / (2 * tan(vHalf) * dist)
-  // of the view height. Set that to BODY_FILL and solve for `dist`. For a
-  // ringed planet `extent` is the outer-ring diameter, which keeps the
-  // camera safely outside the rings. Tiny absolute floor so we never skim a
-  // sub-unit body's surface.
-  const dist = Math.max(extent / (2 * BODY_FILL * Math.tan(vHalf)), 0.35);
+  const hHalf = Math.atan(Math.tan(vHalf) * aspect); // half horizontal fov
+  // extent / (2 * tan(half) * dist) = BODY_FILL  =>  dist = extent / (2*fill*tan).
+  // The tighter (smaller) half-fov governs: max over the two. Tiny absolute
+  // floor so we never skim a sub-unit body's surface.
+  const dist = Math.max(
+    extent / (2 * BODY_FILL * Math.tan(vHalf)),
+    extent / (2 * BODY_FILL * Math.tan(hHalf)),
+    0.35,
+  );
+  // Offset bearing: fixed horizontal azimuth (+Z) with a fixed elevation
+  // above the ecliptic. elevation fraction of the offset = tan(BODY_ELEV_DEG)
+  // projected so |offset| = dist: y = dist*sin(elev), horizontal = dist*cos(elev).
+  const elevRad = (BODY_ELEV_DEG * Math.PI) / 180;
+  const dy = Math.sin(elevRad);
+  const dh = Math.cos(elevRad); // horizontal run (all along +Z for a fixed bearing)
   return {
-    pos: [center[0], center[1] + dist, center[2]],
+    pos: [center[0], center[1] + dist * dy, center[2] + dist * dh],
     target: center,
   };
 }

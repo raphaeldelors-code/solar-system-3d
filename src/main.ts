@@ -442,7 +442,15 @@ function camAnchorForBody(id: string): CamAnchor | null {
     planet.frameExtent,
     satExtent > 0 ? 2 * satExtent + planet.sceneRadius : 0,
   );
-  return frameBody([planet.worldPos.x, planet.worldPos.y, planet.worldPos.z], extent, FOV_DEG);
+  // Pass the live canvas aspect so the framing solves for the tighter of the
+  // vertical/horizontal FOV — a wide satellite system then always lands with
+  // margin on landscape screens, never full-screen or cut off (plan 008 S3).
+  return frameBody(
+    [planet.worldPos.x, planet.worldPos.y, planet.worldPos.z],
+    extent,
+    FOV_DEG,
+    built.camera.aspect,
+  );
 }
 
 /**
@@ -1051,6 +1059,14 @@ fmtDate();
   get renderer() {
     return built.renderer;
   },
+  // Live body entries (id -> {def, mesh, worldPos, sceneRadius, frameExtent,
+  // parent}) + the satellite-extent helper, so e2e checks can verify
+  // planet fly-to framing against the scene's own numbers.
+  get bodies() {
+    return built.bodies;
+  },
+  // Reads the LIVE scale each call (scale is a mutable module `let`).
+  satelliteExtentScene: (planetId: string) => satelliteExtentScene(planetId, scale),
   clock,
 };
 

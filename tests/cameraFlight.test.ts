@@ -47,22 +47,26 @@ describe('dirTo', () => {
 });
 
 describe('frameBody', () => {
-  it('lands directly overhead: pure 90° straight-down along the ecliptic north pole', () => {
+  it('lands from a natural 3/4 bearing, NOT straight down: camera lifted +Y AND offset along +Z', () => {
     const center: Vec3 = [3, 0, -4];
     const anchor: CamAnchor = frameBody(center, 1, 50);
     // target is the body
     expect(anchor.target).toEqual([3, 0, -4]);
-    // camera sits on the +Y side of the body: same x/z, higher y — a pure
-    // top-down view (view direction = −Y), whatever the orbit phase is.
-    approx(anchor.pos[0], 3, 1e-9);
-    approx(anchor.pos[2], -4, 1e-9);
-    expect(anchor.pos[1]).toBeGreaterThan(center[1]);
+    // Plan 008 S3: a 38° elevation above the ecliptic, on the +Z bearing.
+    // Camera is ABOVE the body (pos.y > center.y) AND pushed OUT along +Z
+    // (pos.z > center.z) — a 3/4 view, not the old pure overhead (which had
+    // pos.z === center.z and pos.x === center.x).
+    expect(anchor.pos[1]).toBeGreaterThan(center[1]); // lifted +Y
+    expect(anchor.pos[2]).toBeGreaterThan(center[2]); // pushed +Z (not top-down)
+    approx(anchor.pos[0], center[0], 1e-9); // bearing is along Z, x unchanged
   });
-  it('offset is exactly vertical (no horizontal bearing)', () => {
+  it('landing elevation is ~38° above the ecliptic (within 30–45°)', () => {
     const a = frameBody([0, 0, 0], 1, 50);
-    expect(a.pos[0] - a.target[0]).toBe(0);
-    expect(a.pos[2] - a.target[2]).toBe(0);
-    expect(a.pos[1] - a.target[1]).toBeGreaterThan(0);
+    const dy = a.pos[1] - a.target[1];
+    const dh = Math.hypot(a.pos[0] - a.target[0], a.pos[2] - a.target[2]);
+    const elevDeg = (Math.atan2(dy, dh) * 180) / Math.PI;
+    expect(elevDeg).toBeGreaterThan(30);
+    expect(elevDeg).toBeLessThan(45);
   });
   it('bigger body => camera farther away', () => {
     const near = frameBody([0, 0, 0], 1, 50);
@@ -70,6 +74,36 @@ describe('frameBody', () => {
     const d = (a: CamAnchor) =>
       Math.hypot(a.pos[0] - a.target[0], a.pos[1] - a.target[1], a.pos[2] - a.target[2]);
     expect(d(far)).toBeGreaterThan(d(near));
+  });
+  it('a portrait canvas (aspect < 1) pulls the camera FARTHER — the narrower horizontal FOV then binds', () => {
+    const square = frameBody([0, 0, 0], 10, 50, 1);
+    const portrait = frameBody([0, 0, 0], 10, 50, 0.6);
+    const d = (a: CamAnchor) =>
+      Math.hypot(a.pos[0] - a.target[0], a.pos[1] - a.target[1], a.pos[2] - a.target[2]);
+    // aspect < 1 => horizontal half-fov is NARROWER than vertical, so it is the
+    // binding constraint and the camera must back up further than the square.
+    expect(d(portrait)).toBeGreaterThan(d(square));
+  });
+  it('a landscape canvas (aspect > 1) keeps the same framing distance (vertical FOV binds)', () => {
+    const square = frameBody([0, 0, 0], 10, 50, 1);
+    const wide = frameBody([0, 0, 0], 10, 50, 1.6);
+    const d = (a: CamAnchor) =>
+      Math.hypot(a.pos[0] - a.target[0], a.pos[1] - a.target[1], a.pos[2] - a.target[2]);
+    // aspect > 1 => horizontal half-fov is WIDER, vertical stays binding, so the
+    // distance is unchanged (a wide satellite system fits MORE easily on a wide
+    // canvas, never cut off).
+    approx(d(wide), d(square), 1e-6);
+  });
+  it('frames the extent at ~BODY_FILL of the smaller axis (not full-screen)', () => {
+    const a = frameBody([0, 0, 0], 10, 50, 1);
+    const dist = Math.hypot(a.pos[0], a.pos[1], a.pos[2]);
+    const vHalf = (50 * Math.PI) / 360;
+    // extent / (2 * tan(vHalf) * dist) = the vertical fill fraction.
+    const fill = 10 / (2 * Math.tan(vHalf) * dist);
+    // With aspect 1 the horizontal half-fov > vertical, so vertical is binding
+    // and fill should be exactly BODY_FILL (0.62) — a comfortable margin, well
+    // under the old 0.9 full-screen.
+    approx(fill, 0.62, 1e-3);
   });
 });
 
