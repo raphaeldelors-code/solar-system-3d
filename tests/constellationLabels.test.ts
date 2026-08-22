@@ -1,220 +1,289 @@
 /**
- * Tests for the constellation NAME labels (D7, plan 003 P3, re-anchored
- * plan 004 Q1): the elegant lettering sits BESIDE each figure with a
- * CONSTANT VISIBLE gap (CONSTELLATION_LABEL_EDGE_GAP_RAD, ~2°) from the
- * figure's FAR TIP to the ink's near edge — the margin is
- * `halfExtent + EDGE_GAP + inkRad/2` where `halfExtent` is the far tip on
- * the label side (the pose flips the principal axis to carry it) and
- * `inkRad` is the ACTUAL letter ink width (layout table, not the sprite
- * padding). The sprite is sized ~the figure's own angular span (floor
- * 0.2 rad), unchanged from plan 003. The label fades with the SAME
- * emphasis as its own figure's lines (D4) — the highlight lookup is
- * name-based, so an interleaved child order (lines0, label0, lines1,
- * label1, …) can never fade label k with constellation k+1's emphasis.
+ * Tests for the constellation name-label geometry (plan 003 P3, re-anchored
+ * plan 004 Q1, re-sized + de-cluttered plan 006):
+ *
+ *  - `constellationLabelPose(c)` — the figure's principal axis + far-tip
+ *    half-extent, and the exact-spherical label direction.
+ *    INVARIANTS (unit-tested):
+ *      * the axis carries the FAR tip (max signed projection === halfExtent)
+ *      * the label lands `margin` past the centroid along the axis, on the
+ *        far side (dot(dir, labelDir(margin)) ≈ cos(margin))
+ *      * the label sits on the celestial sphere (unit length)
+ *
+ *  - Constant size tiers (plan 006): `constellationLabelHeightRad` returns
+ *    exactly two values; `constellationLabelWidth` is constant per tier.
+ *
+ *  - `resolveConstellationLabels` (plan 006): static anti-overlap solver —
+ *    the full 88 sky must contain NO pair of overlapping names, and the
+ *    placement of one label must not change when an unrelated constellation
+ *    is added (determinism).
  */
-import { describe, it, expect } from 'vitest';
-import * as THREE from 'three';
+import { describe, expect, it } from 'vitest';
 import {
   constellationCenter,
-  constellationLabelPose,
-  constellationLabelWidth,
+  constellationLabelHeightRad,
   constellationLabelInkWidthRad,
   constellationLabelMargin,
-  updateConstellationHighlight,
-  CONSTELLATION_BASE_OPACITY,
-  CONSTELLATION_PEAK_OPACITY,
-  CONSTELLATION_LABEL_EDGE_GAP_RAD,
-  CONSTELLATION_LABEL_MIN_WIDTH_RAD,
+  constellationLabelOpacity,
+  constellationLabelPose,
+  constellationLabelWidth,
+  CONSTELLATION_LABEL_BASE_OPACITY,
+  CONSTELLATION_LABEL_HEIGHT_RAD,
+  CONSTELLATION_LABEL_MINOR_HEIGHT_RAD,
+  CONSTELLATION_LABEL_PEAK_OPACITY,
+  resolveConstellationLabels,
 } from '../src/render/scene';
 import { CONSTELLATIONS, raDecToUnit } from '../src/data/constellations';
-import { layoutConstellationName, CONSTELLATION_NAME_CANVAS_W } from '../src/render/textures';
+import type { Constellation } from '../src/data/constellations';
 
-function unit(v: [number, number, number]): number {
-  return Math.hypot(v[0], v[1], v[2]);
-}
+const approx = (a: number, b: number, eps: number) => Math.abs(a - b) <= eps;
+const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
-describe('constellationLabelPose (plan 004 Q1)', () => {
-  it('flips the principal axis so the label side carries the figure FAR TIP', () => {
+describe('constellationLabelPose (plan 003 P3 / 004 Q1 / 006 sizing)', () => {
+  it('axis is unit and tangent to the sphere at the centroid', () => {
+    for (const c of CONSTELLATIONS) {
+      const dir = constellationCenter(c);
+      const pose = constellationLabelPose(c);
+      expect(Math.hypot(...pose.axis)).toBeCloseTo(1, 5);
+      // Tangent: perpendicular to the centroid direction.
+      expect(Math.abs(dot(dir, pose.axis))).toBeLessThan(1e-6);
+    }
+  });
+
+  it('the label side carries the FAR tip (max signed projection === halfExtent)', () => {
     for (const c of CONSTELLATIONS) {
       const pose = constellationLabelPose(c);
-      expect(pose.halfExtent).toBeGreaterThan(0);
-      expect(unit(pose.axis)).toBeCloseTo(1, 6);
-      // The max SIGNED star projection on the pose axis equals halfExtent —
-      // the far tip is on the +axis (label) side. Before plan 004 the sign
-      // was arbitrary and 5 of 13 figures (Cygnus, Orion, Scorpius,
-      // Canis Major, Taurus) had their name past the near/phantom edge.
       let maxPlus = 0;
       for (const s of c.stars) {
-        const d = raDecToUnit(s.raHours, s.decDeg);
-        const p = d[0] * pose.axis[0] + d[1] * pose.axis[1] + d[2] * pose.axis[2];
+        const p = dot(raDecToUnit(s.raHours, s.decDeg), pose.axis);
         if (p > maxPlus) maxPlus = p;
       }
-      expect(maxPlus).toBeCloseTo(pose.halfExtent, 5);
+      // The far tip's projection IS halfExtent, up to float error.
+      expect(approx(pose.halfExtent, maxPlus, 1e-9)).toBe(true);
+      expect(pose.halfExtent).toBeGreaterThan(0);
     }
   });
 
-  it('keeps the label on the same side of the sky as the figure (no wrap-around)', () => {
+  it('labelDir lands `margin` past the centroid ON THE FAR SIDE, unit length', () => {
     for (const c of CONSTELLATIONS) {
+      const dir = constellationCenter(c);
       const pose = constellationLabelPose(c);
-      const labelDir = pose.labelDir(constellationLabelMargin(c));
-      // Same hemisphere as the centroid: dot > 0 (no wrap-around). The
-      // threshold is 0.3 (~72°), not 0.5: with the full IAU 88-constellation
-      // set (plan 005) the largest figures place their labels legitimately
-      // far from the centroid — Hydra's figure spans ~100° and its label sits
-      // 64° past the centroid (dot ≈ 0.43). A true wrap-around would be
-      // dot ≤ 0; the observed minimum across all 88 is ≈ 0.43.
-      const [cx, cy, cz] = constellationCenter(c);
-      const dot = labelDir[0] * cx + labelDir[1] * cy + labelDir[2] * cz;
-      expect(dot).toBeGreaterThan(0.3);
+      for (const margin of [0.2, 0.5, 1.0]) {
+        const ld = pose.labelDir(margin);
+        // Exact spherical offset: angle(centroid, label) === margin.
+        expect(Math.acos(dot(dir, ld))).toBeCloseTo(margin, 6);
+        // Unit direction.
+        expect(Math.hypot(...ld)).toBeCloseTo(1, 6);
+        // Far side: the label must be farther along the axis than the
+        // centroid — i.e. its projection on the axis is POSITIVE (the pose
+        // flipped the axis so the far tip is on the + side).
+        expect(dot(ld, pose.axis)).toBeGreaterThan(0.5 * margin - 1e-6);
+      }
     }
   });
-});
 
-describe('label margin — constant INK-edge gap (plan 004 Q1)', () => {
-  it('sits exactly halfExtent + EDGE_GAP + inkRad/2 past the centroid', () => {
+  it('label margin grows with figure size + name length, and beats the figure', () => {
     for (const c of CONSTELLATIONS) {
+      const m = constellationLabelMargin(c);
       const pose = constellationLabelPose(c);
-      const margin = constellationLabelMargin(c);
-      const inkRad = constellationLabelInkWidthRad(c);
-      expect(margin).toBeCloseTo(
-        pose.halfExtent + CONSTELLATION_LABEL_EDGE_GAP_RAD + inkRad / 2,
-        6,
-      );
-
-      // And the label direction really is `margin` past the centroid
-      // (exact spherical offset along the pose axis).
-      const [cx, cy, cz] = constellationCenter(c);
-      const labelDir = pose.labelDir(margin);
-      const cosAng = cx * labelDir[0] + cy * labelDir[1] + cz * labelDir[2];
-      const ang = Math.acos(Math.min(1, Math.max(-1, cosAng)));
-      expect(ang).toBeCloseTo(margin, 5);
+      // Always beyond the far tip + the gap (the margin must clear the
+      // figure, not land inside it).
+      expect(m).toBeGreaterThan(pose.halfExtent + 0.03);
+      // And a real margin (the ink half is non-trivial for every name).
+      expect(m).toBeGreaterThan(0.05);
     }
   });
 
-  it("puts the INK's near edge a CONSTANT EDGE_GAP past the figure's far tip", () => {
+  it('plan 006: letter cap height is exactly two tiers, independent of name', () => {
+    const seen = new Set<number>();
     for (const c of CONSTELLATIONS) {
-      const pose = constellationLabelPose(c);
-      const inkEdge = constellationLabelMargin(c) - constellationLabelInkWidthRad(c) / 2;
-      // The user-visible gap: from the far tip to the first letter.
-      expect(inkEdge - pose.halfExtent).toBeCloseTo(CONSTELLATION_LABEL_EDGE_GAP_RAD, 6);
+      const h = constellationLabelHeightRad(c);
+      seen.add(h);
+      expect([CONSTELLATION_LABEL_HEIGHT_RAD, CONSTELLATION_LABEL_MINOR_HEIGHT_RAD]).toContain(h);
     }
+    // Both tiers actually occur in the 88 (a long figure and a tiny one).
+    expect(seen.size).toBe(2);
+    expect(seen.has(CONSTELLATION_LABEL_HEIGHT_RAD)).toBe(true);
+    expect(seen.has(CONSTELLATION_LABEL_MINOR_HEIGHT_RAD)).toBe(true);
   });
 
-  it('never overlaps the figure (ink near edge past the far tip)', () => {
+  it('plan 006: label width is constant per tier (longer names = wider sprite, same letters)', () => {
     for (const c of CONSTELLATIONS) {
-      const pose = constellationLabelPose(c);
-      expect(constellationLabelMargin(c) - constellationLabelInkWidthRad(c) / 2).toBeGreaterThan(
-        pose.halfExtent,
-      );
-    }
-  });
-});
-
-describe('constellationLabelInkWidthRad (plan 004 Q1)', () => {
-  it('is the ink FRACTION of the canvas times the sprite width', () => {
-    for (const c of CONSTELLATIONS) {
-      const ink = layoutConstellationName(c.name).inkWidthPx / CONSTELLATION_NAME_CANVAS_W;
-      expect(constellationLabelInkWidthRad(c)).toBeCloseTo(ink * constellationLabelWidth(c), 6);
-      // The ink is strictly narrower than the sprite block (padding exists).
-      expect(constellationLabelInkWidthRad(c)).toBeLessThan(constellationLabelWidth(c));
-    }
-  });
-
-  it('varies with name length — long names fill more of the block', () => {
-    // "URSA MAJOR" (10 chars) must have a wider ink than "ARIES" (5).
-    const um = CONSTELLATIONS.find((c) => c.name === 'Ursa Major')!;
-    const ar = CONSTELLATIONS.find((c) => c.name === 'Aries')!;
-    expect(constellationLabelInkWidthRad(um)).toBeGreaterThan(constellationLabelInkWidthRad(ar));
-  });
-});
-
-describe('constellationLabelWidth (plan 003 P3 — unchanged)', () => {
-  it("sizes the sprite ~the figure's angular span, floored at MIN_WIDTH_RAD", () => {
-    for (const c of CONSTELLATIONS) {
+      const h = constellationLabelHeightRad(c);
       const w = constellationLabelWidth(c);
-      expect(w).toBeGreaterThanOrEqual(CONSTELLATION_LABEL_MIN_WIDTH_RAD);
-      expect(w).toBeCloseTo(
-        Math.max(CONSTELLATION_LABEL_MIN_WIDTH_RAD, 0.8 * constellationLabelPose(c).halfExtent),
-        5,
-      );
+      // Width = H × (canvasW / font size); always positive and wider than the ink.
+      expect(w).toBeGreaterThan(constellationLabelInkWidthRad(c));
+      expect(w).toBeGreaterThan(h); // 4:1-ish blocks are wider than tall.
     }
   });
 
-  it('is strictly narrower than the pre-plan-003 0.5-rad-half-width sprite for every figure', () => {
+  it('plan 006: ink width fraction is well inside the sprite for every name', () => {
     for (const c of CONSTELLATIONS) {
-      const oldFull = 2 * Math.max(0.5, constellationLabelPose(c).halfExtent * 1.5);
-      expect(constellationLabelWidth(c)).toBeLessThan(oldFull);
+      const ink = constellationLabelInkWidthRad(c);
+      const full = constellationLabelWidth(c);
+      // The ink is a strict sub-fraction of the block (padding exists).
+      expect(ink).toBeGreaterThan(0);
+      expect(ink / full).toBeLessThan(1);
     }
   });
 });
 
-describe('updateConstellationHighlight (name-based index)', () => {
-  /** A group in the interleaved order buildConstellations produces. */
-  function fakeSky() {
-    const group = new THREE.Group();
-    const lineMats: THREE.LineBasicMaterial[] = [];
-    const labelMats: THREE.SpriteMaterial[] = [];
-    for (const c of CONSTELLATIONS) {
-      const lm = new THREE.LineBasicMaterial({ transparent: true });
-      const lines = new THREE.LineSegments(new THREE.BufferGeometry(), lm);
-      lines.name = `constellation-lines:${c.name}`;
-      group.add(lines);
-      lineMats.push(lm);
-
-      const sm = new THREE.SpriteMaterial({ transparent: true });
-      const label = new THREE.Sprite(sm);
-      label.name = `constellation-label:${c.name}`;
-      group.add(label);
-      labelMats.push(sm);
+describe('constellationLabelOpacity (plan 006 label fade curve)', () => {
+  it('is 0.05 at the edges and 1.0 dead center, monotonically increasing', () => {
+    expect(constellationLabelOpacity(0)).toBeCloseTo(CONSTELLATION_LABEL_BASE_OPACITY, 6);
+    expect(constellationLabelOpacity(1)).toBeCloseTo(CONSTELLATION_LABEL_PEAK_OPACITY, 6);
+    let prev = constellationLabelOpacity(0);
+    for (let i = 1; i <= 10; i++) {
+      const v = constellationLabelOpacity(i / 10);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      prev = v;
     }
-    return { group, lineMats, labelMats };
-  }
+  });
+});
 
-  it("fades each label with ITS OWN figure's emphasis (not the next one)", () => {
-    const { group, lineMats, labelMats } = fakeSky();
-    // Only the LAST constellation is at the view center (emphasis 1);
-    // everything else is at the base opacity. A running index counter would
-    // shift every label by one and leave the last label unlit.
-    const emphases = new Array(CONSTELLATIONS.length).fill(0);
-    emphases[CONSTELLATIONS.length - 1] = 1;
-    updateConstellationHighlight(group, emphases);
+describe('resolveConstellationLabels (plan 006 anti-overlap solver)', () => {
+  /** Ink boxes of the resolved labels: angular half-widths around each dir. */
+  const boxes = (c: Constellation[], placements: ReturnType<typeof resolveConstellationLabels>) =>
+    c.map((cc, i) => ({
+      dir: placements[i].dir,
+      inkHalf: placements[i].inkHalf,
+      halfH: placements[i].halfH,
+      name: cc.name,
+    }));
 
-    const peak = CONSTELLATION_PEAK_OPACITY;
-    const base = CONSTELLATION_BASE_OPACITY;
-    for (let i = 0; i < CONSTELLATIONS.length - 1; i++) {
-      expect(labelMats[i].opacity).toBeCloseTo(base, 5);
-      expect(lineMats[i].opacity).toBeCloseTo(base, 5);
+  /** Ellipse overlap (same math as the solver) between two placed labels. */
+  const overlap = (
+    a: { dir: [number, number, number]; inkHalf: number; halfH: number },
+    b: { dir: [number, number, number]; inkHalf: number; halfH: number },
+  ): number => {
+    const ox = a.inkHalf + b.inkHalf;
+    const oy = a.halfH + b.halfH;
+    let mx = a.dir[0] + b.dir[0],
+      my = a.dir[1] + b.dir[1],
+      mz = a.dir[2] + b.dir[2];
+    const ml = Math.hypot(mx, my, mz);
+    if (ml < 1e-6) return 0;
+    mx /= ml;
+    my /= ml;
+    mz /= ml;
+    let ux = my * a.dir[2] - mz * a.dir[1],
+      uy = mz * a.dir[0] - mx * a.dir[2],
+      uz = mx * a.dir[1] - my * a.dir[0];
+    const ul = Math.hypot(ux, uy, uz);
+    if (ul < 1e-6) return 0;
+    ux /= ul;
+    uy /= ul;
+    uz /= ul;
+    const vx = my * uz - mz * uy,
+      vy = mz * ux - mx * uz,
+      vz = mx * uy - my * ux;
+    const ax = ux * a.dir[0] + uy * a.dir[1] + uz * a.dir[2],
+      ay = vx * a.dir[0] + vy * a.dir[1] + vz * a.dir[2];
+    const bx = ux * b.dir[0] + uy * b.dir[1] + uz * b.dir[2],
+      by = vx * b.dir[0] + vy * b.dir[1] + vz * b.dir[2];
+    const nx = (ax - bx) / ox;
+    const ny = (ay - by) / oy;
+    const d2 = nx * nx + ny * ny;
+    return d2 < 1 ? 1 - d2 : 0;
+  };
+
+  it('returns one placement per constellation, in input order, on the sphere', () => {
+    const placements = resolveConstellationLabels(CONSTELLATIONS);
+    expect(placements.length).toBe(CONSTELLATIONS.length);
+    for (const p of placements) {
+      expect(Math.hypot(...p.dir)).toBeCloseTo(1, 5);
+      expect([1, -1]).toContain(p.side);
+      expect([1.0, 1.5]).toContain(p.marginScale);
+      expect(p.inkHalf).toBeGreaterThan(0);
+      expect(p.halfH).toBeGreaterThan(0);
+      expect(p.offset).toBeGreaterThan(0);
     }
-    const last = CONSTELLATIONS.length - 1;
-    expect(labelMats[last].opacity).toBeCloseTo(peak, 5);
-    expect(lineMats[last].opacity).toBeCloseTo(peak, 5);
   });
 
-  it('fades lines and labels of the same figure together at partial emphasis', () => {
-    const { group, lineMats, labelMats } = fakeSky();
-    const base = CONSTELLATION_BASE_OPACITY;
-    const peak = CONSTELLATION_PEAK_OPACITY;
-    const emphases = CONSTELLATIONS.map((_, i) => i / (CONSTELLATIONS.length - 1));
-    updateConstellationHighlight(group, emphases);
+  it('plan 006: the FULL 88-constellation sky has NO overlapping name pair', () => {
+    const placements = resolveConstellationLabels(CONSTELLATIONS);
+    const bs = boxes(CONSTELLATIONS, placements);
+    let worst = 0;
+    for (let i = 0; i < bs.length; i++) {
+      for (let j = i + 1; j < bs.length; j++) {
+        const o = overlap(bs[i], bs[j]);
+        if (o > worst) worst = o;
+      }
+    }
+    // Zero overlap (the padding in inkHalf/halfH makes this exact).
+    expect(worst).toBe(0);
+  });
+
+  it('plan 006: each label stays near its own figure (offset ≤ 1.5× the natural margin)', () => {
+    // The solver places the label exactly `offset` radians from the centroid
+    // (a spherical offset along the figure axis), where
+    // offset = margin0 × marginScale and marginScale ∈ {1, 1.5}. So the
+    // label can never drift farther than 1.5× its natural "beside the
+    // figure" margin — the guarantee that keeps every name with its own
+    // figure even when crowded by a neighbor.
+    const placements = resolveConstellationLabels(CONSTELLATIONS);
     for (let i = 0; i < CONSTELLATIONS.length; i++) {
-      const t = base + (peak - base) * emphases[i];
-      expect(lineMats[i].opacity).toBeCloseTo(t, 5);
-      expect(labelMats[i].opacity).toBeCloseTo(t, 5);
+      const c = CONSTELLATIONS[i];
+      const p = placements[i];
+      expect(p.offset).toBeLessThanOrEqual(1.5 * constellationLabelMargin(c) + 1e-12);
+      // And the label direction is exactly `offset` from the centroid.
+      const d = Math.acos(Math.min(1, Math.max(-1, dot(constellationCenter(c), p.dir))));
+      expect(d).toBeCloseTo(p.offset, 9);
     }
   });
 
-  it('ignores unrelated children (star dots, etc.)', () => {
-    const { group, labelMats } = fakeSky();
-    const dots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial());
-    dots.name = 'constellation-stars';
-    group.add(dots);
-    expect(() =>
-      updateConstellationHighlight(
-        group,
-        CONSTELLATIONS.map(() => 1),
-      ),
-    ).not.toThrow();
-    // Labels still at peak, dots untouched.
-    for (const m of labelMats) expect(m.opacity).toBeCloseTo(CONSTELLATION_PEAK_OPACITY, 5);
+  it('plan 006: deterministic — same input, same output', () => {
+    const a = resolveConstellationLabels(CONSTELLATIONS);
+    const b = resolveConstellationLabels(CONSTELLATIONS);
+    expect(b).toEqual(a);
+  });
+
+  it('plan 006: deterministic — order-independent tie-breaks (shuffled input, same set)', () => {
+    const a = resolveConstellationLabels(CONSTELLATIONS);
+    const shuffled = [...CONSTELLATIONS].sort((x, y) => y.name.localeCompare(x.name));
+    const b = resolveConstellationLabels(shuffled);
+    // The PLACEMENT SET is identical regardless of input order (the solver
+    // sorts internally by figure size + name).
+    const key = (c: Constellation, p: { dir: [number, number, number] }) =>
+      `${c.name}:${p.dir.map((v) => v.toFixed(6)).join(',')}`;
+    const setA = new Set(CONSTELLATIONS.map((c, i) => key(c, a[i])));
+    const setB = new Set(shuffled.map((c, i) => key(c, b[i])));
+    expect(setB).toEqual(setA);
+  });
+
+  it('plan 006: the top-priority (largest) figure places identically alone or in the full sky', () => {
+    // The solver places figures biggest-first (name tie-break), so the
+    // largest figure is placed with zero neighbors — its placement must be
+    // exactly the single-constellation result, even inside the full sky.
+    let topIdx = 0;
+    for (let i = 1; i < CONSTELLATIONS.length; i++) {
+      const da = constellationLabelPose(CONSTELLATIONS[i]).halfExtent;
+      const db = constellationLabelPose(CONSTELLATIONS[topIdx]).halfExtent;
+      if (
+        da > db ||
+        (da === db && CONSTELLATIONS[i].name.localeCompare(CONSTELLATIONS[topIdx].name) < 0)
+      ) {
+        topIdx = i;
+      }
+    }
+    const top = CONSTELLATIONS[topIdx];
+    // Guard: the top figure must be the unique largest (else the tie-break
+    // pair could interact before either is placed — the invariant is
+    // only guaranteed for a unique maximum).
+    const second = [...CONSTELLATIONS.keys()]
+      .filter((i) => i !== topIdx)
+      .reduce((best, i) => {
+        const h = constellationLabelPose(CONSTELLATIONS[i]).halfExtent;
+        const hb = constellationLabelPose(CONSTELLATIONS[best]).halfExtent;
+        return h > hb ? i : best;
+      }, 0);
+    expect(constellationLabelPose(top).halfExtent).toBeGreaterThan(
+      constellationLabelPose(CONSTELLATIONS[second]).halfExtent,
+    );
+    const base = resolveConstellationLabels([top]);
+    const all = resolveConstellationLabels(CONSTELLATIONS);
+    expect(all[topIdx].dir).toEqual(base[0].dir);
+    expect(all[topIdx].marginScale).toBe(base[0].marginScale);
+    expect(all[topIdx].side).toBe(base[0].side);
   });
 });

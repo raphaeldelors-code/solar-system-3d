@@ -296,10 +296,10 @@ export function buildScene(
   starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
   const starMat = new THREE.PointsMaterial({
     color: 0xdde6f5,
-    size: 1.6,
+    size: 1.3,
     sizeAttenuation: false,
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.55,
   });
   scene.add(new THREE.Points(starGeo, starMat));
 
@@ -682,8 +682,8 @@ export function constellationLabelPose(c: Constellation): ConstellationLabelPose
  * view center, linearly fading to zero by
  * {@link CONSTELLATION_HILITE_OUT_DEG}. Pure — unit-tested in Node.
  */
-export const CONSTELLATION_HILITE_IN_DEG = 15;
-export const CONSTELLATION_HILITE_OUT_DEG = 40;
+export const CONSTELLATION_HILITE_IN_DEG = 22;
+export const CONSTELLATION_HILITE_OUT_DEG = 48;
 export function constellationEmphasis(
   center: readonly [number, number, number],
   viewDir: readonly [number, number, number],
@@ -701,31 +701,70 @@ export function constellationEmphasis(
 }
 
 /** Baseline line opacity when a constellation is at the view edge (D4). */
-export const CONSTELLATION_BASE_OPACITY = 0.32;
+export const CONSTELLATION_BASE_OPACITY = 0.28;
 /** Peak line opacity when a constellation is dead center in the view (D4). */
-export const CONSTELLATION_PEAK_OPACITY = 0.95;
+export const CONSTELLATION_PEAK_OPACITY = 1.0;
+/**
+ * Name-label opacity curve (plan 006): labels get their OWN, steeper fade
+ * than the lines — peripheral names drop to ~invisible (they clutter the
+ * 120° sky view) while center names reach full opacity, so the view center
+ * reads clearly against the dimmed background starfield.
+ */
+export const CONSTELLATION_LABEL_BASE_OPACITY = 0.05;
+export const CONSTELLATION_LABEL_PEAK_OPACITY = 1.0;
+export const CONSTELLATION_LABEL_GAMMA = 0.75;
+/** Label opacity (0..1) at a given view emphasis — pure, unit-tested. */
+export function constellationLabelOpacity(emph: number): number {
+  return (
+    CONSTELLATION_LABEL_BASE_OPACITY +
+    (CONSTELLATION_LABEL_PEAK_OPACITY - CONSTELLATION_LABEL_BASE_OPACITY) *
+      Math.pow(emph, CONSTELLATION_LABEL_GAMMA)
+  );
+}
 
 /**
- * Name-label geometry (plan 003 P3, re-anchored in plan 004 Q1). The
- * distance is defined from what the USER SEES — the ink's near edge, not an
- * invisible sprite-padding edge:
+ * Name-label geometry (plan 003 P3, re-anchored plan 004 Q1, re-sized +
+ * de-cluttered in plan 006). The distance is defined from what the USER
+ * SEES — the ink's near edge, not an invisible sprite-padding edge:
  *
  * - the label BLOCK (sprite) center sits at `constellationLabelMargin(c)` =
- *   `halfExtent + EDGE_GAP + inkRad/2`, where `halfExtent` is the figure's
- *   far tip on the label side (the pose flips the principal axis to carry
- *   the far tip);
+ *   `halfExtent + EDGE_GAP + inkRad/2` (× the solver's marginScale), where
+ *   `halfExtent` is the figure's far tip on the label side (the pose flips
+ *   the principal axis to carry the far tip);
  * - so the INK's near edge lands exactly `CONSTELLATION_LABEL_EDGE_GAP_RAD`
- *   (~2°) past the figure's far tip — ONE constant, same visible gap for
- *   all 13 names. The old 0.12 block gap (plan 003) looked like 1.2–5.3°
- *   depending on how much of the 4:1 sprite the ink filled (Leo 28% …
- *   Ursa Major 99%), and for 5 figures the name went past a phantom edge.
+ *   (~2°) past the figure's far tip.
  *
- * The sprite width (`constellationLabelWidth`) is unchanged — the user is
- * not complaining about text size, and it stays ~the figure's own span.
+ * Plan 006: text size is now a CONSTANT angular cap height per tier (the
+ * old span-following size made Hydra's name ~13× taller than Canis
+ * Minor's), and the SIDE + margin of every label come from
+ * {@link resolveConstellationLabels} — a static solver that keeps the 88
+ * names from overlapping in crowded bands (winter sky: Orion/Taurus/
+ * Auriga/Gemini/Cetus all at once).
  */
 export const CONSTELLATION_LABEL_EDGE_GAP_RAD = 0.035; // ~2° from tip to ink edge
-export const CONSTELLATION_LABEL_MIN_WIDTH_RAD = 0.2; // sprite floor (≈3° text)
-export const CONSTELLATION_LABEL_SPAN = 0.8; // fullW as fraction of halfExtent
+
+/**
+ * Constellation text sizing (plan 006): every name has a CONSTANT angular
+ * cap height — only TWO tiers, so the difference reads as deliberate
+ * hierarchy (major vs. minor figures), not noise. Sprite width is derived
+ * from the 4:1 canvas: the canvas holds `512/s` cap heights (128 px tall,
+ * font s px caps), so the full block is `H × 512/s` wide.
+ */
+export const CONSTELLATION_LABEL_HEIGHT_RAD = 0.016; // major tier, ~0.9° cap height
+export const CONSTELLATION_LABEL_MINOR_HEIGHT_RAD = 0.011; // minor tier, ~0.6°
+export const CONSTELLATION_LABEL_MINOR_MAX_SPAN_RAD = 0.018; // ≤~1° figure → minor tier
+/** Cap height (radians) of a constellation's name label — constant per tier. */
+export function constellationLabelHeightRad(c: Constellation): number {
+  return constellationLabelPose(c).halfExtent <= CONSTELLATION_LABEL_MINOR_MAX_SPAN_RAD
+    ? CONSTELLATION_LABEL_MINOR_HEIGHT_RAD
+    : CONSTELLATION_LABEL_HEIGHT_RAD;
+}
+/** Angular FULL width (radians) of a constellation's name sprite (4:1 block). */
+export function constellationLabelWidth(c: Constellation): number {
+  const h = constellationLabelHeightRad(c);
+  const s = layoutConstellationName(c.name).fontSize;
+  return h * (CONSTELLATION_NAME_CANVAS_W / s);
+}
 
 /**
  * Angular width (radians) of the ACTUAL letter ink: the ink's fraction of
@@ -753,12 +792,159 @@ export function constellationLabelMargin(c: Constellation): number {
   );
 }
 
-/** Angular FULL width (radians) of a constellation's name sprite. */
-export function constellationLabelWidth(c: Constellation): number {
-  return Math.max(
-    CONSTELLATION_LABEL_MIN_WIDTH_RAD,
-    constellationLabelPose(c).halfExtent * CONSTELLATION_LABEL_SPAN,
-  );
+/** One resolved label placement (plan 006 solver output). */
+export interface ConstellationLabelPlacement {
+  /** Pose-axis side used: +1 = far-tip side (default), −1 = near side. */
+  side: 1 | -1;
+  /** Multiplier on the default margin (1.0 or 1.5). */
+  marginScale: number;
+  /** Final unit direction of the label block center (scene frame). */
+  dir: [number, number, number];
+  /** Angular half-extents of the INK (overlap math uses ink, not padding). */
+  inkHalf: number;
+  /** Angular half-height of the name (tier cap height / 2 + a hair). */
+  halfH: number;
+  /** Angular distance of the label from the figure centroid (diagnostics). */
+  offset: number;
+}
+
+/** Margin multipliers the solver may apply (default, pushed back ~50%). */
+const LABEL_MARGIN_SCALES = [1.0, 1.5];
+/** Side candidates: far-tip side first (default), then the near side. */
+const LABEL_SIDE_CANDIDATES: Array<1 | -1> = [1, -1];
+/** Extra clearance (radians) added around ink when measuring overlap. */
+const LABEL_OVERLAP_PAD_RAD = 0.004;
+/** Cost of taking the ×1.5 margin — a nudge, not a ban (crowded sky). */
+const LABEL_FAR_MARGIN_COST = 0.25;
+
+/**
+ * Static anti-overlap solver for the 88 name labels (plan 006). The sky is
+ * fixed, so this runs ONCE at build: each constellation gets a small
+ * candidate set {side ±1} × {marginScale 1.0/1.5}; constellations are
+ * placed greedily, BIGGEST FIGURES FIRST (their names have priority — the
+ * small ones detour), and each picks the candidate minimizing the sum of
+ * ellipse-overlap penalties against already-placed neighbors (labels
+ * approximated as tangent-plane ellipses at the pair midpoint) plus a small
+ * cost for the pushed-back margin. Pure and deterministic — unit-tested,
+ * including a full-sky "no two of the 88 overlap" assertion.
+ */
+export function resolveConstellationLabels(list: Constellation[]): ConstellationLabelPlacement[] {
+  const items = list.map((c, i) => {
+    const pose = constellationLabelPose(c);
+    const dir = constellationCenter(c);
+    return {
+      i,
+      pose,
+      dir,
+      margin0: constellationLabelMargin(c),
+      inkHalf: constellationLabelInkWidthRad(c) / 2,
+      halfH: constellationLabelHeightRad(c) / 2 + LABEL_OVERLAP_PAD_RAD / 2,
+    };
+  });
+  // Deterministic order: big figures first, name as tie-break.
+  const order = items
+    .map((it) => it.i)
+    .sort((a, b) => {
+      const d = items[b].pose.halfExtent - items[a].pose.halfExtent;
+      return d !== 0 ? d : list[a].name.localeCompare(list[b].name);
+    });
+
+  const result: Array<ConstellationLabelPlacement | null> = new Array(list.length).fill(null);
+
+  for (const i of order) {
+    const it = items[i];
+    let best: {
+      score: number;
+      side: 1 | -1;
+      marginScale: number;
+      dir: [number, number, number];
+      offset: number;
+    } | null = null;
+
+    for (const side of LABEL_SIDE_CANDIDATES) {
+      for (const marginScale of LABEL_MARGIN_SCALES) {
+        const m = it.margin0 * marginScale;
+        // Spherical offset from the centroid along ± the pose axis.
+        const co = Math.cos(m);
+        const so = side * Math.sin(m);
+        const dir: [number, number, number] = [
+          it.dir[0] * co + it.pose.axis[0] * so,
+          it.dir[1] * co + it.pose.axis[1] * so,
+          it.dir[2] * co + it.pose.axis[2] * so,
+        ];
+        let score = LABEL_FAR_MARGIN_COST * (marginScale - 1);
+        for (const j of order) {
+          const other = result[j];
+          if (!other) continue;
+          score += labelOverlapPenalty(it, dir, other);
+        }
+        if (!best || score < best.score) {
+          best = {
+            score,
+            side,
+            marginScale,
+            dir,
+            offset: m, // |angular offset| — the offset is exactly m by construction
+          };
+        }
+      }
+    }
+    const b = best!;
+    result[i] = {
+      side: b.side,
+      marginScale: b.marginScale,
+      dir: b.dir,
+      inkHalf: it.inkHalf + LABEL_OVERLAP_PAD_RAD / 2,
+      halfH: it.halfH,
+      offset: b.offset,
+    };
+  }
+  return result as ConstellationLabelPlacement[];
+}
+
+/**
+ * Ellipse overlap penalty between a candidate label (inkHalf/halfH around
+ * `dir`) and an already-placed one: project both centers onto the tangent
+ * plane at their midpoint and test the combined ellipse (conservative —
+ * the per-label frames are only slightly rotated at these separations).
+ * Returns 0 when clear, the (1 − normalized distance²) shortfall when not.
+ */
+function labelOverlapPenalty(
+  it: { inkHalf: number; halfH: number },
+  dir: [number, number, number],
+  other: ConstellationLabelPlacement,
+): number {
+  const ox = it.inkHalf + other.inkHalf;
+  const oy = it.halfH + other.halfH;
+  // Midpoint tangent frame (fallback if the dirs are ~antipodal — they
+  // never are in practice: labels stay within ~90° of their centroids).
+  let mx = dir[0] + other.dir[0],
+    my = dir[1] + other.dir[1],
+    mz = dir[2] + other.dir[2];
+  const ml = Math.hypot(mx, my, mz);
+  if (ml < 1e-6) return 0;
+  mx /= ml;
+  my /= ml;
+  mz /= ml;
+  let ux = my * dir[2] - mz * dir[1],
+    uy = mz * dir[0] - mx * dir[2],
+    uz = mx * dir[1] - my * dir[0];
+  const ul = Math.hypot(ux, uy, uz);
+  if (ul < 1e-6) return 0;
+  ux /= ul;
+  uy /= ul;
+  uz /= ul;
+  const vx = my * uz - mz * uy,
+    vy = mz * ux - mx * uz,
+    vz = mx * uy - my * ux;
+  const ax = ux * dir[0] + uy * dir[1] + uz * dir[2],
+    ay = vx * dir[0] + vy * dir[1] + vz * dir[2];
+  const bx = ux * other.dir[0] + uy * other.dir[1] + uz * other.dir[2],
+    by = vx * other.dir[0] + vy * other.dir[1] + vz * other.dir[2];
+  const nx = (ax - bx) / ox;
+  const ny = (ay - by) / oy;
+  const d2 = nx * nx + ny * ny;
+  return d2 < 1 ? 1 - d2 : 0;
 }
 
 /**
@@ -813,8 +999,14 @@ export function buildConstellations(): THREE.Group {
     depthWrite: false,
   });
 
+  // Plan 006: resolve every label's side/margin/direction ONCE so the 88
+  // names never overlap (shared deterministic solver, same order as the
+  // input list).
+  const placements = resolveConstellationLabels(CONSTELLATIONS);
+
   const dotVerts: number[] = [];
-  for (const c of CONSTELLATIONS) {
+  for (let i = 0; i < CONSTELLATIONS.length; i++) {
+    const c = CONSTELLATIONS[i];
     const pos = c.stars.map((s) => {
       const [x, y, z] = raDecToUnit(s.raHours, s.decDeg);
       return [x * CONSTELLATION_RADIUS, y * CONSTELLATION_RADIUS, z * CONSTELLATION_RADIUS];
@@ -836,32 +1028,33 @@ export function buildConstellations(): THREE.Group {
     lines.name = `constellation-lines:${c.name}`;
     group.add(lines);
 
-    // Name label (D3/D7, plan 003 P3, re-anchored plan 004 Q1): elegant
-    // lettering placed BESIDE the figure, with a CONSTANT visible gap
+    // Name label (D3/D7, plan 003 P3, re-anchored plan 004 Q1, plan 006):
+    // elegant lettering BESIDE the figure with a CONSTANT visible gap
     // (CONSTELLATION_LABEL_EDGE_GAP_RAD, ~2°) from the figure's FAR TIP to
-    // the ink's near edge — the pose carries the far tip on the label side,
-    // and the margin includes half the actual letter ink, so every name
-    // reads at the same distance from its figure. The sprite is ~the
-    // figure's own angular span (see constellationLabelWidth). depthTest
-    // off so the sky reads cleanly in front of / behind planets alike.
-    const pose = constellationLabelPose(c);
-    const [lx, ly, lz] = pose.labelDir(constellationLabelMargin(c));
+    // the ink's near edge — the margin includes half the actual letter ink,
+    // so every name reads at the same distance from its figure. The SIDE +
+    // margin come from the static anti-overlap solver (plan 006) and the
+    // letter size is a constant per-tier cap height (see
+    // constellationLabelHeightRad). depthTest off so the sky reads cleanly
+    // in front of / behind planets alike.
+    const placement = placements[i];
     const labelTex = makeConstellationNameTexture(c.name);
     const labelMat = new THREE.SpriteMaterial({
       map: labelTex,
       depthTest: false,
       transparent: true,
-      opacity: CONSTELLATION_BASE_OPACITY,
+      opacity: CONSTELLATION_LABEL_BASE_OPACITY,
     });
     const label = new THREE.Sprite(labelMat);
-    // Texture is 4:1; the sprite's world width spans the figure's angular
-    // extent (so the name fits the figure) at the dome radius.
+    // Texture is 4:1; the width = constant cap height × canvas/font ratio
+    // (see constellationLabelWidth) so the LETTER size never varies per
+    // name — only the number of letters does.
     const fullW = constellationLabelWidth(c) * (CONSTELLATION_RADIUS - 90);
     label.scale.set(fullW, fullW / 4, 1);
     label.position.set(
-      lx * (CONSTELLATION_RADIUS - 90),
-      ly * (CONSTELLATION_RADIUS - 90),
-      lz * (CONSTELLATION_RADIUS - 90),
+      placement.dir[0] * (CONSTELLATION_RADIUS - 90),
+      placement.dir[1] * (CONSTELLATION_RADIUS - 90),
+      placement.dir[2] * (CONSTELLATION_RADIUS - 90),
     );
     label.name = `constellation-label:${c.name}`;
     group.add(label);
@@ -930,7 +1123,10 @@ export function updateConstellationHighlight(
     if (idx === undefined) continue;
     const emph = emphases[idx] ?? 0;
     const t =
-      CONSTELLATION_BASE_OPACITY + (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph;
+      child instanceof THREE.Sprite
+        ? constellationLabelOpacity(emph)
+        : CONSTELLATION_BASE_OPACITY +
+          (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph;
     ((child as THREE.LineSegments | THREE.Sprite).material as THREE.Material).opacity =
       t * presence;
   }

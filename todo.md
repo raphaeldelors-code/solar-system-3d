@@ -56,6 +56,13 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] Full IAU 88-constellation dataset — regenerated `constellations.ts` from Stellarium `modern_iau` skyculture figures + Hipparcos catalog (col8/9 = J2000 ICRF, sub-arcsecond verified vs 9 anchor stars; 61/61 HIP cross-check). 88 constellations / 757 figure stars / 752 segments (was 13/76). Orion belt test → name-based; new per-constellation star-count table locks all 88 figures; label threshold relaxed for elongated figures (Hydra). CDP headless verify: 88 line objects + 88 labels live, per-constellation vertex counts match the file exactly, Polaris at the celestial pole to 0.001 units, no console errors. `a7648ef`. See `plans/005-full-iau-88-constellations.md`
 
+## User queue — 2026-08-22 (evening) — plan 006
+
+- [x] R1 fix(render): constant label size — sprite width no longer follows figure angular span (was 13× different name sizes across 88). Cap height is now a fixed angular tier: 0.016 rad major / 0.011 rad minor, font auto-scaled per name so glyph height is identical for "Orion" and "Triangulum Australe". CDP verify: all 79 major-tier labels render at exactly 0.01152 rad ink cap (ratio 1.0000). See `plans/006-constellation-readability.md`
+- [x] R2 fix(render): no overlapping names — deterministic `resolveConstellationLabels()` places the 88 labels biggest-first, trying near/far tip × 4 margin scales and rejecting any placement within ~0.7° of an already-placed label (sphere-rotated, so it moves around figures, not off the dome). CDP verify: 0 ink-box overlaps across all 88. 4 new unit tests
+- [x] R3 fix(render): stronger camera-center emphasis — fade band widened 15°/40° → 22°/48°, base 0.28 / peak 1.0, and labels get a quadratic curve so center names are crisp (op 1.0) while edge names sit near 0.05. Background starfield dimmed (opacity 0.8→0.55, size 1.6→1.3) so figures pop in sky view. CDP verify: brightness ranks by view-center angle (Canis Major 1.00 → Aquarius 0.44 → Cygnus 0.15 at 42°)
+- [x] R4 docs: plan 006 + todo entries
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined

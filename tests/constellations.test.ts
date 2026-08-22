@@ -262,19 +262,21 @@ describe('constellationEmphasis', () => {
     expect(constellationEmphasis([0, 0, 1], [0, 0, 1])).toBeCloseTo(1, 12);
     expect(at(0)).toBeCloseTo(1, 12);
   });
-  it('is 0 at/behind the fade ring (40°) and for the whole sky behind', () => {
-    expect(at(40)).toBeCloseTo(0, 9);
+  it('is 0 at/behind the fade ring (48°) and for the whole sky behind', () => {
+    expect(at(48)).toBeCloseTo(0, 9);
     expect(at(60)).toBeCloseTo(0, 12);
     expect(constellationEmphasis([0, 0, -1], [0, 0, 1])).toBeCloseTo(0, 12);
   });
-  it('is full inside the inner band (15°) and linear in between', () => {
+  it('is full inside the inner band (22°) and linear in between', () => {
     expect(at(10)).toBeCloseTo(1, 9);
-    expect(at(15)).toBeCloseTo(1, 9);
-    // band midpoint (15+40)/2 = 27.5° => exactly half emphasis
-    expect(at(27.5)).toBeCloseTo(0.5, 9);
-    // rises monotonically toward the center
-    expect(at(45)).toBeLessThan(at(30));
-    expect(at(30)).toBeLessThan(at(20));
-    expect(at(20)).toBeLessThan(at(10));
+    expect(at(22)).toBeCloseTo(1, 9);
+    // band midpoint (22+48)/2 = 35° => exactly half emphasis
+    expect(at(35)).toBeCloseTo(0.5, 9);
+    // rises monotonically toward the center (sampled INSIDE the fade band,
+    // where the value is strictly between 0 and 1)
+    expect(at(46)).toBeLessThan(at(44));
+    expect(at(44)).toBeLessThan(at(40));
+    expect(at(40)).toBeLessThan(at(30));
+    expect(at(30)).toBeLessThan(at(24));
   });
 });
