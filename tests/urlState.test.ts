@@ -34,6 +34,12 @@ describe('parseAppState', () => {
     expect(parseAppState(`${BASE}?ev=0`).eventsOpen).toBe(false);
   });
 
+  it('treats an absent fig as no key (figures off by default)', () => {
+    expect('figures' in parseAppState(`${BASE}?t=1`)).toBe(false);
+    expect(parseAppState(`${BASE}?fig=1`).figures).toBe(true);
+    expect(parseAppState(`${BASE}?fig=0`).figures).toBe(false);
+  });
+
   it('parses the camera triple', () => {
     const s = parseAppState(`${BASE}?cam=1,2,3,4,5,6`);
     expect(s.cam).toEqual({ pos: [1, 2, 3], target: [4, 5, 6] });
@@ -84,6 +90,7 @@ describe('encodeAppState', () => {
     expect(u.searchParams.get('b')).toBe('0');
     expect(u.searchParams.get('p')).toBe('1');
     expect(u.searchParams.get('rv')).toBe('1');
+    expect(u.searchParams.has('fig')).toBe(false); // figures off by default
   });
 
   it('encodes the events panel flag and round-trips it', () => {
@@ -123,6 +130,7 @@ describe('encodeAppState', () => {
       orbits: true,
       labels: false,
       belts: true,
+      figures: true,
       paused: false,
       cam: { pos: [10, 20, 30], target: [0, 0, 0] },
     };

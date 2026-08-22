@@ -27,6 +27,7 @@ import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
 import { CONSTELLATIONS, raDecToUnit, type Constellation } from '../data/constellations';
+import { FIGURE_FITS, figurePlacement, unitToRaDec } from '../data/figures';
 import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows';
 import {
   SUN_R,
@@ -174,6 +175,8 @@ export interface BuiltScene {
   starMat: THREE.PointsMaterial;
   /** Constellation figure lines + named-star markers (decorative sky). */
   constellations: THREE.Group;
+  /** Classic figure plates (plan 007); hidden until the Figures toggle. */
+  constellationFigures: THREE.Group;
   /** Per-frame scratch state (sorted body order for updatePositions). */
   userData: { updateOrder?: SceneBody[] };
   dispose: () => void;
@@ -306,6 +309,10 @@ export function buildScene(
   // Constellation figure lines + named-star markers on the celestial sphere.
   const constellations = buildConstellations();
   scene.add(constellations);
+
+  // Classic figure plates (plan 007): hidden until the Figures toggle.
+  const constellationFigures = buildConstellationFigures();
+  scene.add(constellationFigures);
 
   const disposables: { dispose: () => void }[] = [starGeo, starMat];
   const map = new Map<string, SceneBody>();
@@ -532,6 +539,12 @@ export function buildScene(
     for (const d of disposables) d.dispose();
     for (const b of belts) b.dispose();
     constellations.userData.dispose?.();
+    for (const child of constellationFigures.children) {
+      const mesh = child as THREE.Mesh;
+      mesh.geometry.dispose();
+      (mesh.material as THREE.MeshBasicMaterial).dispose();
+      // Plate textures stay in the shared FIGURE_TEX_CACHE for rebuilds.
+    }
     controls.dispose();
     renderer.dispose();
   }
@@ -546,6 +559,7 @@ export function buildScene(
     sunLight,
     starMat,
     constellations,
+    constellationFigures,
     userData: {},
     dispose,
   };
@@ -1088,6 +1102,136 @@ export function buildConstellations(): THREE.Group {
 
 /** name ("Lyra") -> constellation index, for highlight lookups by child name. */
 const CONSTELLATION_NAME_INDEX = new Map(CONSTELLATIONS.map((c, i) => [c.name, i]));
+
+/**
+ * Decoded-figure-texture cache: one THREE.Texture per plate URL for the
+ * page's lifetime, so scene rebuilds (scale toggles) reuse the same
+ * texture instead of re-fetching/re-decoding (same contract as the
+ * real-texture cache in render/realTextures.ts).
+ */
+const FIGURE_TEX_CACHE = new Map<string, THREE.Texture>();
+
+/** URL for a constellation's figure plate (served from Vite's `public/`). */
+export function figureTextureUrl(name: string): string {
+  return `constellation-figures/${name.toLowerCase().replace(/\s+/g, '_')}.png`;
+}
+
+/**
+ * Build the classic constellation figure plates (plan 007): one
+ * transparent, depth-tested plane per fitted constellation, lying on the
+ * sky dome's tangent plane at the figure's centroid. RA-anchored — the
+ * plate is a flat patch of sky, so it stays registered with the star
+ * lines while the camera moves (no billboard snapping).
+ *
+ * The group is HIDDEN by default; main.ts shows it with the "Figures"
+ * toggle and drives per-plate opacity through
+ * `updateConstellationFigureHighlights` (mirrors the D4 emphasis + Q2
+ * presence curves, capped so the plate stays a soft underlay).
+ */
+export function buildConstellationFigures(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'constellation-figures';
+  group.visible = false;
+
+  const loader = new THREE.TextureLoader();
+  for (const fit of FIGURE_FITS) {
+    const c = CONSTELLATIONS.find((cc) => cc.name === fit.constellation);
+    if (!c) continue;
+
+    // Load (cached) the plate; decode happens in the browser — the cache
+    // keeps rebuilds from re-fetching.
+    let tex = FIGURE_TEX_CACHE.get(fit.constellation);
+    if (!tex) {
+      tex = loader.load(figureTextureUrl(fit.constellation));
+      FIGURE_TEX_CACHE.set(fit.constellation, tex);
+    }
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+
+    // Anchor direction = mean of the stars' unit directions, shifted by the
+    // fit's optional RA/Dec offset (moves the art onto the figure's body
+    // rather than the mean star position — 1801 art is loose, not
+    // star-anchored, so the centroid alone misses the drawing).
+    let ax = 0,
+      ay = 0,
+      az = 0;
+    for (const s of c.stars) {
+      const [x, y, z] = raDecToUnit(s.raHours, s.decDeg);
+      ax += x;
+      ay += y;
+      az += z;
+    }
+    const m = Math.hypot(ax, ay, az) || 1;
+    const centroid: [number, number, number] = [ax / m, ay / m, az / m];
+    let placement: ReturnType<typeof figurePlacement>;
+    if (fit.offsetRAHours || fit.offsetDecDeg) {
+      const [raH, decD] = unitToRaDec(centroid);
+      const shifted = raDecToUnit(raH + (fit.offsetRAHours ?? 0), decD + (fit.offsetDecDeg ?? 0));
+      const sm = Math.hypot(shifted[0], shifted[1], shifted[2]) || 1;
+      placement = figurePlacement(fit, [shifted[0] / sm, shifted[1] / sm, shifted[2] / sm]);
+    } else {
+      placement = figurePlacement(fit, centroid);
+    }
+
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    // Just inside the dome (labels sit at RADIUS-90; plates slightly further
+    // out so the lines read in front of the plate).
+    const r = CONSTELLATION_RADIUS * 0.998;
+    mesh.position.set(
+      placement.position[0] * r,
+      placement.position[1] * r,
+      placement.position[2] * r,
+    );
+    // +Z outward (lookAt the origin from outside), image-up along the
+    // north-pole projection, then the per-plate in-plane rotation.
+    mesh.up.set(placement.upHint[0], placement.upHint[1], placement.upHint[2]);
+    mesh.lookAt(0, 0, 0);
+    mesh.rotateZ(placement.rotationRad);
+    mesh.scale.set(
+      placement.planeSize[0] * CONSTELLATION_RADIUS,
+      placement.planeSize[1] * CONSTELLATION_RADIUS,
+      1,
+    );
+    mesh.name = `constellation-figure:${fit.constellation}`;
+    group.add(mesh);
+  }
+  return group;
+}
+
+/**
+ * Per-frame opacity for the figure plates: each plate breathes with its
+ * constellation's D4 emphasis (view-center proximity) and the Q2
+ * camera-presence floor, so the art brightens when the figure is centered
+ * and recedes in close-ups. The cap keeps the plates a SOFT UNDERLAY —
+ * the star lines and name labels stay primary (plan 007).
+ */
+export function updateConstellationFigureHighlights(
+  group: THREE.Group,
+  emphases: ArrayLike<number>,
+  presence: number,
+): void {
+  for (const child of group.children) {
+    const name = child.name ?? '';
+    if (!name.startsWith('constellation-figure:')) continue;
+    const idx = CONSTELLATION_NAME_INDEX.get(name.slice('constellation-figure:'.length));
+    if (idx === undefined) continue;
+    const emph = emphases[idx] ?? 0;
+    // Plate opacity follows the LABEL curve (steeper, 0.28 base → 1.0
+    // peak) but capped at 0.85 so the art never outshines the lines.
+    // Opacity-only (no per-plate visible toggling): fading is smooth,
+    // the group's own visibility is the toggle's job.
+    const t = Math.min(0.85, constellationLabelOpacity(emph)) * presence;
+    (child as THREE.Mesh).visible = t > 0.005;
+    ((child as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = t;
+  }
+}
 
 /**
  * D4: fade each constellation's lines + name label by how close its center

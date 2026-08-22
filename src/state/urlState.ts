@@ -10,6 +10,7 @@
  *   o   = orbits  on/off (1/0)
  *   l   = labels  on/off (1/0)
  *   b   = belts   on/off (1/0)
+ *   fig = figure plates on/off (1/0)  (off by default)
  *   p   = paused  on/off (1/0)
  *   rv  = reversed time on/off (1/0)  (forward by default)
  *   ev  = events panel open/closed (1/0)  (closed by default)
@@ -31,6 +32,8 @@ export interface ViewState {
   orbits?: boolean;
   labels?: boolean;
   belts?: boolean;
+  /** Classic constellation figure plates (plan 007). Absent = off. */
+  figures?: boolean;
   paused?: boolean;
   /** Events panel open (true) / collapsed (false). Absent = collapsed. */
   eventsOpen?: boolean;
@@ -83,6 +86,8 @@ export function parseAppState(href: string): ViewState {
   if (labels !== undefined) state.labels = labels;
   const belts = flag(q.get('b'));
   if (belts !== undefined) state.belts = belts;
+  const figures = flag(q.get('fig'));
+  if (figures !== undefined) state.figures = figures;
   const paused = flag(q.get('p'));
   if (paused !== undefined) state.paused = paused;
   const reversed = flag(q.get('rv'));
@@ -121,6 +126,7 @@ export function encodeAppState(href: string, s: ViewState): string {
   setOrDel('o', s.orbits === undefined ? undefined : s.orbits ? '1' : '0');
   setOrDel('l', s.labels === undefined ? undefined : s.labels ? '1' : '0');
   setOrDel('b', s.belts === undefined ? undefined : s.belts ? '1' : '0');
+  setOrDel('fig', s.figures === undefined ? undefined : s.figures ? '1' : '0');
   setOrDel('p', s.paused === undefined ? undefined : s.paused ? '1' : '0');
   setOrDel('rv', s.reversed === undefined ? undefined : s.reversed ? '1' : '0');
   setOrDel('ev', s.eventsOpen === undefined ? undefined : s.eventsOpen ? '1' : '0');

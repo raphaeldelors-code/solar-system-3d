@@ -63,6 +63,12 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] R3 fix(render): stronger camera-center emphasis — fade band widened 15°/40° → 22°/48°, base 0.28 / peak 1.0, and labels get a quadratic curve so center names are crisp (op 1.0) while edge names sit near 0.05. Background starfield dimmed (opacity 0.8→0.55, size 1.6→1.3) so figures pop in sky view. CDP verify: brightness ranks by view-center angle (Canis Major 1.00 → Aquarius 0.44 → Cygnus 0.15 at 42°)
 - [x] R4 docs: plan 006 + todo entries — `acf2d9c`
 
+## User queue — 2026-08-22 (night) — plan 007 (in progress)
+
+- [ ] S1 feat(render): classic constellation figures (Star Walk 2-style) — PUBLIC-DOMAIN BODE PLATES ONLY (user: "Forget about the ai route too complicated. Let's go with the classic route only"). Prototype first: 6 constellations (Orion, Ursa Major, Cygnus, Lyra, Leo, Scorpius) with transparent PNG sprites billboarded near each figure, per-constellation fit params (offset/scale/rotation), fading with the center-emphasis curve, plus a "Figures: on/off" UI toggle. Then scale to all 88. See `plans/007-constellation-figures.md`
+- [ ] S2 fix(render): kill constellation label see-through — labels/figures must not show through planets/satellites or the sun (occluded or hidden when a body is between camera and them); distracting in solar-system view
+- [ ] S3 fix(nav): natural planet approach — replace the straight-down top view on planet pick with a "travel to the planet" fly-in that lands at a distance where the FULL planet + its satellites fit with a safe margin (never fills/cuts the screen)
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined

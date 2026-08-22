@@ -18,6 +18,7 @@ import {
   constellationEmphasis,
   constellationPresence,
   updateConstellationHighlight,
+  updateConstellationFigureHighlights,
   lerpScale,
   applyScaleMorph,
   reprojectOrbitLine,
@@ -143,6 +144,14 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
   // directions, never fully off.
   const presence = constellationPresence(built.camera.position.length());
   updateConstellationHighlight(built.constellations, CONSTELLATION_EMPHASES, presence);
+  // Plan 007: the classic figure plates breathe with the same curves.
+  if (figuresOn) {
+    updateConstellationFigureHighlights(
+      built.constellationFigures,
+      CONSTELLATION_EMPHASES,
+      presence,
+    );
+  }
 }
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
@@ -157,6 +166,8 @@ const findListEl = document.getElementById('find-list') as HTMLDivElement;
 const orbitsEl = document.getElementById('orbits') as HTMLInputElement;
 const labelsEl = document.getElementById('labels') as HTMLInputElement;
 const beltsEl = document.getElementById('belts') as HTMLInputElement;
+const figuresEl = document.getElementById('figures') as HTMLInputElement;
+let figuresOn = false;
 const shareBtn = document.getElementById('share') as HTMLButtonElement;
 const screenshotBtn = document.getElementById('screenshot') as HTMLButtonElement;
 const tooltipEl = document.getElementById('tooltip') as HTMLDivElement;
@@ -509,6 +520,9 @@ function applyToggles(): void {
   for (const field of built.belts) {
     field.mesh.visible = beltsEl.checked;
   }
+  // Plan 007: classic figure plates (the "Figures" toggle). The per-plate
+  // fade runs in the highlight pass; here we just switch the group.
+  built.constellationFigures.visible = figuresOn;
 }
 
 function fmtSpeed(): void {
@@ -880,6 +894,11 @@ beltsEl.addEventListener('change', () => {
   applyToggles();
   syncUrl();
 });
+figuresEl.addEventListener('change', () => {
+  figuresOn = figuresEl.checked;
+  applyToggles();
+  syncUrl();
+});
 
 window.addEventListener('resize', () => {
   built.camera.aspect = window.innerWidth / window.innerHeight;
@@ -911,6 +930,10 @@ if (urlState.scale) {
 if (urlState.orbits != null) orbitsEl.checked = urlState.orbits;
 if (urlState.labels != null) labelsEl.checked = urlState.labels;
 if (urlState.belts != null) beltsEl.checked = urlState.belts;
+if (urlState.figures != null) {
+  figuresEl.checked = urlState.figures;
+  figuresOn = urlState.figures;
+}
 if (urlState.paused != null) {
   clock.setPaused(urlState.paused);
   pauseBtn.textContent = urlState.paused ? 'Resume' : 'Pause';
@@ -939,6 +962,7 @@ function captureState(): ViewState {
     orbits: orbitsEl.checked,
     labels: labelsEl.checked,
     belts: beltsEl.checked,
+    figures: figuresOn,
     paused: clock.isPaused,
     eventsOpen: !eventsRowEl.hidden,
     cam: {
