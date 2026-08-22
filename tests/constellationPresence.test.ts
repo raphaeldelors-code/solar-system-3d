@@ -52,6 +52,28 @@ describe('constellationPresence', () => {
   });
 });
 
+describe('presence floor (plan 004 Q2)', () => {
+  it('is the MIDDLE (0.5) — between pre-P4 over-presence (≈1.0) and the 0.25 floor', () => {
+    // Pins the intent so a revert to 0.25 is a visible regression: the user
+    // found 0.25 "almost not there anymore" in close-ups (2026-08-21).
+    expect(CONSTELLATION_PRESENCE_FLOOR).toBe(0.5);
+  });
+
+  it('is at (a hair above) the floor in a close-up / overview view, full at the Sky anchor', () => {
+    // Default camera (0,16,30) → length 34; System anchor → 232. The ramp is
+    // gentle over 2→2756, so both sit within 0.1% of the floor — for the eye,
+    // on the floor. Assert the bound, not an exact match, so the test stays
+    // honest about the smoothstep.
+    for (const d of [34, 232]) {
+      expect(constellationPresence(d)).toBeGreaterThanOrEqual(CONSTELLATION_PRESENCE_FLOOR);
+      // ≤ ~1% above the floor — the sky reads as the flat "middle" here.
+      expect(constellationPresence(d)).toBeLessThan(CONSTELLATION_PRESENCE_FLOOR + 0.015);
+    }
+    // Sky anchor stays exactly full — the fix must not touch the sky view.
+    expect(constellationPresence(2756)).toBe(1);
+  });
+});
+
 describe('updateConstellationHighlight presence factor', () => {
   function fakeSky() {
     const group = new THREE.Group();

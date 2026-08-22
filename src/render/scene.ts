@@ -762,23 +762,28 @@ export function constellationLabelWidth(c: Constellation): number {
 }
 
 /**
- * Camera-distance presence for the constellation sky (plan 003 P4). The sky
- * is a full-sphere wraparound, so when the camera is CLOSE to a body (a
- * planet close-up) the constellations sweep across the whole frame behind
- * the planet and dominate the view. Instead of a constant multiplier the
- * sky's opacity gets a MULTIPLICATIVE presence factor: 0.25× close-up →
- * 1.0× exactly at the Sky anchor (measured 2756 for the 2026-08-21 data —
- * frameConstellations(4800, 102.8, 50°); the camera eases to a 120° FOV
- * there, and the sky tour holds that radius). System anchor (232) and the
- * default camera (34) stay at the floor. Never 0: the sky stays faintly
- * visible in close-ups so the stars don't blink out, and the smoothstep
- * transition is symmetric — zoom in to fade it, zoom out to restore it.
+ * Camera-distance presence for the constellation sky (plan 003 P4,
+ * re-centered plan 004 Q2). The sky is a full-sphere wraparound, so when the
+ * camera is CLOSE to a body (a planet close-up) the constellations sweep
+ * across the whole frame behind the planet and dominate the view. Instead of
+ * a constant multiplier the sky's opacity gets a MULTIPLICATIVE presence
+ * factor: 0.5× close-up → 1.0× exactly at the Sky anchor (measured 2756 for
+ * the 2026-08-21 data — frameConstellations(4800, 102.8, 50°); the camera
+ * eases to a 120° FOV there, and the sky tour holds that radius). Because
+ * FAR is so far out, every close-up and overview view (default camera 34,
+ * System anchor 232) sits within a hair of the floor — plan 003's 0.25×
+ * read as "almost not there anymore" (user, 2026-08-21), so the floor moved
+ * to 0.5: the middle between the old over-presence (≈1.0) and the 0.25
+ * floor. Never 0:
+ * the sky stays visible in close-ups so the stars don't blink out, and the
+ * smoothstep transition is symmetric — zoom in to fade it, zoom out to
+ * restore it.
  */
 export const CONSTELLATION_PRESENCE_NEAR = 2.0;
 export const CONSTELLATION_PRESENCE_FAR = 2756.0;
-export const CONSTELLATION_PRESENCE_FLOOR = 0.25;
+export const CONSTELLATION_PRESENCE_FLOOR = 0.5;
 
-/** Multiplicative opacity factor (0.25..1) for the constellation sky at the given camera distance. */
+/** Multiplicative opacity factor (0.5..1) for the constellation sky at the given camera distance. */
 export function constellationPresence(cameraDist: number): number {
   if (cameraDist <= CONSTELLATION_PRESENCE_NEAR) return CONSTELLATION_PRESENCE_FLOOR;
   if (cameraDist >= CONSTELLATION_PRESENCE_FAR) return 1;
