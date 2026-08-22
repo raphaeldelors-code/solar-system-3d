@@ -1049,13 +1049,16 @@ export function buildConstellations(): THREE.Group {
     // so every name reads at the same distance from its figure. The SIDE +
     // margin come from the static anti-overlap solver (plan 006) and the
     // letter size is a constant per-tier cap height (see
-    // constellationLabelHeightRad). depthTest off so the sky reads cleanly
-    // in front of / behind planets alike.
+    // constellationLabelHeightRad). depthTest is ON (plan 008 S2): a planet
+    // or satellite sitting between the camera and the label writes depth in
+    // the opaque pass, so the label is correctly occluded instead of
+    // painting through the body. The background starfield (r ≥ 5000, behind
+    // the 4710 label) and the depthWrite:false sky lines/dots never block it.
     const placement = placements[i];
     const labelTex = makeConstellationNameTexture(c.name);
     const labelMat = new THREE.SpriteMaterial({
       map: labelTex,
-      depthTest: false,
+      depthTest: true,
       transparent: true,
       opacity: CONSTELLATION_LABEL_BASE_OPACITY,
     });
