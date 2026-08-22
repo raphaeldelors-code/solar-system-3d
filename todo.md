@@ -47,6 +47,11 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] P3 fix(render): constellation names close to their figures (constant small gap) + compact sprite — `e04d346`
 - [x] P4 feat(render): constellation presence fades with camera distance (faint in close-ups, full in sky view) — `9023da8`
 
+## User queue — 2026-08-21 (night) — plan 004
+
+- [x] Q1 fix(render): label distance anchored to the TEXT ink edge (constant 2° gap, every name) — `8399ae8`. Name side flips to the far tip; `layoutConstellationName` ink width drives `margin = halfExtent + (inkRad/2 + EDGE_GAP)`. See `plans/004-label-ink-distance-and-presence-middle.md`, Q1
+- [x] Q2 fix(render): presence floor 0.25 → 0.5 (middle between "too much" and "too low"), ramp starts at default view — `51a8a63`. See plan 004, Q2
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
