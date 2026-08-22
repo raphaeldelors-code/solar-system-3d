@@ -33,9 +33,9 @@ superseded by catalog-sourced positions).
      Kochab, Betelgeuse, Procyon, Capella, Arcturus) match col8/9 to <14″,
      with PM-correction NOT improving (i.e. already J2000 — do not double-correct);
      (b) 61/61 independently-verified J2000 positions (the old app file's 76 stars
-     + 13 SIMBAD-confirmed) map to the catalog row whose HIP matches the
-     skyculture's name→HIP (60/61 exact; 1 name-collision "Gienah" used by two
-     stars — not a catalog defect).
+     - 13 SIMBAD-confirmed) map to the catalog row whose HIP matches the
+       skyculture's name→HIP (60/61 exact; 1 name-collision "Gienah" used by two
+       stars — not a catalog defect).
    - All 745 unique figure HIPs exist in the file (max HIP 118322 ≤ 118320… file
      max 120416 rows — 0 missing).
 3. **Star names** — `skycultures/modern/index.json` `common_names`

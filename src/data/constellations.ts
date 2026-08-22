@@ -344,9 +344,7 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Cor Caroli', raHours: 12.9338, decDeg: 38.3182 },
       { name: 'Chara', raHours: 12.5625, decDeg: 41.3568 },
     ],
-    lines: [
-      [0, 1],
-    ],
+    lines: [[0, 1]],
   },
   {
     name: 'Canis Major',
@@ -382,9 +380,7 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Procyon', raHours: 7.6551, decDeg: 5.2275 },
       { name: 'Gomeisa', raHours: 7.4525, decDeg: 8.2894 },
     ],
-    lines: [
-      [0, 1],
-    ],
+    lines: [[0, 1]],
   },
   {
     name: 'Capricornus',
@@ -1326,9 +1322,7 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Hoerikwaggo', raHours: 6.1706, decDeg: -74.7525 },
       { name: 'HIP 23467', raHours: 5.0453, decDeg: -71.3143 },
     ],
-    lines: [
-      [0, 1],
-    ],
+    lines: [[0, 1]],
   },
   {
     name: 'Microscopium',
@@ -1336,9 +1330,7 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'HIP 102831', raHours: 20.8328, decDeg: -33.7797 },
       { name: 'HIP 102989', raHours: 20.8663, decDeg: -33.178 },
     ],
-    lines: [
-      [0, 1],
-    ],
+    lines: [[0, 1]],
   },
   {
     name: 'Monoceros',
@@ -2177,8 +2169,6 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Anser', raHours: 19.4784, decDeg: 24.6652 },
       { name: 'HIP 97886', raHours: 19.891, decDeg: 24.0795 },
     ],
-    lines: [
-      [0, 1],
-    ],
+    lines: [[0, 1]],
   },
 ];
