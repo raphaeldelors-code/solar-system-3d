@@ -1,59 +1,39 @@
 # Plan 011 — Scale the Bode figures to all 88 constellations (S1-followup)
 
-## Status (updated 2026-08-23)
+## Status (updated 2026-08-23, batch 3a staged)
 
-- **Done:** sourcing table for all 88 (zero gaps — Triangulum found on
-  the "Perseus, Andromeda, Die Triangel" plate);
-  **batch 1 shipped (15/88):** all 10 dedicated high-res 1801 plates in
-  the approved full star-chart style;
-  **batch 2 extracted+fitted (36/88 staged, not yet pushed):** all 21
-  dedicated low-res 1801 plates extracted via `mkfig6.py` and fitted via
-  `fit_batch2.py` (all fits out=0–1 stars outside the box).
-- **Style decision (2026-08-23, user-confirmed):** the shipped plates use
-  the FULL STAR-CHART look — figure + stars + line network + graticule +
-  labels together, matching the 5 plan-007 prototypes. Figure-only
-  extraction (the `extract_batch1.py` component/filter approach) is
-  SUPERSEDED: the full-chart recipe is trivial — adaptive paper threshold,
-  border-ring peel, ink-bbox crop, downscale (see `mkfig6.py`).
-  3D / Star Walk 2 semi-transparent figures are DEFERRED (not licensed;
-  proprietary Vito Technology assets — never source from the app).
-- **Calibration findings (dedicated 1801 plates):**
-  1. These are FULL star-field charts — which is exactly the approved
-     look, so no separation is needed. Keep all ink inside the engraved
-     border ring.
-  2. **Thresholding must be LOCAL/adaptive**, not global. The first
-     attempt (paper = P95, ink < paper·0.82) worked on clean scans
-     (paper P50≈250) but on aged/mottled scans (pyxis P50=151,
-     camelopardalis P50=139, horologium P50=155) it swept the whole paper
-     background in as ink (solid 60%+ blobs in ASCII). Fixed: Gaussian
-     background estimate (sigma≈1.8% of width, iterated), ink where
-     `gray < bg·0.96 − k` with k≈18 — gives a consistent 0.25–0.47 ink
-     fraction on clean AND aged plates.
-  3. Border peel: repeatedly strip a 2% band while the outer 4% corners
-     of the inner plate are >95% paper (border ring has no ink in corners,
-     the chart window does). Only andromeda needed it.
-  4. Ophiuchus: the 1801 dedicated plate is skipped — the 1782 _Coelum
-     Stellatum_ plate (`ophiuchus_1782.jpg`, 19801 px) is used instead.
-  5. Per-plate ASCII density-map verification is mandatory (no vision
-     available in the sandbox).
-  6. Fit via grid search over RA/Dec offsets (same math as
-     `scripts/fit_figures.py`); **sizeDeg floor = 12°** (the test guard
-     requires `sizeDeg > 10`; five tiny batch-2 constellations — Crux,
-     Mensa, Microscopium, Canis Minor, Corona Australis — have star spans
-     of 0.7–8.2°, so their plates are floored to 12° for legibility at
-     sky-dome distance. Batch-1 min was 19°.)
-  7. Low-res plates (380–680 px) are upscaled to 800 px in the extractor;
-     high-res plates are downscaled to ≤1000 px (working width capped at
-     2400 px first to bound the adaptive-blur memory on 20k-px scans).
+- **Shipped:** batch 1a (`8eaf84f`), batch 1b (`df88dfd`), batch 2
+  (`7a047e9`) = **36/88 live** on the gh-pages site.
+- **Staged (this commit, batch 3a):** **32 more → 68/88.** All 32 are full
+  star-chart crops from the 16 multi-constellation 1801 plates + the 4
+  dedicated 1782 _Coelum Stellatum_ sheets (equuleus, sextans, norma).
+  Pipeline: OCR each source plate → anchor the crop on the constellation's
+  German figure label (or the labelled star field) → adaptive-threshold
+  extract (`mkfig7win.py`) → fit the star pattern (`fit_batch3.py` math) →
+  **verify with a star-pattern D-test** (`verify_fits.py`: mean star→ink
+  distance for the fitted placement must beat a random-placement baseline by
+  ≥1.6×, i.e. the art is actually aligned to the constellation's stars, not
+  just _some_ ink). All 32 pass.
+- **Style (user-confirmed 2026-08-23):** FULL STAR-CHART look (figure + stars
+  - lines + graticule + labels). Per the plan-007 docs the plates are "loose,
+    star-adjacent art, not star-anchored" — the app draws the IAU stars/lines
+    separately and lays the Bode chart near the centroid. The D-test is
+    deliberately stricter than that bar.
+- **Remaining: 20 constellations — the south-polar set.** All 20 (Phoenix +
+  the 19 that `bode_sourcing.py` mis-mapped to the _December_ plate) live on
+  `phoenix_1782.jpg`, Bode 1782 **south-pole** chart. Sourcing correction
+  (2026-08-23): `dec_regional.jpg` is a **north**-pole December chart (Cepheus,
+  UMi, Draco, Boötes, Quadrans Muralis), NOT the southern set. The 1782
+  south pole is an azimuthal/polar projection (concentric dec circles + radial
+  RA lines), so the linear `gridfit.py` graticule model does not apply — the
+  crop window must come from the polar projection (pole at bottom-center, RA
+  along the top arc, dec rings across).
 
-**Remaining:** 52 constellations. Batch 3: multi-constellation 1801
-plates (15 constellations from 12 plates), 1782 _Coelum Stellatum_
-plates (14), December regional plate (19 southern). All 42 source plates
-are already downloaded to `/opt/data/bode_dl/raw3/`. Cropping approach:
-OCR the graticule edge labels (RA Roman-numeral hours + degree ticks) to
-calibrate a RA/Dec→pixel projection, then crop each constellation's
-window around its star centroid (the German figure names are NOT
-OCR-reliable).
+**Remaining:** 20 south-polar constellations (Phoenix, Apus, Carina,
+Chamaeleon, Circinus, Columba, Dorado, Fornax, Hydrus, Indus, Musca, Octans,
+Pavo, Pictor, Puppis, Reticulum, Triangulum Australe, Tucana, Vela, Volans)
+on `phoenix_1782.jpg`. Crop via the polar projection, extract, fit, D-test,
+register (→ 88/88), gates, CDP verify, commit+push.
 
 ## User request (standing, 2026-08-22)
 
