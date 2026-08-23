@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { figureTextureUrl } from '../src/render/scene';
 import {
   FIGURE_BOX_PADDING,
   FIGURE_FITS,
@@ -19,10 +20,10 @@ const C = (CENTROID[0] ** 2 + CENTROID[1] ** 2 + CENTROID[2] ** 2) ** 0.5;
 const CEN = CENTROID.map((v) => v / C) as [number, number, number];
 
 describe('figures data', () => {
-  it('prototype set is exactly 15 unique constellations (5 + batch 1)', () => {
-    expect(FIGURE_FITS).toHaveLength(15);
+  it('prototype set is exactly 36 unique constellations (5 + batch 1 + batch 2)', () => {
+    expect(FIGURE_FITS).toHaveLength(36);
     const names = FIGURE_FITS.map((f) => f.constellation);
-    expect(new Set(names).size).toBe(15);
+    expect(new Set(names).size).toBe(36);
   });
 
   it('fits have sane aspect ratios and plate sizes', () => {
@@ -43,6 +44,17 @@ describe('figures data', () => {
   it('no duplicate constellation names in the fit table', () => {
     const names = FIGURE_FITS.map((f) => f.constellation);
     expect(names).toEqual([...new Set(names)]);
+  });
+});
+
+describe('figureTextureUrl', () => {
+  it('lowercases and underscores spaces', () => {
+    expect(figureTextureUrl('Canis Major')).toBe('constellation-figures/canis_major.png');
+    expect(figureTextureUrl('Pisces')).toBe('constellation-figures/pisces.png');
+  });
+
+  it('strips diacritics so Boötes maps to bootes.png', () => {
+    expect(figureTextureUrl('Boötes')).toBe('constellation-figures/bootes.png');
   });
 });
 

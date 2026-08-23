@@ -1142,7 +1142,12 @@ const FIGURE_TEX_CACHE = new Map<string, THREE.Texture>();
 
 /** URL for a constellation's figure plate (served from Vite's `public/`). */
 export function figureTextureUrl(name: string): string {
-  return `constellation-figures/${name.toLowerCase().replace(/\s+/g, '_')}.png`;
+  // Diacritics have no filesystem-friendly slug (Boötes → bootes.png).
+  return `constellation-figures/${name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '_')}.png`;
 }
 
 /**

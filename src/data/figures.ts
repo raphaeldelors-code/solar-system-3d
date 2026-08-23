@@ -15,9 +15,9 @@
  * 3D placement (mesh position/up/size) is computed here (pure) and
  * rendered by `buildConstellationFigures` in render/scene.ts.
  *
- * Fits are per constellation (15 of 88 — plan-007 prototype 5 plus the
- * plan-011 batch-1 dedicated 1801 plates); the full-88 pass reuses the
- * same struct for every plate.
+ * Fits are per constellation (36 of 88 — plan-007 prototype 5 plus the
+ * plan-011 batch-1 and batch-2 dedicated 1801 plates); the full-88 pass
+ * reuses the same struct for every plate.
  */
 
 /** Fallback angular box (degrees) for fits without an explicit `sizeDeg`. */
@@ -98,6 +98,54 @@ export const FIGURE_FITS: FigureFit[] = [
   { constellation: 'Pisces', aspect: 1.267, sizeDeg: 51.5, offsetDecDeg: -1 },
   { constellation: 'Taurus', aspect: 1.259, sizeDeg: 48.1, offsetDecDeg: 1 },
   { constellation: 'Virgo', aspect: 1.272, sizeDeg: 57.3, offsetDecDeg: -1 },
+  // Plan-011 batch 2 — dedicated low-res 1801 plates (full star-chart).
+  { constellation: 'Andromeda', aspect: 1.421, sizeDeg: 41.5, offsetDecDeg: -2 },
+  { constellation: 'Antlia', aspect: 1.203, sizeDeg: 22, offsetRAHours: 0.25, offsetDecDeg: 2 },
+  {
+    constellation: 'Aquarius',
+    aspect: 1.406,
+    sizeDeg: 48.6,
+    offsetRAHours: -0.25,
+    offsetDecDeg: 1,
+  },
+  { constellation: 'Aquila', aspect: 0.797, sizeDeg: 29.8, offsetDecDeg: -1 },
+  { constellation: 'Ara', aspect: 1.218, sizeDeg: 17.7, offsetDecDeg: -1 },
+  {
+    constellation: 'Boötes',
+    aspect: 0.823,
+    sizeDeg: 48.1,
+    offsetDecDeg: -1,
+  },
+  { constellation: 'Caelum', aspect: 1.189, sizeDeg: 14.3 },
+  { constellation: 'Camelopardalis', aspect: 0.909, sizeDeg: 32.3 },
+  {
+    constellation: 'Canis Major',
+    aspect: 1.754,
+    sizeDeg: 23.3,
+    offsetDecDeg: 1,
+  },
+  { constellation: 'Canis Minor', aspect: 1.208, sizeDeg: 12 },
+  {
+    constellation: 'Coma Berenices',
+    aspect: 1.013,
+    sizeDeg: 18.2,
+  },
+  { constellation: 'Corona Australis', aspect: 1.132, sizeDeg: 12 },
+  { constellation: 'Crux', aspect: 1.218, sizeDeg: 12 },
+  { constellation: 'Eridanus', aspect: 0.903, sizeDeg: 70, offsetDecDeg: -1 },
+  { constellation: 'Horologium', aspect: 2.847, sizeDeg: 30.4, offsetDecDeg: -1 },
+  { constellation: 'Mensa', aspect: 1.566, sizeDeg: 12 },
+  { constellation: 'Microscopium', aspect: 0.84, sizeDeg: 12 },
+  { constellation: 'Piscis Austrinus', aspect: 1.185, sizeDeg: 19.8 },
+  { constellation: 'Pyxis', aspect: 1.444, sizeDeg: 19.6 },
+  { constellation: 'Sagittarius', aspect: 1.194, sizeDeg: 29.5 },
+  {
+    constellation: 'Sculptor',
+    aspect: 2.156,
+    sizeDeg: 27,
+    offsetRAHours: 0.25,
+    offsetDecDeg: 1,
+  },
 ];
 
 export function findFigureFit(name: string): FigureFit | undefined {
