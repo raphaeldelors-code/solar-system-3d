@@ -4,36 +4,37 @@
 
 - **Done:** sourcing table for all 83 (zero gaps); batch-1 plates (10
   dedicated high-res 1801 scans) downloaded to `/opt/data/bode_dl/raw/`;
-  extraction pipeline calibrated (`/opt/data/figcheck/extract_batch1.py`);
-  **batch 1a shipped: Aries + Perseus** (7/88 figures live, CDP 15/15).
+  **batch 1a shipped: Aries + Perseus** (7/88 figures live, CDP 15/15);
+  **batch 1b: full star-chart extraction for all 10 batch-1 plates**
+  (15/88 figures live).
+- **Style decision (2026-08-23, user-confirmed):** the shipped plates use
+  the FULL STAR-CHART look — figure + stars + line network + graticule +
+  labels together, matching the 5 plan-007 prototypes. Figure-only
+  extraction (the `extract_batch1.py` component/filter approach) is
+  SUPERSEDED: the full-chart recipe is trivial — adaptive paper threshold,
+  border-ring peel, ink-bbox crop, downscale (see `mkfig6.py`).
+  3D / Star Walk 2 semi-transparent figures are DEFERRED (not licensed;
+  proprietary Vito Technology assets — never source from the app).
 - **Calibration findings (high-res 1801 dedicated plates):**
-  1. These are FULL star-field charts, not isolated animals: the graticule
-     - star line-network fuse into one giant component that spans >70% of
-       the plate in both dims. The animal figure is a SEPARATE localized
-       component (Aries: 636k px ram, 5.7% of the plate).
-  2. Grid discriminator: a component spanning >0.7 of the plate in BOTH
-     height and width is graticule/frame — never the figure.
-  3. Thin-stroke figures (Perseus, Ophiuchus) fuse into the grid at the
-     default threshold (median−25). Fix: **adaptive threshold descent**
-     (150 → 140 → … → 85, ~250ms re-label each) until the biggest
-     non-grid component has size ≥ 15k and fill < 0.22.
-  4. Keep set = main figure + non-grid components within 0.18·minSide of
-     its bbox center (near fragments + attached labels) — NOT every big
-     component (that drags in title text and far star labels; Taurus
-     "figure" became the line network until the proximity filter landed).
+  1. These are FULL star-field charts — which is exactly the approved
+     look, so no separation is needed. Keep all ink inside the engraved
+     border ring.
+  2. Adaptive threshold: paper = P95 of grayscale, ink < paper·0.82
+     clamped to [110, 180].
+  3. Border peel: repeatedly strip a 2% band while the outer 4% corners
+     of the inner plate are >95% paper (border ring has no ink in corners,
+     the chart window does).
+  4. Ophiuchus: the 1801 dedicated plate is skipped — the 1782 _Coelum
+     Stellatum_ plate (`ophiuchus_1782.jpg`, 19801 px) is used instead.
   5. Per-plate ASCII density-map verification is mandatory (no vision
      available in the sandbox).
-  6. Ophiuchus: the 1801 dedicated plate (`Ophiuchus Uranographia.jpg`)
-     fails separation even at thr=85 → switched to the 1782 _Coelum
-     Stellatum_ plate (19801 px), which separates cleanly at thr=110.
-  7. Per-plate source overrides live in `PLATE` in
-     `/opt/data/figcheck/extract_batch1.py`.
+  6. Fit via `fit_batch1.py` (scipy-free grid search over RA/Dec offsets,
+     same math as `scripts/fit_figures.py`); Aries keeps 1/4 stars out —
+     acceptable, matches the shipped 1a result.
 
-**Remaining:** 81 constellations. Next: ship the other 8 batch-1 plates
-whose extractions verified clean (Cancer, Cetus, Gemini, Pisces, Virgo,
-Pegasus, + Ophiuchus-1782 after its aspect fix; Taurus needs a
-re-separation pass), then B3–B7 crops (2–3-constellation 1801 plates,
-1782 plates, December regional plate for the 19 southern constellations).
+**Remaining:** 73 constellations. Batch 1 complete (10 dedicated 1801
+plates). Next: B3–B7 crops (2–3-constellation 1801 plates, 1782 plates,
+December regional plate for the 19 southern constellations).
 
 ## User request (standing, 2026-08-22)
 
