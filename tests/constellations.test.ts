@@ -65,6 +65,46 @@ describe('CONSTELLATIONS data', () => {
     }
   });
 
+  it('no star is the (0h, 0°) vernal-equinox sentinel (plan 009)', () => {
+    // The (0,0) coordinate is the equinox point in Pisces — a data
+    // generation sentinel (missing catalog lookup) that renders a stray
+    // dot/line in a completely wrong part of the sky. Guard against it
+    // recurring (first instance: Ursa Major / Alula Australis).
+    for (const c of CONSTELLATIONS) {
+      for (const s of c.stars) {
+        const isSentinel = Math.abs(s.raHours) < 1e-9 && Math.abs(s.decDeg) < 1e-9;
+        expect(isSentinel, `${c.name}/${s.name} sits at the vernal-equinox sentinel (0,0)`).toBe(
+          false,
+        );
+      }
+    }
+  });
+
+  it('no line spans more than 30° of sky (plan 009)', () => {
+    // Every IAU figure edge connects NEIGHBOURING stars. The widest real
+    // edge in the whole set is ~14° (Draco Altais→Grumium). A segment over
+    // 30° means a star (or its coordinate) was placed in the wrong region —
+    // e.g. a line shooting from Ursa Major to the equinox point in Pisces.
+    const angSep = (
+      a: { raHours: number; decDeg: number },
+      b: { raHours: number; decDeg: number },
+    ) => {
+      const [ax, ay, az] = raDecToUnit(a.raHours, a.decDeg);
+      const [bx, by, bz] = raDecToUnit(b.raHours, b.decDeg);
+      const d = Math.acos(Math.max(-1, Math.min(1, ax * bx + ay * by + az * bz)));
+      return (d * 180) / Math.PI;
+    };
+    for (const c of CONSTELLATIONS) {
+      for (const [a, b] of c.lines) {
+        const sep = angSep(c.stars[a], c.stars[b]);
+        expect(
+          sep,
+          `${c.name} line ${a}->${b} (${c.stars[a].name}–${c.stars[b].name}) spans ${sep.toFixed(1)}°`,
+        ).toBeLessThan(30);
+      }
+    }
+  });
+
   it('names within a constellation are unique', () => {
     for (const c of CONSTELLATIONS) {
       const names = new Set(c.stars.map((s) => s.name));

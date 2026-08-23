@@ -2028,7 +2028,7 @@ export const CONSTELLATIONS: Constellation[] = [
       { name: 'Tania Australis', raHours: 10.3722, decDeg: 41.4994 },
       { name: 'Tania Borealis', raHours: 10.285, decDeg: 42.9145 },
       { name: 'Alula Borealis', raHours: 11.308, decDeg: 33.0942 },
-      { name: 'Alula Australis', raHours: 0, decDeg: 0 },
+      { name: 'Alula Australis', raHours: 11.3031, decDeg: 31.5308 },
       { name: 'Megrez', raHours: 12.2571, decDeg: 57.0326 },
       { name: 'Dubhe', raHours: 11.0622, decDeg: 61.7511 },
       { name: 'Merak', raHours: 11.0307, decDeg: 56.3823 },
