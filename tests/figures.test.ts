@@ -19,10 +19,10 @@ const C = (CENTROID[0] ** 2 + CENTROID[1] ** 2 + CENTROID[2] ** 2) ** 0.5;
 const CEN = CENTROID.map((v) => v / C) as [number, number, number];
 
 describe('figures data', () => {
-  it('prototype set is exactly 5 unique constellations', () => {
-    expect(FIGURE_FITS).toHaveLength(5);
+  it('prototype set is exactly 7 unique constellations (5 + batch 1)', () => {
+    expect(FIGURE_FITS).toHaveLength(7);
     const names = FIGURE_FITS.map((f) => f.constellation);
-    expect(new Set(names).size).toBe(5);
+    expect(new Set(names).size).toBe(7);
   });
 
   it('fits have sane aspect ratios and plate sizes', () => {

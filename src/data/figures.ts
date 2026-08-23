@@ -15,8 +15,9 @@
  * 3D placement (mesh position/up/size) is computed here (pure) and
  * rendered by `buildConstellationFigures` in render/scene.ts.
  *
- * Fits are per constellation (prototype: 5 of 88); the full-88 pass
- * reuses the same struct for every plate.
+ * Fits are per constellation (7 of 88 — plan-007 prototype 5 plus the
+ * plan-011 batch-1 dedicated 1801 plates Aries & Perseus); the full-88
+ * pass reuses the same struct for every plate.
  */
 
 /** Fallback angular box (degrees) for fits without an explicit `sizeDeg`. */
@@ -53,8 +54,9 @@ export interface FigureFit {
   rotationDeg?: number;
 }
 
-/** Prototype set — Bode plates, plan 007. Values fitted to the star
- * patterns (see scripts/fit_figures.py), not hand-guessed. */
+/** Plan-007 prototype set + plan-011 batch 1 — Bode plates. Values
+ * fitted to the star patterns (see scripts/fit_figures.py), not
+ * hand-guessed. */
 export const FIGURE_FITS: FigureFit[] = [
   { constellation: 'Orion', aspect: 1.412, sizeDeg: 38.5 },
   {
@@ -67,6 +69,15 @@ export const FIGURE_FITS: FigureFit[] = [
   { constellation: 'Cygnus', aspect: 0.844, sizeDeg: 39, offsetDecDeg: 1 },
   { constellation: 'Scorpius', aspect: 1.418, sizeDeg: 37.7, offsetDecDeg: -1 },
   { constellation: 'Leo', aspect: 1.37, sizeDeg: 44.5, offsetDecDeg: 1 },
+  // Batch 1 of the full-88 pass (plan 011) — dedicated 1801 plates.
+  {
+    constellation: 'Aries',
+    aspect: 1.524,
+    sizeDeg: 19,
+    offsetRAHours: -0.25,
+    offsetDecDeg: -2,
+  },
+  { constellation: 'Perseus', aspect: 1.04, sizeDeg: 38.1, offsetDecDeg: 1 },
 ];
 
 export function findFigureFit(name: string): FigureFit | undefined {
