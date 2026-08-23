@@ -244,6 +244,11 @@
       #find-list .fr-free {
         opacity: 0.7;
       }
+      /* Constellation rows: gold accent — matches the emphasis color the
+         figure's lines turn when picked (plan 010, S4). */
+      #find-list .fr-const .fr-name {
+        color: #ffc46b;
+      }
       #find-list .fr-name {
         font-weight: 600;
         color: #e8f0fb;
@@ -469,7 +474,7 @@
         border-color: #6ea8ff;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-BUNxlBQb.js"></script>
+    <script type="module" crossorigin src="./assets/index-DhfhZZW0.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -591,13 +596,13 @@
         <div id="info" class="info" hidden>
           <div class="info-title" id="info-name">—</div>
           <div class="info-row">
-            <span>Orbit period</span><span id="info-period" class="value">—</span>
+            <span id="info-label-1">Orbit period</span><span id="info-period" class="value">—</span>
           </div>
           <div class="info-row">
-            <span>Distance</span><span id="info-distance" class="value">—</span>
+            <span id="info-label-2">Distance</span><span id="info-distance" class="value">—</span>
           </div>
           <div class="info-row">
-            <span>Peri / Apo</span><span id="info-range" class="value">—</span>
+            <span id="info-label-3">Peri / Apo</span><span id="info-range" class="value">—</span>
           </div>
         </div>
         <div class="hint" id="hint">
