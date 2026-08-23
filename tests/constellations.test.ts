@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { raDecToUnit, CONSTELLATIONS } from '../src/data/constellations';
-import { constellationCenter, constellationEmphasis } from '../src/render/scene';
+import {
+  constellationCenter,
+  constellationEmphasis,
+  constellationEmphasisOpacity,
+  CONSTELLATION_EMPHASIS_PULSE,
+  CONSTELLATION_EMPHASIS_PERIOD,
+} from '../src/render/scene';
 
 describe('raDecToUnit', () => {
   it('maps the equatorial pole straight up', () => {
@@ -318,5 +324,26 @@ describe('constellationEmphasis', () => {
     expect(at(44)).toBeLessThan(at(40));
     expect(at(40)).toBeLessThan(at(30));
     expect(at(30)).toBeLessThan(at(24));
+  });
+});
+
+describe('constellationEmphasisOpacity (pick pulse, plan 010 S4)', () => {
+  it('breathes between 1 and 1 − PULSE, never losing the figure', () => {
+    // Peak: sin = 1 at t = PERIOD/4. Trough: sin = −1 at t = 3·PERIOD/4.
+    const peak = constellationEmphasisOpacity(CONSTELLATION_EMPHASIS_PERIOD / 4);
+    const trough = constellationEmphasisOpacity((3 * CONSTELLATION_EMPHASIS_PERIOD) / 4);
+    expect(peak).toBeCloseTo(1, 12);
+    expect(trough).toBeCloseTo(1 - CONSTELLATION_EMPHASIS_PULSE, 12);
+  });
+  it('stays in [1 − PULSE, 1] for arbitrary times (including negatives)', () => {
+    for (const t of [-7.3, -1, 0, 0.5, 1, 2.49, 13.7]) {
+      const v = constellationEmphasisOpacity(t);
+      expect(v, `t=${t}`).toBeGreaterThanOrEqual(1 - CONSTELLATION_EMPHASIS_PULSE - 1e-12);
+      expect(v, `t=${t}`).toBeLessThanOrEqual(1 + 1e-12);
+    }
+  });
+  it('is periodic with the configured period', () => {
+    const a = constellationEmphasisOpacity(0.37);
+    expect(constellationEmphasisOpacity(0.37 + CONSTELLATION_EMPHASIS_PERIOD)).toBeCloseTo(a, 12);
   });
 });

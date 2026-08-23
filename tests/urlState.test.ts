@@ -49,6 +49,13 @@ describe('parseAppState', () => {
     expect('follow' in parseAppState(`${BASE}?t=1`)).toBe(false);
   });
 
+  it('parses the picked constellation (c param) and treats absence as no key', () => {
+    expect(parseAppState(`${BASE}?c=Orion`).constellation).toBe('Orion');
+    expect('constellation' in parseAppState(`${BASE}?t=1`)).toBe(false);
+    // URL-encoded multi-word names decode back to the display name.
+    expect(parseAppState(`${BASE}?c=Ursa%20Major`).constellation).toBe('Ursa Major');
+  });
+
   it('defaults visible scale when sc=v', () => {
     expect(parseAppState(`${BASE}?sc=v`).scale).toBe('visible');
   });
@@ -126,6 +133,7 @@ describe('encodeAppState', () => {
       timeMs: 1758000000000,
       speedLog: 1.25,
       follow: 'jupiter',
+      constellation: 'Ursa Major',
       scale: 'true',
       orbits: true,
       labels: false,

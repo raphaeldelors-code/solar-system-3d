@@ -737,6 +737,29 @@ export function constellationLabelOpacity(emph: number): number {
 }
 
 /**
+ * Pick emphasis (plan 010, S4): when the user picks a constellation from
+ * the find box, ITS figure stands out from the 87 others with a distinct
+ * warm-gold line color (max contrast against the 0x8fb0ff sky blue) and a
+ * gentle breathing pulse. Pure — unit-tested.
+ */
+/** Warm gold: the picked figure's line color (vs the base 0x8fb0ff blue). */
+export const CONSTELLATION_EMPHASIS_COLOR = 0xffc46b;
+/** Pulse amplitude: the selected line's opacity swings 1.0 ± this. */
+export const CONSTELLATION_EMPHASIS_PULSE = 0.15;
+/** Pulse period (seconds) — a slow, calm breathe, not a strobe. */
+export const CONSTELLATION_EMPHASIS_PERIOD = 2.5;
+
+/**
+ * The selected figure's line opacity at wall-clock time `tSec`: a sine
+ * breathing between 1 and 1 − PULSE (always fully opaque at the peak, so the
+ * figure is never lost).
+ */
+export function constellationEmphasisOpacity(tSec: number): number {
+  const phase = 2 * Math.PI * (tSec / CONSTELLATION_EMPHASIS_PERIOD);
+  return 1 - (CONSTELLATION_EMPHASIS_PULSE * (1 - Math.sin(phase))) / 2;
+}
+
+/**
  * Name-label geometry (plan 003 P3, re-anchored plan 004 Q1, re-sized +
  * de-cluttered in plan 006). The distance is defined from what the USER
  * SEES — the ink's near edge, not an invisible sprite-padding edge:
@@ -1038,6 +1061,9 @@ export function buildConstellations(): THREE.Group {
       opacity: CONSTELLATION_BASE_OPACITY,
       depthWrite: false,
     });
+    // Base color remembered so a pick-emphasis (plan 010) can restore it
+    // exactly when the selection is cleared.
+    lineMat.userData.baseColor = 0x8fb0ff;
     const lines = new THREE.LineSegments(lineGeo, lineMat);
     lines.name = `constellation-lines:${c.name}`;
     group.add(lines);
@@ -1251,6 +1277,8 @@ export function updateConstellationHighlight(
   group: THREE.Group,
   emphases: ArrayLike<number>,
   presence: number = 1,
+  selectedName?: string | null,
+  tSec = 0,
 ): void {
   for (const child of group.children) {
     const name = child.name ?? '';
@@ -1269,13 +1297,34 @@ export function updateConstellationHighlight(
       : undefined;
     if (idx === undefined) continue;
     const emph = emphases[idx] ?? 0;
-    const t =
-      child instanceof THREE.Sprite
-        ? constellationLabelOpacity(emph)
-        : CONSTELLATION_BASE_OPACITY +
-          (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph;
-    ((child as THREE.LineSegments | THREE.Sprite).material as THREE.Material).opacity =
-      t * presence;
+    if (child instanceof THREE.Sprite) {
+      // Labels: unchanged — the D4 curve only. The picked figure's NAME
+      // label keeps the standard blue treatment (the gold lines carry the
+      // pick).
+      ((child as THREE.Sprite).material as THREE.Material).opacity =
+        constellationLabelOpacity(emph) * presence;
+      continue;
+    }
+    // Line segments: D4 base curve, then the pick emphasis overrides — the
+    // selected figure's lines take the warm-gold color + a breathing pulse
+    // (plan 010); everyone else returns to the base color + D4 opacity.
+    const mat = (child as THREE.LineSegments).material as THREE.LineBasicMaterial;
+    const baseColor = (mat.userData.baseColor ?? 0x8fb0ff) as number;
+    const isPicked =
+      selectedName != null && selectedName !== '' && name === `constellation-lines:${selectedName}`;
+    if (isPicked) {
+      mat.color.setHex(CONSTELLATION_EMPHASIS_COLOR);
+      // Full-opacity pulse: the picked figure ignores the sky presence — it
+      // is what the user asked to see (the S4 sky-dome view sits at ~600
+      // units where presence ≈ 0.55 and would half-dim the emphasis).
+      mat.opacity = constellationEmphasisOpacity(tSec);
+    } else {
+      mat.color.setHex(baseColor);
+      mat.opacity =
+        (CONSTELLATION_BASE_OPACITY +
+          (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph) *
+        presence;
+    }
   }
 }
 

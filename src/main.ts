@@ -6,7 +6,12 @@
 import * as THREE from 'three';
 import { SimClock } from './sim/clock';
 import { ALL_BODIES } from './data/bodies';
-import { searchBodies, groupedBodyMenu, type SearchHit } from './data/searchIndex';
+import { searchBodies, groupedBodyMenu } from './data/searchIndex';
+import {
+  searchConstellations,
+  constellationMenu,
+  CONSTELLATION_ID_PREFIX,
+} from './data/constellationSearch';
 import {
   buildScene,
   updatePositions,
@@ -16,6 +21,8 @@ import {
   updateSatelliteHighlight,
   constellationCenter,
   constellationEmphasis,
+  constellationEmphasisOpacity,
+  constellationLabelPose,
   constellationPresence,
   updateConstellationHighlight,
   updateConstellationFigureHighlights,
@@ -34,6 +41,7 @@ import {
   frameBody,
   frameSystem,
   frameConstellations,
+  frameConstellation,
   stepFlight,
   makeFlight,
   easeInOutCubic,
@@ -115,6 +123,10 @@ for (const ev of ['pointerdown', 'wheel', 'keydown', 'touchstart']) {
 // to ~5 Hz and skipped entirely when the camera pose is unchanged — the
 // feature costs nothing while idle.
 const CONSTELLATION_CENTER_DIRS = CONSTELLATIONS.map((c) => constellationCenter(c));
+// Figure far-tip angular half-extents (plan 010): precomputed once for the
+// constellation fly-to's zoom solve (frameConstellation). Same geometry the
+// label solver uses, so the framing and the label side agree.
+const CONSTELLATION_HALF_EXTENT = CONSTELLATIONS.map((c) => constellationLabelPose(c).halfExtent);
 const CONSTELLATION_EMPHASES = new Float32Array(CONSTELLATIONS.length);
 const HIGHLIGHT_INTERVAL_MS = 200; // ~5 Hz
 let lastHighlightMs = 0;
@@ -124,7 +136,9 @@ const HIGHLIGHT_FWD = new THREE.Vector3();
 function updateConstellationHighlightThrottled(nowMs: number): void {
   if (nowMs - lastHighlightMs < HIGHLIGHT_INTERVAL_MS) return;
   const cp = built.camera.position;
-  const key = `${cp.x.toFixed(2)}|${cp.y.toFixed(2)}|${cp.z.toFixed(2)}|${built.camera.quaternion.w.toFixed(3)}`;
+  // Include the pick in the gate: a selection change must force a highlight
+  // refresh even if the camera is parked (plan 010).
+  const key = `${cp.x.toFixed(2)}|${cp.y.toFixed(2)}|${cp.z.toFixed(2)}|${built.camera.quaternion.w.toFixed(3)}|${selectedConstellation}`;
   if (key === lastHighlightPoseKey) return;
   lastHighlightMs = nowMs;
   lastHighlightPoseKey = key;
@@ -143,13 +157,43 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
   // close and back to 1.0× by the Sky-anchor distance — smooth in both
   // directions, never fully off.
   const presence = constellationPresence(built.camera.position.length());
-  updateConstellationHighlight(built.constellations, CONSTELLATION_EMPHASES, presence);
+  updateConstellationHighlight(
+    built.constellations,
+    CONSTELLATION_EMPHASES,
+    presence,
+    selectedConstellation || null,
+    nowMs / 1000,
+  );
   // Plan 007: the classic figure plates breathe with the same curves.
   if (figuresOn) {
     updateConstellationFigureHighlights(
       built.constellationFigures,
       CONSTELLATION_EMPHASES,
       presence,
+    );
+  }
+}
+
+/**
+ * Per-frame breathing pulse on the picked constellation's lines (plan 010):
+ * the pose-gated highlight above only refreshes when the camera moves, so the
+ * gold line's opacity would freeze if the user parks the view. This runs every
+ * frame (one material write) so the pulse stays smooth.
+ */
+function updatePickedConstellationPulse(nowMs: number): void {
+  if (!selectedConstellation) return;
+  const child = built.constellations.children.find(
+    (o) => o.name === `constellation-lines:${selectedConstellation}`,
+  ) as THREE.LineSegments | undefined;
+  if (child) {
+    // NOTE: deliberately NOT multiplied by constellationPresence — the sky
+    // presence dims the sky when the camera is near a body, but the picked
+    // figure's emphasis must stay fully visible at ANY distance (the S4
+    // sky-dome view parks the camera at ~600 units, where presence ≈ 0.55
+    // would half-dim the gold we just flew to). The figure is what the user
+    // asked to see.
+    (child.material as THREE.LineBasicMaterial).opacity = constellationEmphasisOpacity(
+      nowMs / 1000,
     );
   }
 }
@@ -178,6 +222,9 @@ const infoNameEl = document.getElementById('info-name') as HTMLDivElement;
 const infoPeriodEl = document.getElementById('info-period') as HTMLSpanElement;
 const infoDistanceEl = document.getElementById('info-distance') as HTMLSpanElement;
 const infoRangeEl = document.getElementById('info-range') as HTMLSpanElement;
+const infoLabel1El = document.getElementById('info-label-1') as HTMLSpanElement;
+const infoLabel2El = document.getElementById('info-label-2') as HTMLSpanElement;
+const infoLabel3El = document.getElementById('info-label-3') as HTMLSpanElement;
 const eventsToggleBtn = document.getElementById('events-toggle') as HTMLButtonElement;
 const eventsRangeEl = document.getElementById('events-range') as HTMLSelectElement;
 const eventsRowEl = document.getElementById('events-row') as HTMLDivElement;
@@ -203,6 +250,12 @@ let followId = '';
  * how "pick a satellite" works: planet+all-orbits view + highlighted moon.
  */
 let selectedSatelliteId = '';
+/**
+ * The constellation picked from the find box (plan 010, S4): its figure's
+ * lines take the warm-gold emphasis color + a breathing pulse to stand out
+ * from the other 87. '' = nothing picked (all figures in the base blue).
+ */
+let selectedConstellation = '';
 let lastDays = clock.t;
 let lastMs = performance.now();
 // Throttle for the per-frame Moon orbit-line resample (see the frame loop).
@@ -454,6 +507,27 @@ function camAnchorForBody(id: string): CamAnchor | null {
 }
 
 /**
+ * Sky-dome anchor for a picked constellation (plan 010, S4): the camera
+ * moves to sit on the figure's own direction line at `CONSTELLATION_RADIUS /
+ * 8` (600 units) from the origin, looking outward at the dome — the Sun is
+ * then directly behind the camera. The FOV is solved (in
+ * `frameConstellation`) so the figure's far tip fills ~55 % of the smaller
+ * screen axis with a safe margin: small figures zoom in, the largest (Hydra)
+ * clamp at 120° and can be panned.
+ */
+function camAnchorForConstellation(name: string): CamAnchor | null {
+  const idx = CONSTELLATIONS.findIndex((c) => c.name === name);
+  if (idx < 0) return null;
+  return frameConstellation(
+    CONSTELLATION_CENTER_DIRS[idx],
+    CONSTELLATION_HALF_EXTENT[idx],
+    CONSTELLATION_RADIUS,
+    CONSTELLATION_RADIUS / 8, // 600 units from the origin — "inside the dome"
+    built.camera.aspect,
+  );
+}
+
+/**
  * Start an eased flight from the current camera pose to `dest`.
  * `bodyId` (optional) is the picked body being tracked — the orbit-target
  * follows its live position each frame so a fast-moving planet isn't landed
@@ -467,6 +541,8 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
   followId = bodyId ?? '';
   setFindValue(followId);
   selectedSatelliteId = bodyId && moonParent.has(bodyId) ? bodyId : '';
+  if (bodyId) selectedConstellation = ''; // a body pick drops the gold emphasis (plan 010)
+  syncUrl(); // shareable state follows the pick: c= cleared when a body is chosen
   // A Sky landing kicks off the panoramic tour; any other flight cancels it.
   stopSkyTour();
   pendingSkyTour = sky;
@@ -489,6 +565,36 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
     built.camera.fov,
     FOV_DEG,
   );
+}
+
+/**
+ * Fly to a picked constellation (plan 010, S4): move to the sky-dome anchor
+ * that centres the figure, light its lines gold, and drop any body follow.
+ * The figure is static (the sky doesn't move), so no body tracking is needed
+ * — the flight lands and hands the camera back to OrbitControls looking out
+ * at the dome. Re-picking the same constellation re-flies (harmless); picking
+ * a different one moves the gold emphasis over.
+ */
+function flyToConstellation(name: string): void {
+  const dest = camAnchorForConstellation(name);
+  if (!dest) return; // unknown name — ignore
+  selectedConstellation = name; // arm the gold emphasis (before the flight so it shows)
+  followId = ''; // a constellation pick is not a body follow
+  selectedSatelliteId = '';
+  stopSkyTour();
+  pendingSkyTour = false;
+  lastHighlightPoseKey = ''; // force the highlight pass to refresh on the next frame
+  updateInfo();
+  flight = makeFlight(
+    [built.camera.position.x, built.camera.position.y, built.camera.position.z],
+    [built.controls.target.x, built.controls.target.y, built.controls.target.z],
+    dest,
+    1.6,
+    null,
+    built.camera.fov,
+    FOV_DEG,
+  );
+  syncUrl();
 }
 
 // Anchor buttons. `data-anchor` distinguishes the two global presets; a
@@ -599,9 +705,35 @@ function applyDatePick(): void {
   syncUrl();
 }
 
-/** Orbit period / live distance / peri-apoapsis for the followed body. */
+/**
+ * Panel info card. Shows the followed body's orbital readout, or — when a
+ * constellation is picked from the find box (plan 010, S4) and no body is
+ * followed — the figure's sky center + star count (orbit rows are reused for
+ * center RA / center Dec / star count).
+ */
 function updateInfo(): void {
   if (!followId) {
+    if (selectedConstellation) {
+      const idx = CONSTELLATIONS.findIndex((c) => c.name === selectedConstellation);
+      const c = idx >= 0 ? CONSTELLATIONS[idx] : undefined;
+      if (!c) {
+        infoEl.hidden = true;
+        return;
+      }
+      const [dx, dy, dz] = CONSTELLATION_CENTER_DIRS[idx];
+      const decDeg = (Math.asin(Math.min(1, Math.max(-1, dy))) * 180) / Math.PI;
+      let raH = (Math.atan2(-dz, -dx) * 180) / Math.PI / 15;
+      if (raH < 0) raH += 24;
+      infoEl.hidden = false;
+      infoNameEl.textContent = `${c.name} — constellation`;
+      infoLabel1El.textContent = 'Center RA';
+      infoLabel2El.textContent = 'Center Dec';
+      infoLabel3El.textContent = 'Stars';
+      infoPeriodEl.textContent = `${raH.toFixed(1)}h`;
+      infoDistanceEl.textContent = `${decDeg >= 0 ? '+' : ''}${decDeg.toFixed(1)}°`;
+      infoRangeEl.textContent = `${c.stars.length} stars`;
+      return;
+    }
     infoEl.hidden = true;
     return;
   }
@@ -613,6 +745,9 @@ function updateInfo(): void {
   }
   infoEl.hidden = false;
   infoNameEl.textContent = def.name;
+  infoLabel1El.textContent = 'Orbit period';
+  infoLabel2El.textContent = 'Distance';
+  infoLabel3El.textContent = 'Peri / Apo';
   infoPeriodEl.textContent = formatPeriod(r.periodDays);
   infoDistanceEl.textContent =
     def.kind === 'moon'
@@ -767,19 +902,59 @@ datePickEl.addEventListener('change', () => {
   applyDatePick();
 });
 
-// --- Body search combobox (B2) --------------------------------------------
-// Replaces the old native `#follow` select: a typeahead input with a
-// grouped dropdown (planet → its moons), keyboard nav (↑/↓/Enter/Esc) and
-// click-to-select. Selecting a body flies the camera exactly like a pick;
-// the empty query / "Free camera" row drops the follow. The `f` URL param
-// is unchanged — `followId` remains the single source of truth.
+// --- Body search combobox (B2) + constellations (plan 010, S4) --------------
+// The panel's "Find" combobox lists the 88 IAU constellations alongside the
+// bodies. Constellation rows are tagged `const:<Name>` (bodies stay bare ids)
+// so one dropdown, one keyboard-nav path and one `findPick` handle both kinds.
+// Selecting a body flies the camera exactly like a pick; selecting a
+// constellation flies to a sky-dome view that centres it and lights its lines
+// gold. The empty query / "Free camera" row drops both. The `f` / `c` URL
+// params keep `followId` / `selectedConstellation` as the sources of truth.
 
-const findMenu = groupedBodyMenu(ALL_BODIES); // display order, unfiltered
+const findMenu = groupedBodyMenu(ALL_BODIES); // body display order, unfiltered
+const constellationMenuAll = constellationMenu(); // 88, IAU order (ids `const:Name`)
+const FIND_MENU_CONST_CAP = 15; // empty-query menu: bodies + a slice of consts
 let findActiveIdx = -1; // highlighted row in the open dropdown
-let findHits: SearchHit[] = []; // current dropdown rows (hits only)
+
+/**
+ * A single dropdown row: a body (`c: false`) or a constellation (`c: true`).
+ * `id` is the pick id — the bare body id for bodies, or the `const:<Name>`
+ * namespaced id for constellations (so one `findPick` handles both kinds).
+ */
+interface FindRow {
+  c: boolean;
+  id: string;
+  name: string;
+  sub: string;
+}
+
+function findRowsFor(query: string): FindRow[] {
+  const rows: FindRow[] = [];
+  if (!query.trim()) {
+    for (const e of findMenu) rows.push({ c: false, id: e.id, name: e.name, sub: e.sub });
+    for (const e of constellationMenuAll.slice(0, FIND_MENU_CONST_CAP)) {
+      rows.push({ c: true, id: e.id, name: e.name, sub: e.sub });
+    }
+    return rows;
+  }
+  const bodies = searchBodies(ALL_BODIES, query);
+  for (const h of bodies) {
+    rows.push({
+      c: false,
+      id: h.id,
+      name: h.name,
+      sub: h.parentName ? `moon of ${h.parentName}` : h.kind,
+    });
+  }
+  const consts = searchConstellations(query);
+  for (const c of consts) rows.push({ c: true, id: c.id, name: c.name, sub: c.sub });
+  return rows;
+}
 
 function findLabel(id: string): string {
-  return id === '' ? 'Free camera' : (byId.get(id)?.name ?? id);
+  if (id === '') return 'Free camera';
+  if (id.startsWith(CONSTELLATION_ID_PREFIX)) return id.slice(CONSTELLATION_ID_PREFIX.length);
+  return byId.get(id)?.name ?? id;
 }
 
 /** Reflect the current follow into the input (called by flyTo + URL restore). */
@@ -799,36 +974,35 @@ function findMarkActive(): void {
 }
 
 function findRender(query: string): void {
-  findHits = searchBodies(ALL_BODIES, query);
+  const rows = findRowsFor(query);
   findListEl.replaceChildren();
   const frag = document.createDocumentFragment();
   if (!query.trim()) {
-    // Unfiltered: the full grouped menu (Sun → planets → moons → dwarfs).
+    // Unfiltered: Free camera row first, then bodies + a slice of constellations.
     const free = document.createElement('div');
     free.className = 'fr fr-free';
     free.innerHTML =
       '<span class="fr-name">Free camera</span><span class="fr-sub">orbit wherever</span>';
     free.addEventListener('click', () => findPick(''));
     frag.appendChild(free);
-    for (const e of findMenu) {
+    for (const r of rows) {
       const row = document.createElement('div');
-      row.className = 'fr';
-      row.innerHTML = `<span class="fr-name">${e.name}</span><span class="fr-sub">${e.sub}</span>`;
-      row.addEventListener('click', () => findPick(e.id));
+      row.className = r.c ? 'fr fr-const' : 'fr';
+      row.innerHTML = `<span class="fr-name">${r.name}</span><span class="fr-sub">${r.sub}</span>`;
+      row.addEventListener('click', () => findPick(r.id));
       frag.appendChild(row);
     }
-  } else if (findHits.length === 0) {
+  } else if (rows.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'fr-empty';
-    empty.textContent = 'No bodies match';
+    empty.textContent = 'No matches';
     frag.appendChild(empty);
   } else {
-    for (const h of findHits) {
+    for (const r of rows) {
       const row = document.createElement('div');
-      row.className = 'fr';
-      const sub = h.parentName ? `moon of ${h.parentName}` : h.kind;
-      row.innerHTML = `<span class="fr-name">${h.name}</span><span class="fr-sub">${sub}</span>`;
-      row.addEventListener('click', () => findPick(h.id));
+      row.className = r.c ? 'fr fr-const' : 'fr';
+      row.innerHTML = `<span class="fr-name">${r.name}</span><span class="fr-sub">${r.sub}</span>`;
+      row.addEventListener('click', () => findPick(r.id));
       frag.appendChild(row);
     }
   }
@@ -838,11 +1012,21 @@ function findRender(query: string): void {
   findListEl.hidden = false;
 }
 
-/** Select a body from the dropdown (or '' = free camera) and fly to it. */
+/**
+ * Select a body (or `const:<Name>` constellation, or '' = free camera) from
+ * the dropdown and fly to it. Constellations fly to a sky-dome view that
+ * centres the figure and lights its lines gold (plan 010, S4); the
+ * body/constellation pick clears the other's selection so only one target is
+ * ever emphasized.
+ */
 function findPick(id: string): void {
   findInputEl.value = findLabel(id);
   findClose();
   findInputEl.blur();
+  if (id.startsWith(CONSTELLATION_ID_PREFIX)) {
+    flyToConstellation(id.slice(CONSTELLATION_ID_PREFIX.length));
+    return;
+  }
   if (id) {
     const dest = camAnchorForBody(id);
     if (dest) {
@@ -850,8 +1034,9 @@ function findPick(id: string): void {
       return;
     }
   }
-  // "Free camera" (or a body with no frame): just drop the follow.
+  // "Free camera" (or a body with no frame): drop both selections.
   followId = '';
+  selectedConstellation = '';
   updateInfo();
   syncUrl();
 }
@@ -958,6 +1143,14 @@ if (urlState.follow && byId.has(urlState.follow)) {
   // Restoring a satellite selection re-arms its highlight ring too.
   selectedSatelliteId = moonParent.has(urlState.follow) ? urlState.follow : '';
 }
+// Restored constellation pick (plan 010, S4): re-arm the gold emphasis + the
+// find box label. No flight on load — a shared link's `cam` param (applied
+// below) already restores the exact view the picker parked the camera in.
+if (urlState.constellation && CONSTELLATIONS.some((c) => c.name === urlState.constellation)) {
+  selectedConstellation = urlState.constellation;
+  setFindValue(`const:${urlState.constellation}`);
+  lastHighlightPoseKey = ''; // refresh the highlight pass immediately
+}
 
 /** Snapshot the current UI + camera into a shareable ViewState. */
 function captureState(): ViewState {
@@ -966,6 +1159,7 @@ function captureState(): ViewState {
     speedLog: parseFloat(speedEl.value),
     reversed: clock.isReversed,
     follow: followId || undefined,
+    constellation: selectedConstellation || undefined,
     scale: scale === TRUE_SCALE ? 'true' : 'visible',
     orbits: orbitsEl.checked,
     labels: labelsEl.checked,
@@ -1339,6 +1533,10 @@ function frame(): void {
   // center is to the view center. Throttled + pose-gated, so idle frames cost
   // nothing. Runs after the camera pose for this frame is finalized.
   updateConstellationHighlightThrottled(nowMs);
+  // The picked constellation's gold lines pulse every frame (plan 010) — the
+  // pose-gated pass above only refreshes when the camera moves, so without
+  // this the pulse would freeze in a parked view. One material write.
+  updatePickedConstellationPulse(nowMs);
 
   // Pulsing highlight on the selected satellite (driven by wall-clock time so
   // the pulse is smooth and independent of the sim speed / direction).

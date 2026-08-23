@@ -198,6 +198,53 @@ export function frameConstellations(
 }
 
 /**
+ * Frame a single constellation for a sky-dome "look at it" view (plan 010,
+ * S4): the camera sits on the figure's own direction line at `camDist` from
+ * the origin, looking outward at the dome point `centerDir × domeRadius`.
+ * The Sun (at the origin) is then directly BEHIND the camera, so the figure
+ * reads against clean sky — the natural "from inside the dome" perspective —
+ * with the figure dead-center.
+ *
+ * The zoom comes from the FOV (the distance stays fixed, keeping the sun out
+ * of frame): the figure's far tip is at an angular half-separation `h` from
+ * the view axis (exact spherical geometry from the camera to the tip), and
+ * the FOV is solved so `h` fills `fill` of the SMALLER screen axis —
+ * whichever of vertical / horizontal governs wins (the same "safe margin"
+ * philosophy as `frameBody`). Tiny figures zoom in (small FOV), the largest
+ * (Hydra) clamp at `maxFov` and can be panned.
+ * `halfExtentRad` is the figure's far-tip angular half-extent at the dome
+ * (see `constellationLabelPose().halfExtent`).
+ */
+export function frameConstellation(
+  centerDir: Vec3,
+  halfExtentRad: number,
+  domeRadius: number,
+  camDist: number,
+  aspect = 1,
+  fill = 0.55,
+  minFov = 6,
+  maxFov = 120,
+): CamAnchor {
+  // Exact half-separation of the far tip as seen from the camera: the tip
+  // is at dome angle `halfExtentRad` from the view axis, camera on the axis
+  // at `camDist`. (atan2 degrades gracefully for tips past the horizon.)
+  const h = Math.atan2(
+    domeRadius * Math.sin(halfExtentRad),
+    domeRadius * Math.cos(halfExtentRad) - camDist,
+  );
+  const hReq = h / fill; // required half-angle so the tip lands at `fill`
+  const r2d = 180 / Math.PI;
+  const fovV = 2 * hReq * r2d; // vertical-axis-governed FOV
+  const fovH = 2 * Math.atan(hReq / aspect) * r2d; // horizontal-axis-governed
+  const fov = Math.min(maxFov, Math.max(minFov, Math.max(fovV, fovH)));
+  return {
+    pos: [centerDir[0] * camDist, centerDir[1] * camDist, centerDir[2] * camDist],
+    target: [centerDir[0] * domeRadius, centerDir[1] * domeRadius, centerDir[2] * domeRadius],
+    fov,
+  };
+}
+
+/**
  * Advance a flight by `dt` seconds and return the camera pose for this
  * frame. Mutates `flight.t` (so it is stateful across frames). The caller
  * may override `sample.target` with a live body position (for a picked body)

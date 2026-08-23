@@ -5,6 +5,7 @@ import {
   frameBody,
   frameSystem,
   frameConstellations,
+  frameConstellation,
   stepFlight,
   makeFlight,
   type Flight,
@@ -127,6 +128,45 @@ describe('frameConstellations', () => {
     const dist = Math.hypot(a.pos[0], a.pos[1], a.pos[2]);
     expect(dist).toBeLessThan(4800); // inside the constellation shell
     expect(dist).toBeGreaterThan(0);
+  });
+});
+
+describe('frameConstellation', () => {
+  const dir: Vec3 = [0.6, 0.2, 0.7746]; // unit (checked: 0.36+0.04+0.6=1.0)
+  const dome = 4800;
+  const camDist = 4000;
+  it("sits on the figure's direction line and aims at the dome point", () => {
+    const a = frameConstellation(dir, 0.1, dome, camDist);
+    // camera = dir * camDist, target = dir * domeRadius (dead-center the figure)
+    for (let i = 0; i < 3; i++) {
+      approx(a.pos[i], dir[i] * camDist, 1e-9);
+      approx(a.target[i], dir[i] * dome, 1e-9);
+    }
+    // the sun (origin) is exactly behind the camera: camera and target are
+    // collinear with the origin (same direction, opposite sides of nothing —
+    // both on the same ray from the origin).
+    const cross = [
+      a.pos[1] * a.target[2] - a.pos[2] * a.target[1],
+      a.pos[2] * a.target[0] - a.pos[0] * a.target[2],
+      a.pos[0] * a.target[1] - a.pos[1] * a.target[0],
+    ];
+    for (const c of cross) approx(c, 0, 1e-6);
+  });
+  it('bigger figure => wider FOV (more zoom-out), clamped to [minFov, maxFov]', () => {
+    const small = frameConstellation(dir, 0.05, dome, camDist);
+    const big = frameConstellation(dir, 0.5, dome, camDist);
+    expect(big.fov!).toBeGreaterThan(small.fov!);
+    const huge = frameConstellation(dir, 2.5, dome, camDist);
+    expect(huge.fov!).toBeLessThanOrEqual(120); // maxFov clamp
+    const tiny = frameConstellation(dir, 0.001, dome, camDist);
+    expect(tiny.fov!).toBeGreaterThanOrEqual(6); // minFov clamp
+  });
+  it('the smaller screen axis governs: portrait (aspect<1) needs a wider FOV than landscape', () => {
+    // Same figure, same geometry: a portrait canvas sees less horizontally,
+    // so the required FOV (driven by the binding axis) is wider or equal.
+    const landscape = frameConstellation(dir, 0.1, dome, camDist, 1.6);
+    const portrait = frameConstellation(dir, 0.1, dome, camDist, 0.6);
+    expect(portrait.fov!).toBeGreaterThanOrEqual(landscape.fov! - 1e-9);
   });
 });
 

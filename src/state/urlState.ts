@@ -6,6 +6,7 @@
  *   t   = sim time as UTC milliseconds            (e.g. 1758000000000)
  *   sp  = speed slider value, log10 days/sec      (e.g. 0 => 1 d/s)
  *   f   = followed body id                        (""/absent = free camera)
+ *   c   = picked constellation name               (""/absent = none)
  *   sc  = "v" (visible scale) | "t" (true scale)
  *   o   = orbits  on/off (1/0)
  *   l   = labels  on/off (1/0)
@@ -28,6 +29,8 @@ export interface ViewState {
   reversed?: boolean;
   /** Followed body id; '' or undefined = free camera. */
   follow?: string;
+  /** Picked constellation name; '' or undefined = none (plan 010, S4). */
+  constellation?: string;
   scale?: ScaleChoice;
   orbits?: boolean;
   labels?: boolean;
@@ -76,6 +79,9 @@ export function parseAppState(href: string): ViewState {
   const follow = q.get('f');
   if (follow != null) state.follow = follow;
 
+  const constellation = q.get('c');
+  if (constellation != null) state.constellation = constellation;
+
   const sc = q.get('sc');
   if (sc === 't') state.scale = 'true';
   else if (sc === 'v') state.scale = 'visible';
@@ -122,6 +128,7 @@ export function encodeAppState(href: string, s: ViewState): string {
   setOrDel('t', s.timeMs !== undefined ? String(Math.round(s.timeMs)) : undefined);
   setOrDel('sp', s.speedLog !== undefined ? String(round3(s.speedLog)) : undefined);
   setOrDel('f', s.follow === undefined ? undefined : s.follow);
+  setOrDel('c', s.constellation === undefined ? undefined : s.constellation);
   setOrDel('sc', s.scale === undefined ? undefined : s.scale === 'true' ? 't' : 'v');
   setOrDel('o', s.orbits === undefined ? undefined : s.orbits ? '1' : '0');
   setOrDel('l', s.labels === undefined ? undefined : s.labels ? '1' : '0');
