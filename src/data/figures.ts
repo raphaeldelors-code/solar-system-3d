@@ -27,6 +27,16 @@
  * 3D placement (mesh position/up/size) is computed here (pure) and
  * rendered by `buildConstellationFigures` in render/scene.ts:
  * image-right = east, image-up = celestial north, CCW rotation.
+ *
+ * Plan 013 (pilot): Delphinus, Ursa Major and Draco were re-anchored
+ * SEMANTICALLY — the Stellarium art for these three is the horizontal
+ * mirror image of the sky pattern under a pure similarity (the 3-anchor
+ * fits' true residuals were 2–18° and no similarity can fix chirality),
+ * so their PNGs are stored pre-mirrored and the fits below anchor the
+ * art's head/tail feature points to their sky stars (Al Salib/Aldulfin,
+ * Muscida/Alkaid, Eltanin/Giausar) then refine the center until every
+ * constellation star sits on the ink (max 0.07°). See
+ * plans/013-semantic-reanchor-pilot.md.
  */
 
 export interface FigureFit {
@@ -296,11 +306,11 @@ export const FIGURE_FITS: FigureFit[] = [
   },
   {
     constellation: 'Delphinus',
-    centerRAHours: 20.6925,
-    centerDecDeg: 13.1224,
-    sizeW: 4.59,
-    sizeH: 4.59,
-    rotationDeg: -93.8,
+    centerRAHours: 20.6889,
+    centerDecDeg: 14.1666,
+    sizeW: 5.38,
+    sizeH: 5.38,
+    rotationDeg: 11.94,
   },
   {
     constellation: 'Dorado',
@@ -312,11 +322,11 @@ export const FIGURE_FITS: FigureFit[] = [
   },
   {
     constellation: 'Draco',
-    centerRAHours: 17.3673,
-    centerDecDeg: 73.8226,
-    sizeW: 24.64,
-    sizeH: 24.64,
-    rotationDeg: -59.8,
+    centerRAHours: 15.6625,
+    centerDecDeg: 68.1989,
+    sizeW: 53.91,
+    sizeH: 53.91,
+    rotationDeg: 157.16,
   },
   {
     constellation: 'Equuleus',
@@ -704,11 +714,11 @@ export const FIGURE_FITS: FigureFit[] = [
   },
   {
     constellation: 'Ursa Major',
-    centerRAHours: 10.952,
-    centerDecDeg: 55.7295,
-    sizeW: 33.63,
-    sizeH: 33.63,
-    rotationDeg: -149.4,
+    centerRAHours: 10.6059,
+    centerDecDeg: 55.2756,
+    sizeW: 55.12,
+    sizeH: 55.12,
+    rotationDeg: -34.58,
   },
   {
     constellation: 'Ursa Minor',

@@ -74,6 +74,10 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 feat(render): constellation figures — replace hand-fitted Bode 1801 scan crops with Stellarium `western` sky-culture illustrations (85 professional transparent figures, each 3-anchored to Hipparcos stars), registered to the sky by a data-driven least-squares similarity transform (center+rotation+scale) — zero hand-tuning, anchor error ≤0.44°. The 3 with no pre-1922 figure (Puppis/Serpens/Vela) use original generated SVG art (ship's stern, two-mast sails, serpent) on the rotated star-cloud extent. Soft tinted underlay behind the IAU star lines. `7a4c7be`. `plans/012-constellation-figures-stellarium.md`
 
+## User queue — 2026-08-26 — plan 013 (pilot gate)
+
+- [ ] F1 fix(figures): semantic re-anchor pilot — Delphinus, Ursa Major, Draco misplaced (3-anchor similarity can't fix chirality; true residuals 2–18°). Mirror the 3 art PNGs (renderer has no flip param) + head/tail Procrustes anchor + center refinement until every star sits on the ink (max 0.07°). User validates the pilot before rollout to all 88. `plans/013-semantic-reanchor-pilot.md`
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
