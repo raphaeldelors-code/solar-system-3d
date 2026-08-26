@@ -76,7 +76,7 @@ loader, constellation tour, tooltips, screenshot button).
 
 ## User queue — 2026-08-26 — plan 013 (pilot gate)
 
-- [ ] F1 fix(figures): semantic re-anchor pilot — Delphinus, Ursa Major, Draco misplaced (3-anchor similarity can't fix chirality; true residuals 2–18°). Mirror the 3 art PNGs (renderer has no flip param) + head/tail Procrustes anchor + center refinement until every star sits on the ink (max 0.07°). User validates the pilot before rollout to all 88. `plans/013-semantic-reanchor-pilot.md`
+- [x] F1 fix(figures): semantic re-anchor pilot — Delphinus, Ursa Major, Draco misplaced (3-anchor similarity can't fix chirality; true residuals 2–18°). Mirror the 3 art PNGs (renderer has no flip param) + head/tail Procrustes anchor + center refinement until every star sits on the ink (max 0.07°). User validates the pilot before rollout to all 88. `plans/013-semantic-reanchor-pilot.md`
 
 ## Declined (user decision 2026-08-18)
 
