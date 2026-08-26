@@ -70,6 +70,10 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] S2 fix(render): kill constellation label see-through — labels/figures must not show through planets/satellites or the sun (occluded or hidden when a body is between camera and them); distracting in solar-system view — 93e01ea (plan 008). Fix: label SpriteMaterial depthTest false→true; opaque planet/satellite spheres write depth in the main pass so they occlude a label behind them, while the depthWrite:false sky lines/dots and the r≥5000 background starfield (behind the 4710 labels) never do. CDP-verified: 88/88 labels depthTest=true, constructed Mercury-over-Equuleus-label occlusion confirmed.
 - [x] S3 fix(nav): natural planet approach — replace the straight-down top view on planet pick with a "travel to the planet" fly-in that lands at a distance where the FULL planet + its satellites fit with a safe margin (never fills/cuts the screen) — dd3dac3 (plan 008). Fix: frameBody lands at 38° ecliptic elevation (30–45° ask) on a +Z bearing instead of pure overhead, and solves distance against the tighter of vertical/horizontal half-FOV (live canvas aspect) with BODY_FILL 0.9→0.62. CDP-verified on all 8 planets: 34–38° tilt, non-top-down, ~0.62 fill (satellite systems exact), 0.46–0.62 for the four small worlds (build-time frameExtent margin).
 
+## User queue — 2026-08-26 (overnight) — plan 012
+
+- [ ] F1 feat(render): constellation figures — replace hand-fitted Bode 1801 scan crops with Stellarium `western` sky-culture illustrations (85 professional transparent figures, each 3-anchored to Hipparcos stars), registered to the sky by a data-driven least-squares similarity transform (center+rotation+scale) — zero hand-tuning, anchor error ≤0.44°. All 88 (3 synthesized for Puppis/Serpens/Vela). Soft tinted underlay behind the IAU star lines. `plans/012-constellation-figures-stellarium.md`
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined

@@ -164,7 +164,7 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
     selectedConstellation || null,
     nowMs / 1000,
   );
-  // Plan 007: the classic figure plates breathe with the same curves.
+  // Plan 012: the constellation figures breathe with the same curves.
   if (figuresOn) {
     updateConstellationFigureHighlights(
       built.constellationFigures,
@@ -634,7 +634,7 @@ function applyToggles(): void {
   for (const field of built.belts) {
     field.mesh.visible = beltsEl.checked;
   }
-  // Plan 007: classic figure plates (the "Figures" toggle). The per-plate
+  // Plan 012: constellation figures (the "Figures" toggle). The per-figure
   // fade runs in the highlight pass; here we just switch the group.
   built.constellationFigures.visible = figuresOn;
 }

@@ -1,49 +1,51 @@
 import { describe, expect, it } from 'vitest';
 import { figureTextureUrl } from '../src/render/scene';
-import {
-  FIGURE_BOX_PADDING,
-  FIGURE_FITS,
-  TANGENT_PLANE_SIZE,
-  findFigureFit,
-  figurePlacement,
-  unitToRaDec,
-  type FigureFit,
-} from '../src/data/figures';
+import { raDecToUnit } from '../src/data/constellations';
+import { FIGURE_FITS, findFigureFit, figurePlacement, type FigureFit } from '../src/data/figures';
 
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const norm = (a: number[]) => Math.hypot(a[0], a[1], a[2]);
 const approx = (v: number, n = 6) => Math.round(v * 10 ** n) / 10 ** n;
 
-/** A unit direction pointing at RA 6h / Dec +40° in the scene frame. */
-const CENTROID: [number, number, number] = [0.6428, 0.342, 0.6845]; // not exact — normalized below
-const C = (CENTROID[0] ** 2 + CENTROID[1] ** 2 + CENTROID[2] ** 2) ** 0.5;
-const CEN = CENTROID.map((v) => v / C) as [number, number, number];
+/** A registered figure used for placement-shape tests. */
+const FIT: FigureFit = {
+  constellation: 'Test',
+  centerRAHours: 6.0,
+  centerDecDeg: 40.0,
+  sizeW: 20,
+  sizeH: 12,
+  rotationDeg: 30,
+};
+const CEN = raDecToUnit(FIT.centerRAHours, FIT.centerDecDeg);
 
-describe('figures data', () => {
-  it('prototype set is exactly 68 unique constellations (5 + batch 1 + batch 2 + batch 3a)', () => {
-    expect(FIGURE_FITS).toHaveLength(68);
+describe('figures data (plan 012)', () => {
+  it('covers exactly 88 unique constellations', () => {
+    expect(FIGURE_FITS).toHaveLength(88);
     const names = FIGURE_FITS.map((f) => f.constellation);
-    expect(new Set(names).size).toBe(68);
+    expect(new Set(names).size).toBe(88);
+    expect(names).toEqual([...new Set(names)]);
   });
 
-  it('fits have sane aspect ratios and plate sizes', () => {
+  it('fits have sane solved centers, sizes, and rotations', () => {
     for (const f of FIGURE_FITS) {
-      expect(f.aspect).toBeGreaterThan(0.2);
-      expect(f.aspect).toBeLessThan(5);
-      const size = f.sizeDeg ?? TANGENT_PLANE_SIZE;
-      expect(size).toBeGreaterThan(10);
-      expect(size).toBeLessThan(100);
+      const ra = ((f.centerRAHours % 24) + 24) % 24;
+      expect(ra).toBeGreaterThanOrEqual(0);
+      expect(ra).toBeLessThan(24);
+      expect(f.centerDecDeg).toBeGreaterThanOrEqual(-90);
+      expect(f.centerDecDeg).toBeLessThanOrEqual(90);
+      expect(f.sizeW).toBeGreaterThan(0.5);
+      expect(f.sizeH).toBeGreaterThan(0.5);
+      // Largest figure (Serpens, a cloud-center fit) is the only one this
+      // wide; every anchor-registered figure is far smaller.
+      expect(Math.max(f.sizeW, f.sizeH)).toBeLessThan(70);
+      expect(Math.abs(f.rotationDeg)).toBeLessThanOrEqual(180);
     }
   });
 
   it('findFigureFit hits and misses', () => {
-    expect(findFigureFit('Orion')?.aspect).toBeCloseTo(1.412, 3);
-    expect(findFigureFit('Pavo')).toBeUndefined();
-  });
-
-  it('no duplicate constellation names in the fit table', () => {
-    const names = FIGURE_FITS.map((f) => f.constellation);
-    expect(names).toEqual([...new Set(names)]);
+    expect(findFigureFit('Orion')).toBeDefined();
+    expect(findFigureFit('Puppis')).toBeDefined();
+    expect(findFigureFit('Not A Constellation')).toBeUndefined();
   });
 });
 
@@ -59,22 +61,20 @@ describe('figureTextureUrl', () => {
 });
 
 describe('figurePlacement', () => {
-  const fit: FigureFit = { constellation: 'Test', aspect: 1.2 };
-
-  it('position is the normalized centroid', () => {
-    const p = figurePlacement(fit, CEN);
+  it('position is the scene direction of the solved center', () => {
+    const p = figurePlacement(FIT);
     expect(p.position.map(approx)).toEqual(CEN.map(approx));
     expect(norm(p.position)).toBeCloseTo(1, 6);
   });
 
   it('upHint is perpendicular to position (tangent plane)', () => {
-    const p = figurePlacement(fit, CEN);
+    const p = figurePlacement(FIT);
     expect(Math.abs(dot(p.position, p.upHint))).toBeLessThan(1e-9);
     expect(norm(p.upHint)).toBeCloseTo(1, 6);
   });
 
   it('upHint at zero rotation points to celestial north on the tangent plane', () => {
-    const p = figurePlacement({ constellation: 'T', aspect: 1 }, CEN);
+    const p = figurePlacement({ ...FIT, rotationDeg: 0 });
     // North on the tangent plane = component of world-up perpendicular to n.
     const n = p.position;
     const north = [-n[1] * n[0], 1 - n[1] * n[1], -n[1] * n[2]];
@@ -90,73 +90,30 @@ describe('figurePlacement', () => {
   it('rotationDeg sets rotationRad but leaves upHint as the north projection', () => {
     // The renderer applies the in-plane rotation via mesh.rotateZ, so the
     // pure placement must NOT pre-rotate upHint (that would double-apply it).
-    const base = figurePlacement({ constellation: 'T', aspect: 1 }, CEN);
-    const rot = figurePlacement({ constellation: 'T', aspect: 1, rotationDeg: 90 }, CEN);
+    const base = figurePlacement({ ...FIT, rotationDeg: 0 });
+    const rot = figurePlacement(FIT);
     expect(rot.upHint.map(approx)).toEqual(base.upHint.map(approx));
     expect(Math.abs(dot(rot.position, rot.upHint))).toBeLessThan(1e-9);
-    expect(rot.rotationRad).toBeCloseTo(Math.PI / 2, 6);
+    expect(rot.rotationRad).toBeCloseTo((30 * Math.PI) / 180, 6);
   });
 
-  it('plane size fills the padded box preserving aspect', () => {
-    const p = figurePlacement({ constellation: 'T', aspect: 4 / 3 }, CEN);
-    const box = (TANGENT_PLANE_SIZE * Math.PI) / 180;
-    const usable = box * (1 - 2 * FIGURE_BOX_PADDING);
-    const expectedW = usable * Math.sqrt(4 / 3);
-    const expectedH = usable / Math.sqrt(4 / 3);
-    // W>U*... aspect 4/3 => w>h and w<=usable? w = usable*1.155 > usable!
-    // The clamp caps the wider dimension at `usable`.
-    expect(Math.max(p.planeSize[0], p.planeSize[1])).toBeCloseTo(usable, 6);
-    expect(p.planeSize[0] / p.planeSize[1]).toBeCloseTo(expectedW / expectedH, 6);
-  });
-
-  it('aspect 1 gives a square of the full padded box', () => {
-    const p = figurePlacement({ constellation: 'T', aspect: 1 }, CEN);
-    const usable = ((TANGENT_PLANE_SIZE * Math.PI) / 180) * (1 - 2 * FIGURE_BOX_PADDING);
-    expect(p.planeSize[0]).toBeCloseTo(usable, 6);
-    expect(p.planeSize[1]).toBeCloseTo(usable, 6);
-  });
-
-  it('sizeDeg scales the plate box (default is TANGENT_PLANE_SIZE)', () => {
-    const small = figurePlacement({ constellation: 'T', aspect: 1 }, CEN);
-    const big = figurePlacement({ constellation: 'T', aspect: 1, sizeDeg: 30 }, CEN);
-    expect(big.planeSize[0] / small.planeSize[0]).toBeCloseTo(30 / 15, 6);
-    expect(big.planeSize[1] / small.planeSize[1]).toBeCloseTo(30 / 15, 6);
-  });
-
-  it('wide plates clamp width to the box', () => {
-    const p = figurePlacement({ constellation: 'T', aspect: 3 }, CEN);
-    const usable = ((TANGENT_PLANE_SIZE * Math.PI) / 180) * (1 - 2 * FIGURE_BOX_PADDING);
-    expect(p.planeSize[0]).toBeCloseTo(usable, 6);
-    expect(p.planeSize[1]).toBeCloseTo(usable / 3, 6);
+  it('planeSize is the solved size in radians', () => {
+    const p = figurePlacement(FIT);
+    expect(p.planeSize[0]).toBeCloseTo((20 * Math.PI) / 180, 6);
+    expect(p.planeSize[1]).toBeCloseTo((12 * Math.PI) / 180, 6);
   });
 
   it('handles the celestial pole without NaN', () => {
-    const p = figurePlacement({ constellation: 'T', aspect: 1, rotationDeg: 30 }, [0, 1, 0]);
+    const p = figurePlacement({ ...FIT, centerDecDeg: 90, rotationDeg: 30 });
     expect(Number.isFinite(p.position[0] + p.upHint[0] + p.planeSize[0])).toBe(true);
     expect(norm(p.position)).toBeCloseTo(1, 6);
+    expect(norm(p.upHint)).toBeCloseTo(1, 6);
   });
 
-  it('unnormalizable centroid still yields a unit position (degenerate)', () => {
-    const p = figurePlacement({ constellation: 'T', aspect: 1 }, [0, 0, 0]);
-    expect(norm(p.position)).toBeCloseTo(1, 6);
-  });
-});
-
-describe('unitToRaDec', () => {
-  it('round-trips raDecToUnit', async () => {
-    const { raDecToUnit } = await import('../src/data/constellations');
-    for (const [ra, dec] of [
-      [0, 0],
-      [5.5877, -1.2],
-      [10.68, 56.3],
-      [19.98, 42.3],
-      [23.9, -43.1],
-    ]) {
-      const [backRa, backDec] = unitToRaDec(raDecToUnit(ra, dec));
-      expect(backDec).toBeCloseTo(dec, 5);
-      // RA is periodic; compare modulo 24h.
-      const diff = (backRa - ra + 24) % 24;
-      expect(Math.min(diff, 24 - diff)).toBeLessThan(1e-5);
-    }
+  it('placement is independent of constellation data (pure fit math)', () => {
+    const p1 = figurePlacement(FIT);
+    const p2 = figurePlacement(FIT);
+    expect(p1.position.map(approx)).toEqual(p2.position.map(approx));
+    expect(p1.planeSize.map(approx)).toEqual(p2.planeSize.map(approx));
   });
 });

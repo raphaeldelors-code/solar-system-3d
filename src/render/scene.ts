@@ -27,7 +27,7 @@ import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
 import { CONSTELLATIONS, raDecToUnit, type Constellation } from '../data/constellations';
-import { FIGURE_FITS, figurePlacement, unitToRaDec } from '../data/figures';
+import { FIGURE_FITS, figurePlacement } from '../data/figures';
 import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows';
 import {
   SUN_R,
@@ -1151,16 +1151,18 @@ export function figureTextureUrl(name: string): string {
 }
 
 /**
- * Build the classic constellation figure plates (plan 007): one
- * transparent, depth-tested plane per fitted constellation, lying on the
- * sky dome's tangent plane at the figure's centroid. RA-anchored — the
- * plate is a flat patch of sky, so it stays registered with the star
+ * Build the constellation figures (plan 012): one transparent,
+ * depth-tested plane per constellation, lying on the sky dome's tangent
+ * plane at the fit's SOLVED sky center. The art is a Stellarium
+ * "western" sky-culture illustration registered to the real stars via
+ * three Hipparcos anchors (see data/figures.ts), so the plane is
+ * RA-anchored — a flat patch of sky that stays registered with the star
  * lines while the camera moves (no billboard snapping).
  *
  * The group is HIDDEN by default; main.ts shows it with the "Figures"
- * toggle and drives per-plate opacity through
+ * toggle and drives per-plane opacity through
  * `updateConstellationFigureHighlights` (mirrors the D4 emphasis + Q2
- * presence curves, capped so the plate stays a soft underlay).
+ * presence curves, capped so the art stays a soft underlay).
  */
 export function buildConstellationFigures(): THREE.Group {
   const group = new THREE.Group();
@@ -1169,10 +1171,9 @@ export function buildConstellationFigures(): THREE.Group {
 
   const loader = new THREE.TextureLoader();
   for (const fit of FIGURE_FITS) {
-    const c = CONSTELLATIONS.find((cc) => cc.name === fit.constellation);
-    if (!c) continue;
+    if (!CONSTELLATION_NAME_INDEX.has(fit.constellation)) continue;
 
-    // Load (cached) the plate; decode happens in the browser — the cache
+    // Load (cached) the art; decode happens in the browser — the cache
     // keeps rebuilds from re-fetching.
     let tex = FIGURE_TEX_CACHE.get(fit.constellation);
     if (!tex) {
@@ -1182,30 +1183,10 @@ export function buildConstellationFigures(): THREE.Group {
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
 
-    // Anchor direction = mean of the stars' unit directions, shifted by the
-    // fit's optional RA/Dec offset (moves the art onto the figure's body
-    // rather than the mean star position — 1801 art is loose, not
-    // star-anchored, so the centroid alone misses the drawing).
-    let ax = 0,
-      ay = 0,
-      az = 0;
-    for (const s of c.stars) {
-      const [x, y, z] = raDecToUnit(s.raHours, s.decDeg);
-      ax += x;
-      ay += y;
-      az += z;
-    }
-    const m = Math.hypot(ax, ay, az) || 1;
-    const centroid: [number, number, number] = [ax / m, ay / m, az / m];
-    let placement: ReturnType<typeof figurePlacement>;
-    if (fit.offsetRAHours || fit.offsetDecDeg) {
-      const [raH, decD] = unitToRaDec(centroid);
-      const shifted = raDecToUnit(raH + (fit.offsetRAHours ?? 0), decD + (fit.offsetDecDeg ?? 0));
-      const sm = Math.hypot(shifted[0], shifted[1], shifted[2]) || 1;
-      placement = figurePlacement(fit, [shifted[0] / sm, shifted[1] / sm, shifted[2] / sm]);
-    } else {
-      placement = figurePlacement(fit, centroid);
-    }
+    // Anchor direction = the fit's solved sky center (anchor-registered
+    // for 85 figures, star-cloud-centered for the 3 specials) — no
+    // centroid/offset computation anymore.
+    const placement = figurePlacement(fit);
 
     const mat = new THREE.MeshBasicMaterial({
       map: tex,
