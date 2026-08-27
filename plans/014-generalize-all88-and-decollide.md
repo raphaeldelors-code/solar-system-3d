@@ -56,7 +56,7 @@ Star-ink scores were unaffected (they work in degree units consistently).
 ## Commit
 
 1. `cb853c0` — `feat(figures): re-anchor all 88 constellations to their star
-   patterns + de-collision`
+patterns + de-collision`
    - `public/constellation-figures/*.png`: 80 figures mirrored in place
      (renderer has no flip parameter; the baked mirror is the figure's true
      chirality per the Stellarium anchor test).
