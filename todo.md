@@ -78,6 +78,10 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 fix(figures): semantic re-anchor pilot — Delphinus, Ursa Major, Draco misplaced (3-anchor similarity can't fix chirality; true residuals 2–18°). Mirror the 3 art PNGs (renderer has no flip param) + head/tail Procrustes anchor + center refinement until every star sits on the ink (max 0.07°). User validates the pilot before rollout to all 88. `plans/013-semantic-reanchor-pilot.md`
 
+## User queue — 2026-08-26 — plan 014 (rollout + de-collision)
+
+- [x] F1 fix(figures): generalise to all 88 — re-solve every figure from Stellarium's 3-anchor correspondences (closed-form similarity, no vision/search). Anchor chirality test: 80 figures' stored art is the horizontal mirror of the sky pattern → mirror those 80 PNGs in place (renderer has no flip param). Self-selecting rule keeps 3 already-optimal fits (pilots from plan 013). Star match: 742/757 stars now on the art (was 380/757). Then a de-collision pass (per-figure center/size nudges minimizing art-on-art overlap on the sphere, star match guarded) cuts the worst figure overlap from 22.4% (Carina/Vela) to 12.9% with no pair above 13%; A/B vision-verified at in-app opacity. `plans/014-generalize-all88-and-decollide.md`
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
