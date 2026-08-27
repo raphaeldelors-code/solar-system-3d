@@ -200,6 +200,19 @@ base blue; rotate to 13h/+10° → gold moves to Virgo, Orion back to blue.
   cyan; pick the Moon → same as today.
 - **Subject:** `feat(bodies): blue pick ring + orbit highlight for planets and satellites`
 
+**SHIPPED `ca5e237` (2026-08-27).** Implemented exactly as specified. The
+per-body ring/orbit decision is a pure `bodyHighlightTargets(id, pickedId,
+hasOrbit, tSeconds)` (6 unit tests, `tests/bodyHighlight.test.ts`);
+`main.ts` now sets `selectedBodyId = bodyId ?? ''` on any body pick, clears
+it on constellation/free picks, and re-arms it from the `?f=` URL param for
+any body. Live CDP + real find-bar clicks (real three.js state): pick Mars →
+ring visible (op 0.43, breathing) + Mars orbit `0x7fd8ff` @0.95 + exactly 1
+ring scene-wide; pick the Moon → identical to the pre-change satellite
+behavior; pick the Sun → ring only (no orbit line); `?f=mars` restore arms
+it. Screenshot: cyan ring halo around Mars + its orbit path glowing bright
+cyan vs the faint `0x5570a0` baseline of every other orbit. Gates: 229/229,
+tsc clean, build clean, prettier clean.
+
 ## Execution notes
 
 - One feature in the tree at a time: implement → `npx vitest` +

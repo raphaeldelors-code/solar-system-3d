@@ -89,7 +89,7 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] P3 fix(figures): Camelopardalis — verified, NO change: shipped entry == standard plan-014 pipeline output (anchor LS + de-collide, drift 0.0000°); ad-hoc re-fit candidates (0.387/0.090/0.0786) rejected as policy breaks per user decision, 0.0786 also vision-rejected (wraps star cloud). Docs in plan 015 P3
 - [x] P4 fix(sky): bring constellation labels closer to their star paths (long figures: cap the far-tip margin) — `447776d`
 - [x] P5 feat(sky): gold proximity highlight for the nearest constellation (fades with motion) — `05e32d1`
-- [ ] P6 feat(bodies): blue pick ring + orbit highlight for planets (already for satellites)
+- [x] P6 feat(bodies): blue pick ring + orbit-path highlight for planets (already for satellites) — `ca5e237`
 
 ## Declined (user decision 2026-08-18)
 
