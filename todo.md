@@ -82,6 +82,15 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 fix(figures): generalise to all 88 — re-solve every figure from Stellarium's 3-anchor correspondences (closed-form similarity, no vision/search). Anchor chirality test: 80 figures' stored art is the horizontal mirror of the sky pattern → mirror those 80 PNGs in place (renderer has no flip param). Self-selecting rule keeps 3 already-optimal fits (pilots from plan 013). Star match: 742/757 stars now on the art (was 380/757). Then a de-collision pass (per-figure center/size nudges minimizing art-on-art overlap on the sphere, star match guarded) cuts the worst figure overlap from 22.4% (Carina/Vela) to 12.9% with no pair above 13%; A/B vision-verified at in-app opacity. `plans/014-generalize-all88-and-decollide.md`
 
+## User queue — 2026-08-27 — plan 015 (360° cam, giraffe, labels, highlights)
+
+- [x] P1 fix(sky): clear the constellation pick when a global anchor / free camera is chosen (stuck gold) — `plans/015-36...[truncated]
+- [ ] P2 feat(camera): TrackballControls for full 360° rotation past the poles
+- [ ] P3 fix(figures): retune Camelopardalis transform to its star path (vision: no mirror, flatter neck)
+- [ ] P4 fix(sky): bring constellation labels closer to their star paths (long figures: cap the far-tip margin)
+- [ ] P5 feat(sky): gold proximity highlight for the nearest constellation (fades with motion)
+- [ ] P6 feat(bodies): blue pick ring + orbit highlight for planets (already for satellites)
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
