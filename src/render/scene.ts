@@ -11,7 +11,7 @@
  * converted by the active VisualScale.
  */
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js';
 import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAtInto, sampleOrbit, type Vec3 } from '../sim/kepler';
 import { moonGeocentricJ2000 } from '../sim/moon';
@@ -166,7 +166,7 @@ export interface SceneBody {
 export interface BuiltScene {
   renderer: THREE.WebGLRenderer;
   camera: THREE.PerspectiveCamera;
-  controls: OrbitControls;
+  controls: TrackballControls;
   scene: THREE.Scene;
   bodies: Map<string, SceneBody>;
   /** Small-body fields (asteroid + Kuiper belts). */
@@ -272,9 +272,19 @@ export function buildScene(
   );
   camera.position.set(0, 16, 30);
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
+  const controls = new TrackballControls(camera, renderer.domElement);
+  // Trackball = free-axis rotation: it rotates the view around an arbitrary
+  // screen-space axis (and rolls camera.up), so the camera can pass OVER
+  // either celestial pole. OrbitControls kept up=+Y and clamped polar to
+  // [0, π] — that clamp was the user-visible "rotation blocked around the
+  // poles" (plan 015 P2). Speed constants tuned to match the old Orbit feel
+  // (OrbitControls damping 0.08 ≈ Trackball momentum decay 0.2; its default
+  // rotateSpeed 1.0 feels ~4x slower than Orbit's 1.0).
+  controls.rotateSpeed = 4.0;
+  controls.zoomSpeed = 1.2;
+  controls.dynamicDampingFactor = 0.2;
+  // (Trackball's default A/S/D keyboard pan is kept — the app uses no global
+  // key bindings that would conflict; it's a bonus input path.)
 
   // Lighting: Sun point light at origin + faint ambient.
   const sunLight = new THREE.PointLight(0xfff2d8, 3.5, 0, 0);

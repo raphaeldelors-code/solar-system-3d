@@ -3,8 +3,8 @@
  * constellations, the whole solar system, and any picked body. Pure math, no
  * DOM / no three.js, so it is unit-tested in Node.
  *
- * `main.ts` owns the live PerspectiveCamera + OrbitControls and drives these
- * with `stepFlight` each frame. The transition eases BOTH the orbit target
+ * `main.ts` owns the live PerspectiveCamera + TrackballControls and drives
+ * these with `stepFlight` each frame. The transition eases BOTH the orbit target
  * and the camera's offset-from-target with cubic in/out (slow start, fast
  * middle, gentle landing) — the "zoom + rotation with acceleration &
  * deceleration" the user asked for. FOV is held constant; the zoom comes

@@ -107,6 +107,9 @@ function advanceSkyTour(dtSeconds: number): void {
     radius * Math.cos(phi),
     radius * sinPhi * Math.cos(theta),
   );
+  // De-roll (plan 015 P2): keep the sweep level even if the camera was rolled
+  // before the tour started (lookAt honors camera.up).
+  deRollCameraUp(1);
   built.camera.lookAt(0, 0, 0);
 }
 
@@ -132,6 +135,42 @@ const HIGHLIGHT_INTERVAL_MS = 200; // ~5 Hz
 let lastHighlightMs = 0;
 let lastHighlightPoseKey = '';
 const HIGHLIGHT_FWD = new THREE.Vector3();
+// Scratch: previous follow-pivot position (Trackball follow-mode delta, below).
+const _followPrevPivot = new THREE.Vector3();
+// Scratch: de-roll vectors (plan 015 P2 flights/sky tour ease camera.up back
+// to a canonical frame — see deRollCameraUp).
+const _deRollDir = new THREE.Vector3();
+const _deRollRef = new THREE.Vector3();
+const _deRollUp = new THREE.Vector3();
+const _deRollQ = new THREE.Quaternion();
+const _deRollIdentity = new THREE.Quaternion();
+
+/**
+ * Ease `camera.up` back toward a canonical, un-rolled frame (plan 015 P2).
+ * Trackball rotation rolls camera.up freely (that is what allows rotating
+ * OVER a pole), but flight + sky-tour poses are driven by lookAt(), which
+ * honors camera.up — so a rolled up would land/pan the view sideways. Blend
+ * toward the canonical up perpendicular to the view direction: world +Y,
+ * falling back to world +Z when the view looks near-vertically.
+ * @param t 0..1 blend (1 = fully canonical)
+ */
+function deRollCameraUp(t: number): void {
+  if (t <= 0) return;
+  // Forward = view axis (camera -> target).
+  _deRollDir.subVectors(built.controls.target, built.camera.position).normalize();
+  // Canonical up = world +Y projected perpendicular to the view axis — the
+  // standard "north on top" frame (a cross product would be 90° off, landing
+  // the view sideways). Fall back to world +Z when the view is near-vertical,
+  // where +Y is (almost) parallel to the view axis and the projection degenerates.
+  _deRollRef.set(0, 1, 0);
+  if (Math.abs(_deRollDir.dot(_deRollRef)) > 0.99) _deRollRef.set(0, 0, 1);
+  // u = ref - f * (ref . f), normalized -> the nearest perpendicular to f.
+  _deRollUp.copy(_deRollRef).addScaledVector(_deRollDir, -_deRollRef.dot(_deRollDir)).normalize();
+  // q rotates current up -> canonical up; slerping it toward identity by
+  // (1 - t) keeps only the fraction t of that rotation, applied in-place.
+  _deRollQ.setFromUnitVectors(built.camera.up, _deRollUp).slerp(_deRollIdentity, 1 - t);
+  built.camera.up.applyQuaternion(_deRollQ);
+}
 
 function updateConstellationHighlightThrottled(nowMs: number): void {
   if (nowMs - lastHighlightMs < HIGHLIGHT_INTERVAL_MS) return;
@@ -267,7 +306,7 @@ let lastMoonResampleMs = 0;
 let contextLost = false;
 // Active camera flight (anchor / picked-body). `null` when no flight is in
 // progress; the render loop advances it and hands control back to the free
-// OrbitControls when it lands.
+// TrackballControls when it lands.
 let flight: Flight | null = null;
 
 // --- Scale toggle (B3) ------------------------------------------------------
@@ -576,9 +615,9 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
  * Fly to a picked constellation (plan 010, S4): move to the sky-dome anchor
  * that centres the figure, light its lines gold, and drop any body follow.
  * The figure is static (the sky doesn't move), so no body tracking is needed
- * — the flight lands and hands the camera back to OrbitControls looking out
- * at the dome. Re-picking the same constellation re-flies (harmless); picking
- * a different one moves the gold emphasis over.
+ * — the flight lands and hands the camera back to TrackballControls looking
+ * out at the dome. Re-picking the same constellation re-flies (harmless);
+ * picking a different one moves the gold emphasis over.
  */
 function flyToConstellation(name: string): void {
   const dest = camAnchorForConstellation(name);
@@ -1102,6 +1141,9 @@ window.addEventListener('resize', () => {
   built.camera.aspect = window.innerWidth / window.innerHeight;
   built.camera.updateProjectionMatrix();
   built.renderer.setSize(window.innerWidth, window.innerHeight);
+  // Trackball (plan 015 P2) caches the canvas rect in handleResize() at
+  // construction; refresh it after a resize or drag mapping goes stale.
+  built.controls.handleResize();
 });
 
 // --- Shareable URL state ----------------------------------------------------
@@ -1254,6 +1296,9 @@ fmtDate();
   },
   get camera() {
     return built.camera;
+  },
+  get controls() {
+    return built.controls;
   },
   get renderer() {
     return built.renderer;
@@ -1490,6 +1535,10 @@ function frame(): void {
       built.camera.fov = sample.fov;
       built.camera.updateProjectionMatrix();
     }
+    // De-roll (plan 015 P2): trackball rotation rolls camera.up; ease it back
+    // to the canonical frame over the flight so the landing is level. Must run
+    // before lookAt (which honors camera.up).
+    deRollCameraUp(easeInOutCubic(Math.min(1, flight.t / flight.duration)));
     built.camera.lookAt(target[0], target[1], target[2]);
     if (sample.done) {
       flight = null;
@@ -1501,8 +1550,9 @@ function frame(): void {
         startSkyTour();
       } else {
         built.controls.enabled = true;
-        // Re-sync OrbitControls' internal spherical state to the pose we just
-        // landed on so user drag/wheel/pan resumes smoothly from here.
+        // Re-sync the control's internal state to the pose we just landed on
+        // so user drag/wheel resumes smoothly from here (plan 015 P2: with
+        // Trackball this is just a no-op re-derivation of the eye vector).
         built.controls.update();
         // the user can break free any time via the Free-camera option.
         if (followId) {
@@ -1528,7 +1578,21 @@ function frame(): void {
     const entry = built.bodies.get(followId);
     const lockEntry =
       entry && moonParent.has(followId) ? built.bodies.get(moonParent.get(followId)!) : entry;
-    if (lockEntry) built.controls.target.lerp(lockEntry.worldPos, 0.2);
+    if (lockEntry) {
+      // Trackball (plan 015 P2): controls.update() no longer re-derives the
+      // camera from the pivot (OrbitControls' spherical state did), so a
+      // target-only lerp would leave the camera parked. Move the pivot toward
+      // the body and shift the CAMERA by the same delta — rigid tracking that
+      // preserves the user's current view offset (and any trackball roll).
+      _followPrevPivot.copy(built.controls.target);
+      built.controls.target.lerp(lockEntry.worldPos, 0.2);
+      const dx = built.controls.target.x - _followPrevPivot.x;
+      const dy = built.controls.target.y - _followPrevPivot.y;
+      const dz = built.controls.target.z - _followPrevPivot.z;
+      built.camera.position.x += dx;
+      built.camera.position.y += dy;
+      built.camera.position.z += dz;
+    }
     built.controls.update();
   } else {
     built.controls.update();
