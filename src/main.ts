@@ -18,7 +18,7 @@ import {
   applySpin,
   updateBeltFields,
   satelliteExtentScene,
-  updateSatelliteHighlight,
+  updateBodyHighlight,
   constellationCenter,
   constellationEmphasis,
   constellationEmphasisOpacity,
@@ -295,11 +295,13 @@ let built!: BuiltScene;
 let scale: VisualScale = VISIBLE_SCALE;
 let followId = '';
 /**
- * Currently highlighted satellite (a selected moon). The follow/camera can
- * be on the parent planet while the selected satellite stays lit — this is
- * how "pick a satellite" works: planet+all-orbits view + highlighted moon.
+ * Currently highlighted body — a planet OR a moon (plan 015 P6). The
+ * follow/camera can be on the parent planet while the selected satellite
+ * stays lit — that's how "pick a satellite" works: planet+all-orbits view
+ * + highlighted moon. A planet pick lights ITS OWN heliocentric orbit.
+ * '' = nothing picked.
  */
-let selectedSatelliteId = '';
+let selectedBodyId = '';
 /**
  * The constellation picked from the find box (plan 010, S4): its figure's
  * lines take the warm-gold emphasis color + a breathing pulse to stand out
@@ -590,7 +592,10 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
   // while the follow/selection stays on the moon for info + highlight.
   followId = bodyId ?? '';
   setFindValue(followId);
-  selectedSatelliteId = bodyId && moonParent.has(bodyId) ? bodyId : '';
+  // Plan 015 P6: the picked body gets the blue ring + its orbit line lit —
+  // a MOON (ring on the moon, its orbit) or a PLANET (ring on the planet,
+  // its heliocentric orbit). The Sun has no orbit line (ring only).
+  selectedBodyId = bodyId ?? '';
   // Every pick that is NOT a constellation clears the gold emphasis (plan
   // 015 P1): global anchors (Sky/System) pass bodyId=null, so the clear must
   // be unconditional — a parked camera otherwise keeps the gold (the
@@ -635,7 +640,7 @@ function flyToConstellation(name: string): void {
   if (!dest) return; // unknown name — ignore
   selectedConstellation = name; // arm the gold emphasis (before the flight so it shows)
   followId = ''; // a constellation pick is not a body follow
-  selectedSatelliteId = '';
+  selectedBodyId = '';
   stopSkyTour();
   pendingSkyTour = false;
   lastHighlightPoseKey = ''; // force the highlight pass to refresh on the next frame
@@ -1198,8 +1203,9 @@ if (!eventsRowEl.hidden) refreshEvents();
 if (urlState.follow && byId.has(urlState.follow)) {
   setFindValue(urlState.follow);
   followId = urlState.follow;
-  // Restoring a satellite selection re-arms its highlight ring too.
-  selectedSatelliteId = moonParent.has(urlState.follow) ? urlState.follow : '';
+  // Restoring a body selection re-arms its highlight ring too (plan 015 P6:
+  // any body — planet or satellite).
+  selectedBodyId = urlState.follow;
 }
 // Restored constellation pick (plan 010, S4): re-arm the gold emphasis + the
 // find box label. No flight on load — a shared link's `cam` param (applied
@@ -1618,9 +1624,10 @@ function frame(): void {
   // this the pulse would freeze in a parked view. One material write.
   updatePickedConstellationPulse(nowMs);
 
-  // Pulsing highlight on the selected satellite (driven by wall-clock time so
-  // the pulse is smooth and independent of the sim speed / direction).
-  updateSatelliteHighlight(built, selectedSatelliteId, nowMs / 1000);
+  // Pulsing highlight on the picked body — a planet or a moon (plan 015 P6) —
+  // driven by wall-clock time so the pulse is smooth and independent of the
+  // sim speed / direction.
+  updateBodyHighlight(built, selectedBodyId, nowMs / 1000);
 
   // Shadow culling: the Sun is a point light, so its shadow is a 6-face
   // cube map (2048² each) re-rendered every frame — the heaviest single GPU

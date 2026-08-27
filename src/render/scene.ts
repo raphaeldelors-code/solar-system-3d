@@ -1662,27 +1662,60 @@ export function satelliteExtentScene(planetId: string, scale: VisualScale): numb
 }
 
 /**
- * Selection highlight for a satellite: a pulsing glow ring in the moon's
- * equatorial plane + its orbit line brightened. `id` '' clears the
- * selection. Call once per frame with a wall-clock `tSeconds` to drive
- * the pulse (phase is absolute, so the pulse never jumps).
+ * Pure highlight targets for one body (plan 015 P6): given the picked
+ * body's id, what should THIS body's glow ring and orbit line look like?
+ * The satellite behavior is the special case `hasOrbit && id===moon` and
+ * stays pixel-identical: pulsing blue ring (`0.35 + 0.55·phase` opacity,
+ * `1 + 0.12·phase` breathing) + orbit line brightened to 0.95 /
+ * `0x7fd8ff`. A planet picks the SAME ring + its own heliocentric orbit
+ * line lit; the Sun (no orbit line) gets just the ring. `orbitOpacity` /
+ * `orbitColor` are `null` when the body has no orbit line to touch. Pure —
+ * unit-tested.
  */
-export function updateSatelliteHighlight(built: BuiltScene, id: string, tSeconds: number): void {
+export function bodyHighlightTargets(
+  bodyId: string,
+  pickedId: string,
+  hasOrbit: boolean,
+  tSeconds: number,
+): {
+  ringVisible: boolean;
+  ringOpacity: number;
+  ringBreath: number; // ring scale factor applied to sceneRadius
+  orbitOpacity: number | null;
+  orbitColor: number | null;
+} {
+  const isSel = pickedId !== '' && bodyId === pickedId;
   const phase = 0.5 + 0.5 * Math.sin(tSeconds * 3.4); // 0..1, ~1.9 s period
+  return {
+    ringVisible: isSel,
+    ringOpacity: isSel ? 0.35 + 0.55 * phase : 0,
+    ringBreath: 1 + 0.12 * phase,
+    orbitOpacity: hasOrbit ? (isSel ? 0.95 : 0.45) : null,
+    orbitColor: hasOrbit ? (isSel ? 0x7fd8ff : 0x5570a0) : null,
+  };
+}
+
+/**
+ * Selection highlight for a picked BODY (planet OR satellite, plan 015 P6):
+ * a pulsing glow ring in the body's equatorial plane + its orbit line
+ * brightened. `pickedId` '' clears the selection. Call once per frame with
+ * a wall-clock `tSeconds` to drive the pulse (phase is absolute, so the
+ * pulse never jumps). State per body comes from `bodyHighlightTargets`.
+ */
+export function updateBodyHighlight(built: BuiltScene, pickedId: string, tSeconds: number): void {
   for (const entry of built.bodies.values()) {
-    const isSel = id !== '' && entry.def.id === id;
-    entry.orbitEmphasis.visible = isSel;
-    if (isSel) {
+    const t = bodyHighlightTargets(entry.def.id, pickedId, entry.orbit !== null, tSeconds);
+    entry.orbitEmphasis.visible = t.ringVisible;
+    if (t.ringVisible) {
       const m = entry.orbitEmphasis.material as THREE.MeshBasicMaterial;
-      m.opacity = 0.35 + 0.55 * phase;
+      m.opacity = t.ringOpacity;
       // gentle breathing so the ring reads as "the one you picked"
-      const s = entry.sceneRadius * (1.0 + 0.12 * phase);
-      entry.orbitEmphasis.scale.setScalar(s);
+      entry.orbitEmphasis.scale.setScalar(entry.sceneRadius * t.ringBreath);
     }
-    if (entry.orbit) {
+    if (entry.orbit && t.orbitOpacity !== null && t.orbitColor !== null) {
       const om = entry.orbit.material as THREE.LineBasicMaterial;
-      om.opacity = isSel ? 0.95 : 0.45;
-      om.color.set(isSel ? 0x7fd8ff : 0x5570a0);
+      om.opacity = t.orbitOpacity;
+      om.color.set(t.orbitColor);
     }
   }
 }
