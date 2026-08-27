@@ -87,7 +87,7 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] P1 fix(sky): clear the constellation pick when a global anchor / free camera is chosen (stuck gold) — `plans/015-36...[truncated]
 - [x] P2 feat(camera): TrackballControls for full 360° rotation past the poles — `1b054a4`
 - [x] P3 fix(figures): Camelopardalis — verified, NO change: shipped entry == standard plan-014 pipeline output (anchor LS + de-collide, drift 0.0000°); ad-hoc re-fit candidates (0.387/0.090/0.0786) rejected as policy breaks per user decision, 0.0786 also vision-rejected (wraps star cloud). Docs in plan 015 P3
-- [ ] P4 fix(sky): bring constellation labels closer to their star paths (long figures: cap the far-tip margin)
+- [x] P4 fix(sky): bring constellation labels closer to their star paths (long figures: cap the far-tip margin) — `447776d`
 - [ ] P5 feat(sky): gold proximity highlight for the nearest constellation (fades with motion)
 - [ ] P6 feat(bodies): blue pick ring + orbit highlight for planets (already for satellites)
 

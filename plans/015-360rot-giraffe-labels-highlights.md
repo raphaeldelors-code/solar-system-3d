@@ -105,6 +105,23 @@ cap)` so the name floats near the figure's centroid/long axis instead of
   none overlapping, visibility intact.
 - **Subject:** `fix(sky): bring constellation labels closer to long figures`
 
+**SHIPPED `447776d` (2026-08-27).** Implemented as specced, with one safety
+addition the measurement demanded: a naive far-cap put 8/16 long figures'
+names ON their own star lines (and the pre-change build already had 7/88
+labels grazing their own figures — the plan 006 solver only guarded
+label↔label). So the cap ships with a uniform self-clear guard:
+`labelCoversOwnFigure()` + a 10× resolver cost on any candidate that would
+sit a name on its figure's own segments/star dots. The original far-tip
+margin is always a candidate, so the guard can only ever help — a name can
+never cover its own figure.
+Measured (real resolver, all 88): before — worst label→star 12.0° (Aquarius),
+median 5°, 7/88 grazed own lines; after — worst 10.7° (Eridanus, genuinely
+sprawling), 0 self-covers, 0 label-label overlaps, 15/88 capped (9 strictly
+shorter). Edge gap 0.035→0.02 rad as specced.
+Vision A/B (winter band 5h/2°, Hydra view 9.5h/−12°): Taurus name now
+adjacent to the bull (before: detached 5–10° upper-right), Cetus/Gemini
+closer; Hydra still ~0–1° from its body; no on-top, no overlaps in either.
+
 ### P5 — feat: highlight the nearest constellation's star pattern (gold, motion-faded)
 
 - **User:** "for the constellation closest to the view, the star pattern should
