@@ -80,6 +80,27 @@ not tuned from memory.
 - **Result: no code change, no PNG change, no `figures.ts` change.** P3 is
   closed as verified, not implemented.
 
+**Pilots check (2026-08-27, same policy — user asked whether the algorithm
+was applied to the original 3 pilots, Ursa Major in particular):** the pilots
+(Delphinus, Ursa Major, Draco from plan 013) DID go through the plan-014
+pipeline — they are among the `shipped(keep)` entries in `decollided.json`
+(5 kept: +Circinus, Serpens; 3 `na`: Puppis/Vela). "Keep" is the algorithm's
+output, not a bypass: the anchor gate (`anchor_eval`) scores the Stellarium
+ground-truth fit for all 85 anchored figures and accepts it only if it beats
+the plan-013 shipped baseline (UMa anchor 4.17 vs shipped 1.237 → keep; Dra
+2.993 vs 0.702 → keep; Del 0.247 vs 0.024 → keep), and the de-collide
+coordinate descent re-optimized all figures including the pilots (it only
+ships a neighbor's J if strictly lower than the incumbent — it found none
+better). Re-run verbatim with `p015_pilots_check.py` (recomputes star scores
+
+- ink overlap, runs the decollide search per pilot). So: the algorithm's
+  in-policy best IS what ships for all three, and the user's "smaller and
+  forward bear" hypothesis is exactly the anchor candidate the gate already
+  tested — rejected 3.35× on star score (the 19-star Big Dipper + 18-star
+  Kuma pattern match dominates the small overlap win: anchor total 5.3% vs
+  shipped 9.2%, and that excess overlap is Boötes 2.9% / Ursa Minor 3.2%,
+  both <13% ceiling). No change, per policy.
+
 ### P4 — fix: constellation name labels sit closer to their figures
 
 - **User:** labels are "badly placed, a bit too far away from the star paths",
@@ -145,6 +166,15 @@ closer; Hydra still ~0–1° from its body; no on-top, no overlaps in either.
   picked-wins rule. Live CDP: aim the view at a figure, assert its line color
   becomes gold; rotate away, assert it returns to blue.
 - **Subject:** `feat(sky): gold-proximity highlight for the nearest constellation`
+
+**SHIPPED `05e32d1` (2026-08-27).** One design correction vs the draft:
+"nearest" is resolved by **true angular distance (dot argmin)**, not by
+max-emphasis — the D4 curve saturates at 1.0 within 22°, so a max test
+ties several figures (live check at 5.6h/−1°: Lepus, Monoceros AND Orion
+all read emph 1.0). `proximityGoldMix(emph, isNearest, picked)` keeps the
+0.55 threshold ramp; caller computes the argmin once per ~5 Hz refresh.
+Live CDP: Orion's lines read exactly 0xffc46b gold with all 87 others
+base blue; rotate to 13h/+10° → gold moves to Virgo, Orion back to blue.
 
 ### P6 — feat: blue pick ring for planets + orbit-path highlight for picked bodies
 

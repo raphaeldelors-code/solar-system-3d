@@ -88,7 +88,7 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] P2 feat(camera): TrackballControls for full 360° rotation past the poles — `1b054a4`
 - [x] P3 fix(figures): Camelopardalis — verified, NO change: shipped entry == standard plan-014 pipeline output (anchor LS + de-collide, drift 0.0000°); ad-hoc re-fit candidates (0.387/0.090/0.0786) rejected as policy breaks per user decision, 0.0786 also vision-rejected (wraps star cloud). Docs in plan 015 P3
 - [x] P4 fix(sky): bring constellation labels closer to their star paths (long figures: cap the far-tip margin) — `447776d`
-- [ ] P5 feat(sky): gold proximity highlight for the nearest constellation (fades with motion)
+- [x] P5 feat(sky): gold proximity highlight for the nearest constellation (fades with motion) — `05e32d1`
 - [ ] P6 feat(bodies): blue pick ring + orbit highlight for planets (already for satellites)
 
 ## Declined (user decision 2026-08-18)
