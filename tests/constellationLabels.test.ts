@@ -28,9 +28,12 @@ import {
   constellationLabelPose,
   constellationLabelWidth,
   CONSTELLATION_LABEL_BASE_OPACITY,
+  CONSTELLATION_LABEL_EDGE_GAP_RAD,
+  CONSTELLATION_LABEL_FAR_CAP_RAD,
   CONSTELLATION_LABEL_HEIGHT_RAD,
   CONSTELLATION_LABEL_MINOR_HEIGHT_RAD,
   CONSTELLATION_LABEL_PEAK_OPACITY,
+  labelCoversOwnFigure,
   resolveConstellationLabels,
 } from '../src/render/scene';
 import { CONSTELLATIONS, raDecToUnit } from '../src/data/constellations';
@@ -82,15 +85,44 @@ describe('constellationLabelPose (plan 003 P3 / 004 Q1 / 006 sizing)', () => {
     }
   });
 
-  it('label margin grows with figure size + name length, and beats the figure', () => {
+  it('label margin clears the (capped) far edge + gap + ink for every figure', () => {
     for (const c of CONSTELLATIONS) {
       const m = constellationLabelMargin(c);
       const pose = constellationLabelPose(c);
-      // Always beyond the far tip + the gap (the margin must clear the
-      // figure, not land inside it).
-      expect(m).toBeGreaterThan(pose.halfExtent + 0.03);
+      // Beyond the effective far edge (plan 015 P4: capped at
+      // CONSTELLATION_LABEL_FAR_CAP_RAD for long, faint-tailed figures)
+      // plus the edge gap — the margin must clear the figure, never land
+      // inside it.
+      const effectiveFar = Math.min(pose.halfExtent, CONSTELLATION_LABEL_FAR_CAP_RAD);
+      expect(m).toBeGreaterThan(effectiveFar + 0.03);
       // And a real margin (the ink half is non-trivial for every name).
       expect(m).toBeGreaterThan(0.05);
+    }
+  });
+
+  it('plan 015 P4: the cap only shortens the margin, and the resolver never puts a name on its own figure', () => {
+    // The cap can only ever SHORTEN the base margin (min with halfExtent).
+    for (const c of CONSTELLATIONS) {
+      const pose = constellationLabelPose(c);
+      const m = constellationLabelMargin(c);
+      const inkHalf = constellationLabelInkWidthRad(c) / 2;
+      // m = min(halfExtent, CAP) + gap + inkHalf, so the "beyond the
+      // effective far edge" distance (m − gap − inkHalf) never exceeds the
+      // smaller of the figure's far tip and the cap.
+      const effectiveFar = m - CONSTELLATION_LABEL_EDGE_GAP_RAD - inkHalf;
+      expect(effectiveFar).toBeLessThanOrEqual(
+        Math.min(pose.halfExtent, CONSTELLATION_LABEL_FAR_CAP_RAD) + 1e-12,
+      );
+      // A capped figure (halfExtent past the cap) gets a strictly shorter
+      // margin than the old uncapped one.
+      if (pose.halfExtent > CONSTELLATION_LABEL_FAR_CAP_RAD) {
+        expect(m).toBeLessThan(pose.halfExtent + CONSTELLATION_LABEL_EDGE_GAP_RAD + inkHalf);
+      }
+    }
+    // The guardrail: no resolved label covers its own figure's star path.
+    const placements = resolveConstellationLabels(CONSTELLATIONS);
+    for (let i = 0; i < CONSTELLATIONS.length; i++) {
+      expect(labelCoversOwnFigure(CONSTELLATIONS[i], placements[i].dir)).toBe(false);
     }
   });
 

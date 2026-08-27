@@ -788,7 +788,26 @@ export function constellationEmphasisOpacity(tSec: number): number {
  * names from overlapping in crowded bands (winter sky: Orion/Taurus/
  * Auriga/Gemini/Cetus all at once).
  */
-export const CONSTELLATION_LABEL_EDGE_GAP_RAD = 0.035; // ~2° from tip to ink edge
+export const CONSTELLATION_LABEL_EDGE_GAP_RAD = 0.02; // ~1.2° from far edge to ink edge (plan 015 P4)
+/**
+ * Plan 015 P4: cap on the FAR-side label extent (radians past the figure
+ * center). A figure's principal-axis `halfExtent` is dominated by a few
+ * far-out stars — for long, faint-tailed figures (Taurus's horns, Hydra's
+ * head) the far tip is a faint tail well beyond the dense star body the
+ * user reads as "the figure", so an uncapped margin let the name float
+ * detached (measured: Taurus name 8–12° from its dense stars). Capping the
+ * far extent at ~20° pulls those names back to the body.
+ *
+ * This is a uniform rule (one constant, applied identically to all 88),
+ * NOT a per-figure hand-tune. The safety net is the resolver's self-clear
+ * guard (see {@link labelCoversOwnFigure}): a figure whose dense body
+ * genuinely extends past the cap would have its name land on its own star
+ * path at the capped position, so that candidate is rejected and the
+ * original (clearing) far-tip margin is kept instead. A name therefore
+ * NEVER lands on its own figure — plan 006's visibility guardrail holds,
+ * and this change can only ever move a label CLOSER, never worse.
+ */
+export const CONSTELLATION_LABEL_FAR_CAP_RAD = 0.35; // ~20°
 
 /**
  * Constellation text sizing (plan 006): every name has a CONSTANT angular
@@ -826,17 +845,60 @@ export function constellationLabelInkWidthRad(c: Constellation): number {
 }
 
 /**
- * Label block-center margin (radians past the figure center): far tip +
+ * Label block-center margin (radians past the figure center): far extent +
  * constant edge gap + half the ink, so the visible lettering sits a
  * constant `CONSTELLATION_LABEL_EDGE_GAP_RAD` past the figure's far edge
  * for every name.
+ *
+ * Plan 015 P4: the far extent is capped at
+ * `CONSTELLATION_LABEL_FAR_CAP_RAD` — long figures' far tip is often a faint
+ * tail far from the dense star path, so an uncapped margin let the name
+ * float beyond it. Figures whose star path would then sit under the name
+ * are handled by the resolver's self-clear fallback (see
+ * {@link labelCoversOwnFigure} / `resolveConstellationLabels`): they keep
+ * the original far-tip margin, so a name never lands on its own figure.
  */
 export function constellationLabelMargin(c: Constellation): number {
-  return (
-    constellationLabelPose(c).halfExtent +
-    CONSTELLATION_LABEL_EDGE_GAP_RAD +
-    constellationLabelInkWidthRad(c) / 2
-  );
+  const pose = constellationLabelPose(c);
+  const farExtent = Math.min(pose.halfExtent, CONSTELLATION_LABEL_FAR_CAP_RAD);
+  return farExtent + CONSTELLATION_LABEL_EDGE_GAP_RAD + constellationLabelInkWidthRad(c) / 2;
+}
+
+/** Extra clearance (radians) kept around the text by the self-clear check. */
+const LABEL_SELF_CLEAR_PAD_RAD = 0.006; // ~0.35°
+/**
+ * Plan 015 P4: does the label block centered on unit direction `dir`
+ * overlap the figure's OWN star path — its line segments or (unconnected)
+ * star dots? The text is approximated as a tangent-plane rectangle (ink
+ * half-width × height half, plus a small clearance pad). Pure — the
+ * resolver uses it so a capped name never covers its figure (the plan 006
+ * visibility guardrail).
+ */
+export function labelCoversOwnFigure(c: Constellation, dir: [number, number, number]): boolean {
+  const p = norm3(dir);
+  const inkHalf = constellationLabelInkWidthRad(c) / 2;
+  const halfH = constellationLabelHeightRad(c) / 2;
+  const ref = Math.abs(p[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const ex = norm3(cross3(p, ref));
+  const ey = norm3(cross3(p, ex));
+  const units = c.stars.map((s) => raDecToUnit(s.raHours, s.decDeg));
+  const inRect = (q: [number, number, number]) =>
+    Math.abs(dot3(q, ex)) < inkHalf + LABEL_SELF_CLEAR_PAD_RAD &&
+    Math.abs(dot3(q, ey)) < halfH + LABEL_SELF_CLEAR_PAD_RAD;
+  // Star path = the line segments (sampled) plus the star dots themselves
+  // (covers stars no segment touches).
+  for (const [i, j] of c.lines) {
+    for (let t = 0; t <= 1.0001; t += 0.05) {
+      const q: [number, number, number] = [
+        units[i][0] + (units[j][0] - units[i][0]) * t,
+        units[i][1] + (units[j][1] - units[i][1]) * t,
+        units[i][2] + (units[j][2] - units[i][2]) * t,
+      ];
+      if (inRect(q)) return true;
+    }
+  }
+  for (const q of units) if (inRect(q)) return true;
+  return false;
 }
 
 /** One resolved label placement (plan 006 solver output). */
@@ -863,6 +925,15 @@ const LABEL_SIDE_CANDIDATES: Array<1 | -1> = [1, -1];
 const LABEL_OVERLAP_PAD_RAD = 0.004;
 /** Cost of taking the ×1.5 margin — a nudge, not a ban (crowded sky). */
 const LABEL_FAR_MARGIN_COST = 0.25;
+/**
+ * Plan 015 P4: cost of a candidate placement that would put the name on
+ * the figure's OWN star path. Much larger than any overlap penalty, so a
+ * self-covering position is only ever chosen when NO clear candidate
+ * exists — and one always does (the far-tip side at ×1.0 is the original
+ * plan 006 margin, which clears by construction), so a name in practice
+ * NEVER covers its own figure.
+ */
+const LABEL_SELF_COVER_COST = 10;
 
 /**
  * Static anti-overlap solver for the 88 name labels (plan 006). The sky is
@@ -920,6 +991,12 @@ export function resolveConstellationLabels(list: Constellation[]): Constellation
           it.dir[2] * co + it.pose.axis[2] * so,
         ];
         let score = LABEL_FAR_MARGIN_COST * (marginScale - 1);
+        // Plan 015 P4: never sit the name on the figure's own star path.
+        // This is the guardrail that makes the far-extent cap safe — a
+        // capped position that would cover the figure costs far more than
+        // any neighbor overlap, so the solver falls back to the original
+        // (clearing) far-tip margin whenever they conflict.
+        if (labelCoversOwnFigure(list[i], dir)) score += LABEL_SELF_COVER_COST;
         for (const j of order) {
           const other = result[j];
           if (!other) continue;
