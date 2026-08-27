@@ -541,7 +541,12 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
   followId = bodyId ?? '';
   setFindValue(followId);
   selectedSatelliteId = bodyId && moonParent.has(bodyId) ? bodyId : '';
-  if (bodyId) selectedConstellation = ''; // a body pick drops the gold emphasis (plan 010)
+  // Every pick that is NOT a constellation clears the gold emphasis (plan
+  // 015 P1): global anchors (Sky/System) pass bodyId=null, so the clear must
+  // be unconditional — a parked camera otherwise keeps the gold (the
+  // highlight pass is pose-gated and would not refresh on its own).
+  selectedConstellation = '';
+  lastHighlightPoseKey = ''; // force a highlight refresh even mid-flight
   syncUrl(); // shareable state follows the pick: c= cleared when a body is chosen
   // A Sky landing kicks off the panoramic tour; any other flight cancels it.
   stopSkyTour();
