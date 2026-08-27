@@ -37,11 +37,11 @@ in-plane offsets). No optimization loop, no per-figure vision calls.
 
 - Star match: **742/757 stars now sit on the art** (380 before); weighted
   star score 11× lower.
-- Overlap: worst pair 22.4% → 12.9%, **no pair above 13%** (shipped had two
-  > 20%), and the four worst regions were A/B vision-checked at in-app
-  > (38% opacity) rendering: Carina/Vela and Hydra/Leo both clearly reduced
-  > ("broad muddy zone" → "small contained patch"); Boötes/Virgo is a minor
-  > head/hand edge-kiss; Antlia/Hydra minor.
+- Overlap: worst pair 22.4% → 12.9%, and no pair above 13% (shipped had two
+  pairs above 20%). The four worst regions were A/B vision-checked at in-app
+  (38% opacity) rendering: Carina/Vela and Hydra/Leo both clearly reduced
+  (broad muddy zone → small contained patch); Boötes/Virgo and Antlia/Hydra
+  are minor edge-kisses.
 - All 88 pass the data tests (sizes in (0.5, 70), rot in [−180, 180], 88
   unique names, PNG aspect invariant).
 
@@ -55,10 +55,18 @@ Star-ink scores were unaffected (they work in degree units consistently).
 
 ## Commit
 
-1. `fix(figures): plan 014 — anchor-registered all 88 + de-collide`
+1. `cb853c0` — `feat(figures): re-anchor all 88 constellations to their star
+   patterns + de-collision`
    - `public/constellation-figures/*.png`: 80 figures mirrored in place
      (renderer has no flip parameter; the baked mirror is the figure's true
      chirality per the Stellarium anchor test).
    - `src/data/figures.ts`: new centerRAHours/centerDecDeg/sizeW/sizeH/
      rotationDeg for 85 figures (3 unchanged — already optimal from plan 013).
    - Gates: vitest 212/212, `prettier --check .`, vite build.
+
+## Shipped
+
+Live on Pages (push auto-deploys):
+https://raphaeldelors-code.github.io/solar-system-3d/ — verify the three
+plan 013 pilots still look right and spot-check a few newly re-anchored
+figures (Orion, Cassiopeia, Scorpius) plus a de-collided region (Carina/Vela).
