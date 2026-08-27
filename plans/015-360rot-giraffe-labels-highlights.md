@@ -56,23 +56,29 @@ not tuned from memory.
   pointerdown/move) and assert camera crosses the y-axis sign boundary.
 - **Subject:** `feat(camera): trackball controls for full 360° rotation past the poles`
 
-### P3 — fix: Camelopardalis (giraffe) transform — vision-verified
+### P3 — Camelopardalis (giraffe) transform — CLOSED: keep the algorithm's position
 
-- **User:** "the giraffe could have a symmetry transformation to match a bit
-  better the path of stars".
-- **Vision verdict (rendered fit, 8 green/red rings):** mirror would make it
-  **worse** (head star on the right already matches); the neck is drawn too
-  steep — a smaller rotation + size/center nudge improves the path.
-- **Measured (magnitude-weighted star score, 8 stars, span 25.8°):**
-  shipped 0.798 (8/8 in-box, max_pen 0.375) vs best transform ≈ 0.39
-  (rotation −10°, size 35°, center nudge) — 2.1× better, still 8/8 in-box.
-  Final numbers come from the fine refinement grid (background job); the
-  shipped entry in figures.ts is updated to the measured best.
-- **No PNG change** (no mirror), no aspect change (sizeW=sizeH=256²) →
-  figures.test.ts invariants hold by construction.
-- **Test:** re-render the fit (p014_render), vision re-check must show the
-  neck/star line flatter and no regression in on-art star count; vitest green.
-- **Subject:** `fix(figures): retune Camelopardalis transform to its star path`
+- **User policy (2026-08-27):** "having one algorithm reusable across all
+  images placement is probably more valuable than a perfectly position that
+  break the algorithm policy. If the algorithm tells it the best position
+  let's keep it and move on."
+- **Verified:** the shipped `figures.ts` entry (RA 4.8352, Dec 66.1305, size
+  27.70, rot 31.64, mirrored PNG baked in plan 014) is **exactly** the
+  standard plan-014 pipeline output — 3-anchor closed-form LS similarity
+  (anchor step: RA 4.8352, Dec 67.2305, size 32.60, rot 31.64) + the same
+  de-collision pass used for all 88 (drift shipped vs `decollided.json`:
+  0.0000°). The algorithm's best in-policy position is already what ships.
+- **Ad-hoc candidates (reference only, rejected as policy breaks):**
+  coarse search 0.387 (size ≤40), fine 0.090 (size-40 boundary), fine2 0.0786
+  (size 42, rot −22°, 8/8 in-box, max_pen 0.017°). The 0.0786 fit was
+  vision-A/B'd at in-app 38% opacity and **rejected**: it wraps the star
+  cloud (belly under the stars) instead of tracing the spine — a
+  containment-score win, a path-match loss, reachable only by a wider
+  size/rotation search no other figure received.
+- **Mirror:** the plan-014 chirality test already selected the baked mirror
+  (uniform policy); vision independently said a further mirror makes it worse.
+- **Result: no code change, no PNG change, no `figures.ts` change.** P3 is
+  closed as verified, not implemented.
 
 ### P4 — fix: constellation name labels sit closer to their figures
 
