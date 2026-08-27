@@ -186,9 +186,19 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
   const vx = HIGHLIGHT_FWD.x,
     vy = HIGHLIGHT_FWD.y,
     vz = HIGHLIGHT_FWD.z;
+  // Plan 015 P5: nearest figure by TRUE angular distance (the D4 emphasis
+  // saturates at 1 within 22°, so a max-emphasis test would tie several
+  // figures). One argmin per refresh — 88 dot products at ~5 Hz.
+  let nearestIdx = -1;
+  let bestDot = -Infinity;
   for (let i = 0; i < CONSTELLATION_CENTER_DIRS.length; i++) {
     const d = CONSTELLATION_CENTER_DIRS[i];
     CONSTELLATION_EMPHASES[i] = constellationEmphasis(d, [vx, vy, vz]);
+    const dot = d[0] * vx + d[1] * vy + d[2] * vz;
+    if (dot > bestDot) {
+      bestDot = dot;
+      nearestIdx = i;
+    }
   }
   // Camera-distance presence (plan 003 P4): the sky is a full-sphere
   // wraparound, so in a body close-up it sweeps across the whole frame and
@@ -202,6 +212,7 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
     presence,
     selectedConstellation || null,
     nowMs / 1000,
+    nearestIdx,
   );
   // Plan 012: the constellation figures breathe with the same curves.
   if (figuresOn) {
