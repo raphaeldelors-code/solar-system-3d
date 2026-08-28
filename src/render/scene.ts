@@ -19,7 +19,6 @@ import { AU_KM } from '../sim/types';
 import {
   makeSurfaceTexture,
   makeLabelTexture,
-  makeConstellationNameTexture,
   layoutConstellationName,
   CONSTELLATION_NAME_CANVAS_W,
 } from './textures';
@@ -1153,8 +1152,15 @@ export function buildConstellations(): THREE.Group {
   // input list).
   const placements = resolveConstellationLabels(CONSTELLATIONS);
 
+  // Plan 016 P1: name labels moved to the screen-space overlay
+  // (`constellationScreenLabels.ts`) — the 3D sprites caused depth-test
+  // flicker and "label through the figure" under the 360° trackball.
+  // The solver's per-figure anchor directions are exposed on the group so
+  // main.ts can feed the overlay every frame (same math, 2D rendering).
+  const labelDirs: [number, number, number][] = [];
   const dotVerts: number[] = [];
   for (let i = 0; i < CONSTELLATIONS.length; i++) {
+    labelDirs.push(placements[i].dir);
     const c = CONSTELLATIONS[i];
     const pos = c.stars.map((s) => {
       const [x, y, z] = raDecToUnit(s.raHours, s.decDeg);
@@ -1180,40 +1186,6 @@ export function buildConstellations(): THREE.Group {
     lines.name = `constellation-lines:${c.name}`;
     group.add(lines);
 
-    // Name label (D3/D7, plan 003 P3, re-anchored plan 004 Q1, plan 006):
-    // elegant lettering BESIDE the figure with a CONSTANT visible gap
-    // (CONSTELLATION_LABEL_EDGE_GAP_RAD, ~2°) from the figure's FAR TIP to
-    // the ink's near edge — the margin includes half the actual letter ink,
-    // so every name reads at the same distance from its figure. The SIDE +
-    // margin come from the static anti-overlap solver (plan 006) and the
-    // letter size is a constant per-tier cap height (see
-    // constellationLabelHeightRad). depthTest is ON (plan 008 S2): a planet
-    // or satellite sitting between the camera and the label writes depth in
-    // the opaque pass, so the label is correctly occluded instead of
-    // painting through the body. The background starfield (r ≥ 5000, behind
-    // the 4710 label) and the depthWrite:false sky lines/dots never block it.
-    const placement = placements[i];
-    const labelTex = makeConstellationNameTexture(c.name);
-    const labelMat = new THREE.SpriteMaterial({
-      map: labelTex,
-      depthTest: true,
-      transparent: true,
-      opacity: CONSTELLATION_LABEL_BASE_OPACITY,
-    });
-    const label = new THREE.Sprite(labelMat);
-    // Texture is 4:1; the width = constant cap height × canvas/font ratio
-    // (see constellationLabelWidth) so the LETTER size never varies per
-    // name — only the number of letters does.
-    const fullW = constellationLabelWidth(c) * (CONSTELLATION_RADIUS - 90);
-    label.scale.set(fullW, fullW / 4, 1);
-    label.position.set(
-      placement.dir[0] * (CONSTELLATION_RADIUS - 90),
-      placement.dir[1] * (CONSTELLATION_RADIUS - 90),
-      placement.dir[2] * (CONSTELLATION_RADIUS - 90),
-    );
-    label.name = `constellation-label:${c.name}`;
-    group.add(label);
-
     for (const p of pos) dotVerts.push(...p);
   }
 
@@ -1223,6 +1195,10 @@ export function buildConstellations(): THREE.Group {
   dots.name = 'constellation-stars';
   group.add(dots);
 
+  // Plan 016 P1: expose the solver anchor directions so main.ts can feed
+  // the screen-space label layer every frame (the 3D name sprites are gone).
+  group.userData.labelDirs = labelDirs;
+
   // Expose for disposal.
   group.userData.dispose = () => {
     for (const child of group.children) {
@@ -1230,9 +1206,6 @@ export function buildConstellations(): THREE.Group {
       if (o instanceof THREE.LineSegments) {
         o.geometry.dispose();
         (o.material as THREE.Material).dispose();
-      } else if (o instanceof THREE.Sprite) {
-        (o.material as THREE.SpriteMaterial).map?.dispose();
-        o.material.dispose();
       }
     }
     dotGeo.dispose();
@@ -1361,15 +1334,20 @@ export function updateConstellationFigureHighlights(
 }
 
 /**
- * D4: fade each constellation's lines + name label by how close its center
- * is to the camera's view axis. `emphases[i]` must be the per-constellation
+ * D4: fade each constellation's lines by how close its center is to the
+ * camera's view axis. `emphases[i]` must be the per-constellation
  * `constellationEmphasis` output (view-center proximity, 0..1). Cheap: only
  * writes a float per material. Driven from the frame loop at ~5 Hz and
  * only when the camera actually moved.
  *
- * `presence` (plan 003 P4) multiplies everything — lines, name labels AND
- * the shared star dots — so the whole sky fades together when the camera
- * is close to a body and returns at sky-view distances (default 1).
+ * The name LABELS no longer live here (plan 016 P1): they are rendered on
+ * the 2D screen-space overlay (`render/constellationScreenLabels.ts`), which
+ * consumes the same emphasis values at display rate. This pass only writes
+ * the line materials + the shared star dots.
+ *
+ * `presence` (plan 003 P4) multiplies everything — lines AND the shared
+ * star dots — so the whole sky fades together when the camera is close to a
+ * body and returns at sky-view distances (default 1).
  */
 export function updateConstellationHighlight(
   group: THREE.Group,
@@ -1396,14 +1374,6 @@ export function updateConstellationHighlight(
       : undefined;
     if (idx === undefined) continue;
     const emph = emphases[idx] ?? 0;
-    if (child instanceof THREE.Sprite) {
-      // Labels: unchanged — the D4 curve only. The picked figure's NAME
-      // label keeps the standard blue treatment (the gold lines carry the
-      // pick).
-      ((child as THREE.Sprite).material as THREE.Material).opacity =
-        constellationLabelOpacity(emph) * presence;
-      continue;
-    }
     // Line segments: D4 base curve, then the pick emphasis overrides — the
     // selected figure's lines take the warm-gold color + a breathing pulse
     // (plan 010); everyone else returns to the base color + D4 opacity.

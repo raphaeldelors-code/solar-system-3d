@@ -274,18 +274,18 @@ export function layoutConstellationName(name: string): ConstellationNameLayout {
 }
 
 /**
- * Constellation name: elegant spaced serif capitals with a soft starlight
- * glow and a hairline flourish (split line + small diamond) beneath. The
- * font is auto-scaled so names of any length fill the same canvas width —
- * glyphs stay a consistent visual size (a sprite scaled to match). This is
- * the decorative sky lettering; `makeLabelTexture` is the utilitarian body
- * label.
+ * Draw the constellation name lettering (elegant spaced serif capitals, soft
+ * starlight glow, hairline flourish) into `ctx` on the 512×128 canvas.
+ * `variant` selects the palette: `'base'` (blue-white, the sky default) or
+ * `'green'` (apple-green, the emphasis color for the picked / nearest
+ * figure — plan 016 P2). Used by `makeConstellationNameTexture` (3D sprite)
+ * and the screen-space label layer (plan 016 P1).
  */
-export function makeConstellationNameTexture(name: string): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = CONSTELLATION_NAME_CANVAS_W;
-  canvas.height = CONSTELLATION_NAME_CANVAS_H;
-  const ctx = canvas.getContext('2d')!;
+export function drawConstellationName(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  variant: 'base' | 'green' = 'base',
+): void {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const text = name.toUpperCase();
@@ -299,19 +299,35 @@ export function makeConstellationNameTexture(name: string): THREE.CanvasTexture 
       x += charWidths[i] + sp;
     }
   };
+  const base =
+    variant === 'green'
+      ? {
+          glow: 'rgba(124, 252, 90, 0.9)',
+          halo: 'rgba(150, 255, 120, 0.85)',
+          core: '#eaffe8',
+          flourish: 'rgba(124, 252, 90, 0.5)',
+          diamond: 'rgba(190, 255, 160, 0.85)',
+        }
+      : {
+          glow: 'rgba(143, 176, 255, 0.9)',
+          halo: 'rgba(190, 210, 250, 0.9)',
+          core: '#eef4ff',
+          flourish: 'rgba(160, 185, 235, 0.5)',
+          diamond: 'rgba(205, 224, 255, 0.85)',
+        };
   // Two glow passes (wide soft halo), then a crisp shadow-free core so the
   // letterforms stay sharp on top of the halo.
-  ctx.shadowColor = 'rgba(143, 176, 255, 0.9)';
+  ctx.shadowColor = base.glow;
   ctx.shadowBlur = 14;
-  ctx.fillStyle = 'rgba(190, 210, 250, 0.9)';
+  ctx.fillStyle = base.halo;
   drawText();
   drawText();
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#eef4ff';
+  ctx.fillStyle = base.core;
   drawText();
   // Hairline flourish: two strokes broken by a small diamond under the name.
   const y = 90;
-  ctx.strokeStyle = 'rgba(160, 185, 235, 0.5)';
+  ctx.strokeStyle = base.flourish;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(inkStartX - 16, y);
@@ -319,7 +335,7 @@ export function makeConstellationNameTexture(name: string): THREE.CanvasTexture 
   ctx.moveTo(CONSTELLATION_NAME_CANVAS_W / 2 + 10, y);
   ctx.lineTo(inkStartX + inkWidthPx + 16, y);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(205, 224, 255, 0.85)';
+  ctx.fillStyle = base.diamond;
   ctx.beginPath();
   ctx.moveTo(CONSTELLATION_NAME_CANVAS_W / 2, y - 5);
   ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2 + 5, y);
@@ -327,6 +343,21 @@ export function makeConstellationNameTexture(name: string): THREE.CanvasTexture 
   ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2 - 5, y);
   ctx.closePath();
   ctx.fill();
+}
+
+/**
+ * Constellation name texture: wraps {@link drawConstellationName} in a
+ * canvas. The 3D-sprite path is gone (plan 016 P1 moved names to the
+ * screen-space label layer); this stays for any 3D consumer + tests.
+ */
+export function makeConstellationNameTexture(
+  name: string,
+  variant: 'base' | 'green' = 'base',
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = CONSTELLATION_NAME_CANVAS_W;
+  canvas.height = CONSTELLATION_NAME_CANVAS_H;
+  drawConstellationName(canvas.getContext('2d')!, name, variant);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;

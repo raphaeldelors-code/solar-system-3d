@@ -30,12 +30,21 @@ import {
   applyScaleMorph,
   reprojectOrbitLine,
   resampleMoonOrbitLine,
+  resolveConstellationLabels,
+  constellationLabelOpacity,
   VISIBLE_SCALE,
   TRUE_SCALE,
   CONSTELLATION_RADIUS,
   type BuiltScene,
   type VisualScale,
 } from './render/scene';
+import {
+  createConstellationLabelLayer,
+  updateConstellationScreenLabels,
+  CONSTELLATION_LABEL_MIN_SCREEN_OPACITY,
+  type ScreenLabelLayer,
+  type ScreenLabelUpdate,
+} from './render/constellationScreenLabels';
 import { CONSTELLATIONS } from './data/constellations';
 import {
   frameBody,
@@ -122,9 +131,10 @@ for (const ev of ['pointerdown', 'wheel', 'keydown', 'touchstart']) {
 // --- Constellation proximity highlight (D4) ------------------------------
 // The dome is static and the camera moves, so each figure's center DIRECTION
 // is precomputed once; per frame it's one dot-product per constellation
-// (88 total) between that direction and the camera's view axis. Throttled
-// to ~5 Hz and skipped entirely when the camera pose is unchanged — the
-// feature costs nothing while idle.
+// (88 total) between that direction and the camera's view axis. The 88
+// emphases are computed EVERY frame (the screen-space label overlay, plan
+// 016 P1, needs them at display rate); the MATERIAL writes (lines/figures)
+// stay throttled to ~5 Hz and pose-gated, so idle frames cost little.
 const CONSTELLATION_CENTER_DIRS = CONSTELLATIONS.map((c) => constellationCenter(c));
 // Figure far-tip angular half-extents (plan 010): precomputed once for the
 // constellation fly-to's zoom solve (frameConstellation). Same geometry the
@@ -144,6 +154,22 @@ const _deRollRef = new THREE.Vector3();
 const _deRollUp = new THREE.Vector3();
 const _deRollQ = new THREE.Quaternion();
 const _deRollIdentity = new THREE.Quaternion();
+
+// --- Plan 016 P1: screen-space constellation name labels (2D overlay) ----
+// The 88 name sprites moved off the sky dome to a 2D canvas overlay
+// (render/constellationScreenLabels.ts): a screen-space label can never
+// depth-pop or slice through a figure under the 360° trackball, and its
+// opacity is recomputed at display rate (no 5 Hz stepping).
+let labelLayer: ScreenLabelLayer | null = null;
+// The plan-006 solver's per-figure anchor directions — unchanged math; the
+// overlay only renders them in screen space.
+const LABEL_ANCHOR_DIRS = resolveConstellationLabels(CONSTELLATIONS).map((p) => p.dir);
+// Nearest-figure index (plan 015 P5), recomputed per frame in
+// computeConstellationEmphases; read by the 5 Hz material pass below.
+let LABEL_NEAREST_IDX = -1;
+// Scratch: label-occlusion ray + direction (one per label, reused).
+const LABEL_OCCL_RAY = new THREE.Raycaster();
+const LABEL_OCCL_DIR = new THREE.Vector3();
 
 /**
  * Ease `camera.up` back toward a canonical, un-rolled frame (plan 015 P2).
@@ -172,15 +198,13 @@ function deRollCameraUp(t: number): void {
   built.camera.up.applyQuaternion(_deRollQ);
 }
 
-function updateConstellationHighlightThrottled(nowMs: number): void {
-  if (nowMs - lastHighlightMs < HIGHLIGHT_INTERVAL_MS) return;
-  const cp = built.camera.position;
-  // Include the pick in the gate: a selection change must force a highlight
-  // refresh even if the camera is parked (plan 010).
-  const key = `${cp.x.toFixed(2)}|${cp.y.toFixed(2)}|${cp.z.toFixed(2)}|${built.camera.quaternion.w.toFixed(3)}|${selectedConstellation}`;
-  if (key === lastHighlightPoseKey) return;
-  lastHighlightMs = nowMs;
-  lastHighlightPoseKey = key;
+/**
+ * Plan 016 P1: per-frame constellation emphases. The 88-dot-product argmin
+ * loop moved out of the 5 Hz pose-gated pass (below) into the render loop so
+ * the screen-space label overlay can re-evaluate every name's opacity at
+ * display rate — 5 Hz opacity stepping was half of the old sprite flicker.
+ */
+function computeConstellationEmphases(): void {
   // Camera forward = its local −Z expressed in world space.
   HIGHLIGHT_FWD.set(0, 0, -1).applyQuaternion(built.camera.quaternion);
   const vx = HIGHLIGHT_FWD.x,
@@ -188,7 +212,7 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
     vz = HIGHLIGHT_FWD.z;
   // Plan 015 P5: nearest figure by TRUE angular distance (the D4 emphasis
   // saturates at 1 within 22°, so a max-emphasis test would tie several
-  // figures). One argmin per refresh — 88 dot products at ~5 Hz.
+  // figures). One argmin per frame — 88 dot products, ~µs.
   let nearestIdx = -1;
   let bestDot = -Infinity;
   for (let i = 0; i < CONSTELLATION_CENTER_DIRS.length; i++) {
@@ -200,6 +224,18 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
       nearestIdx = i;
     }
   }
+  LABEL_NEAREST_IDX = nearestIdx;
+}
+
+function updateConstellationHighlightThrottled(nowMs: number): void {
+  if (nowMs - lastHighlightMs < HIGHLIGHT_INTERVAL_MS) return;
+  const cp = built.camera.position;
+  // Include the pick in the gate: a selection change must force a highlight
+  // refresh even if the camera is parked (plan 010).
+  const key = `${cp.x.toFixed(2)}|${cp.y.toFixed(2)}|${cp.z.toFixed(2)}|${built.camera.quaternion.w.toFixed(3)}|${selectedConstellation}`;
+  if (key === lastHighlightPoseKey) return;
+  lastHighlightMs = nowMs;
+  lastHighlightPoseKey = key;
   // Camera-distance presence (plan 003 P4): the sky is a full-sphere
   // wraparound, so in a body close-up it sweeps across the whole frame and
   // dominates. Fade the whole sky (lines, names, star dots) to 0.25× up
@@ -212,7 +248,7 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
     presence,
     selectedConstellation || null,
     nowMs / 1000,
-    nearestIdx,
+    LABEL_NEAREST_IDX,
   );
   // Plan 012: the constellation figures breathe with the same curves.
   if (figuresOn) {
@@ -686,11 +722,11 @@ function applyToggles(): void {
     if (entry.orbit) (entry.orbit.material as THREE.Material).visible = orbitsEl.checked;
     entry.label.visible = labelsEl.checked;
   }
-  // Constellation NAME labels follow the Labels toggle (D3); the sky lines
-  // and star dots are always present — they are the sky itself.
-  for (const child of built.constellations.children) {
-    if (child.name.startsWith('constellation-label:')) child.visible = labelsEl.checked;
-  }
+  // Constellation NAME labels follow the Labels toggle (D3). Plan 016 P1:
+  // they live on the 2D screen-space overlay, so the toggle just shows or
+  // hides the layer. The sky lines and star dots are always present — they
+  // are the sky itself.
+  labelLayer?.setVisible(labelsEl.checked);
   for (const field of built.belts) {
     field.mesh.visible = beltsEl.checked;
   }
@@ -1272,8 +1308,22 @@ screenshotBtn.addEventListener('click', async () => {
   const stamp =
     `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}` +
     `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z`;
+  // Plan 016 P1: the name labels live on the 2D overlay, which
+  // canvas.toBlob() cannot see. Composite the WebGL frame + overlay onto a
+  // temporary canvas at pixel size and export that, so saved PNGs keep
+  // their labels (the base-variant lettering, exactly as on screen).
+  const src = labelLayer && labelsEl.checked ? labelLayer.canvas : null;
+  let out: HTMLCanvasElement = canvas;
+  if (src) {
+    out = document.createElement('canvas');
+    out.width = canvas.width;
+    out.height = canvas.height;
+    const octx = out.getContext('2d')!;
+    octx.drawImage(canvas, 0, 0);
+    octx.drawImage(src, 0, 0, canvas.width, canvas.height);
+  }
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob((b) => resolve(b), 'image/png'),
+    out.toBlob((b) => resolve(b), 'image/png'),
   );
   if (!blob) {
     screenshotBtn.textContent = 'Export failed';
@@ -1293,6 +1343,12 @@ screenshotBtn.addEventListener('click', async () => {
 // --- Init ------------------------------------------------------------------
 
 rebuildScene(scale);
+// Plan 016 P1: constellation name labels live on a 2D screen-space overlay
+// (not 3D sprites) — see render/constellationScreenLabels.ts. One layer for
+// the page's lifetime: it anchors to the #app canvas, which persists across
+// scene rebuilds (scale morphs).
+labelLayer = createConstellationLabelLayer(canvas);
+labelLayer.setVisible(labelsEl.checked);
 wireAnchorButtons();
 // Reflect a URL-restored scale in the toggle (label + active state).
 syncScaleUI();
@@ -1319,6 +1375,11 @@ fmtDate();
   },
   get renderer() {
     return built.renderer;
+  },
+  // Plan 016 P1: the 2D constellation name label overlay (CDP checks read
+  // its canvas content + display state under the Labels toggle).
+  get labelLayer() {
+    return labelLayer;
   },
   // Live body entries (id -> {def, mesh, worldPos, sceneRadius, frameExtent,
   // parent}) + the satellite-extent helper, so e2e checks can verify
@@ -1433,6 +1494,115 @@ canvas.addEventListener('pointerup', (ev) => {
 });
 
 // --- Animation loop ---------------------------------------------------------
+
+/**
+ * Plan 016 P1: render the screen-space constellation name labels for this
+ * frame. Runs every frame (unthrottled): label position and opacity follow
+ * the camera at display rate — exactly what the old 3D sprites could not do
+ * (5 Hz opacity stepping + depth-test popping = the flicker; the fixed 3D
+ * anchor = the "label through the figure" slicing). Zero cost while the
+ * Labels toggle is off (the layer is hidden and this returns immediately).
+ *
+ * Occlusion (plan 008 S2, kept in spirit): a body sitting between the camera
+ * and a name's anchor hides the name — one analytic ray vs the body meshes,
+ * computed only for labels already above the draw threshold.
+ */
+function updateConstellationScreenLabelFrame(): void {
+  if (!labelLayer || !labelsEl.checked) return;
+  const camera = built.camera;
+  const camPos = camera.position;
+  const px = camPos.x,
+    py = camPos.y,
+    pz = camPos.z;
+  const presence = constellationPresence(camPos.length());
+  const updates: ScreenLabelUpdate[] = [];
+  for (let i = 0; i < CONSTELLATIONS.length; i++) {
+    const emph = CONSTELLATION_EMPHASES[i];
+    if (constellationLabelOpacity(emph) * presence <= CONSTELLATION_LABEL_MIN_SCREEN_OPACITY)
+      continue;
+    const dir = LABEL_ANCHOR_DIRS[i];
+    // Analytic occlusion: the anchor sits at dir * CONSTELLATION_RADIUS, so
+    // its distance from the camera is the law-of-cosines expression below
+    // (dir is a unit vector). A body hit closer than that hides the name.
+    // NOTE the ray DIRECTION must be (dir*R − camPos).normalize() — the
+    // anchor's actual bearing, NOT (dir − camPos): the anchor is 4800 units
+    // out, so from a near-origin camera the two differ by up to the body's
+    // angular radius, and the unscaled variant points every ray at the
+    // system core (hiding every name behind the Sun).
+    const dirDotCam = px * dir[0] + py * dir[1] + pz * dir[2];
+    const anchorDist = Math.sqrt(
+      CONSTELLATION_RADIUS * CONSTELLATION_RADIUS +
+        (px * px + py * py + pz * pz) -
+        2 * CONSTELLATION_RADIUS * dirDotCam,
+    );
+    LABEL_OCCL_RAY.set(
+      camPos,
+      LABEL_OCCL_DIR.set(
+        dir[0] * CONSTELLATION_RADIUS - px,
+        dir[1] * CONSTELLATION_RADIUS - py,
+        dir[2] * CONSTELLATION_RADIUS - pz,
+      ).normalize(),
+    );
+    // PERF: a full-mesh raycast per label per frame was the old code's
+    // pointer-move cost paid 88× every frame. Pre-filter angularly first:
+    // only a body whose disk could touch the anchor bearing needs the ray.
+    // (Sun ~21 u at 34 u ≈ 36° still passes easily; planets/moons are far
+    // tighter.) frameExtent covers Saturn's rings, sceneRadius the disk.
+    let occluded = false;
+    const rd = LABEL_OCCL_DIR;
+    for (const entry of built.bodies.values()) {
+      if (!entry.mesh.visible) continue;
+      // World position: the mesh sits at local origin inside its tilt pivot
+      // (scene.add(pivot)), so m.position is NOT the world position.
+      const wp = entry.worldPos;
+      const bx = wp.x - px,
+        by = wp.y - py,
+        bz = wp.z - pz;
+      const blen = Math.sqrt(bx * bx + by * by + bz * bz);
+      if (blen < 1e-6) continue;
+      const inv = 1 / blen;
+      const ux = bx * inv,
+        uy = by * inv,
+        uz = bz * inv;
+      // sin(θ) between the body bearing and the anchor bearing:
+      // occludable only if the body disk could touch the ray.
+      const crossX = uy * rd.z - uz * rd.y;
+      const crossY = uz * rd.x - ux * rd.z;
+      const crossZ = ux * rd.y - uy * rd.x;
+      const sinB = Math.sqrt(Math.min(1, crossX * crossX + crossY * crossY + crossZ * crossZ));
+      const discRadius = Math.max(
+        1,
+        entry.frameExtent > 0 ? entry.frameExtent / 2 : entry.sceneRadius,
+      );
+      if (sinB > (discRadius + 2) / blen) continue; // well clear of the bearing
+      // Passed the pre-filter: full raycast against this body only.
+      LABEL_OCCL_RAY.far = blen * 2;
+      const hits = LABEL_OCCL_RAY.intersectObject(entry.mesh, false);
+      if (hits.length > 0 && hits[0].distance < anchorDist) {
+        occluded = true;
+        break;
+      }
+    }
+    updates.push({
+      name: CONSTELLATIONS[i].name,
+      dir,
+      emphasis: emph,
+      // Plan 016 P2 colorizes the picked/nearest name (green variant); P1
+      // keeps the base lettering for all names so the commit stays one
+      // concern.
+      emphasized: false,
+      occluded,
+    });
+  }
+  updateConstellationScreenLabels(
+    labelLayer,
+    camera,
+    updates,
+    presence,
+    window.innerWidth,
+    window.innerHeight,
+  );
+}
 
 function frame(): void {
   requestAnimationFrame(frame);
@@ -1615,9 +1785,12 @@ function frame(): void {
     built.controls.update();
   }
 
-  // Constellation proximity highlight (D4): fade each figure by how close its
-  // center is to the view center. Throttled + pose-gated, so idle frames cost
-  // nothing. Runs after the camera pose for this frame is finalized.
+  // Plan 016 P1: re-evaluate the 88 view emphases every frame — the
+  // screen-space label overlay reads them at display rate (no stepping).
+  computeConstellationEmphases();
+  // Constellation proximity highlight (D4): material writes only —
+  // throttled + pose-gated, so idle frames cost little. Runs after the
+  // camera pose for this frame is finalized.
   updateConstellationHighlightThrottled(nowMs);
   // The picked constellation's gold lines pulse every frame (plan 010) — the
   // pose-gated pass above only refreshes when the camera moves, so without
@@ -1642,6 +1815,9 @@ function frame(): void {
   if (shadowsOn !== built.sunLight.castShadow) built.sunLight.castShadow = shadowsOn;
 
   built.renderer.render(built.scene, built.camera);
+  // Screen-space constellation name labels (plan 016 P1): the 2D overlay
+  // pass after the 3D render, so the names sit crisp above the frame.
+  updateConstellationScreenLabelFrame();
   fmtDate();
   updateInfo();
 }

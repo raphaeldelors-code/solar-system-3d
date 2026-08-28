@@ -91,6 +91,13 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] P5 feat(sky): gold proximity highlight for the nearest constellation (fades with motion) — `05e32d1`
 - [x] P6 feat(bodies): blue pick ring + orbit-path highlight for planets (already for satellites) — `ca5e237`
 
+## User queue — 2026-08-27 — plan 016 (screen-space labels, green emphasis, Serpens)
+
+- [ ] P1 feat(sky): screen-space constellation name labels — 2D canvas overlay replaces the 88 label sprites (no flicker, no through-figure); labels projected every frame at the plan-006 solver dirs; occlusion by bodies kept via per-label raycast; Save-screenshot composites the overlay so PNGs still contain the labels. `plans/016-screen-space-labels-green-emphasis-plate-audit.md`
+- [ ] P2 feat(sky): apple-green emphasis (0x7cfc5a) + per-constellation glowing star overlay + green picked/nearest label
+- [ ] P3 fix(figures): remove generated Serpens silhouette (duplicates the snake already in the Ophiuchus plate; 87 fits); Puppis/Vela audited + kept
+- [ ] P4 docs: record P1–P3 hashes + live-deploy verify
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined

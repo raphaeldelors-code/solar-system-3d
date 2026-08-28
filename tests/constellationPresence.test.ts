@@ -75,21 +75,19 @@ describe('presence floor (plan 004 Q2)', () => {
 });
 
 describe('updateConstellationHighlight presence factor', () => {
+  // Plan 016 P1: name labels left the scene graph (2D screen-space overlay),
+  // so this pass only touches the per-constellation LINE materials + the
+  // shared star dots — the fake sky matches what buildConstellations() now
+  // produces.
   function fakeSky() {
     const group = new THREE.Group();
     const lineMats: THREE.LineBasicMaterial[] = [];
-    const labelMats: THREE.SpriteMaterial[] = [];
     for (const c of CONSTELLATIONS) {
       const lm = new THREE.LineBasicMaterial({ transparent: true });
       const lines = new THREE.LineSegments(new THREE.BufferGeometry(), lm);
       lines.name = `constellation-lines:${c.name}`;
       group.add(lines);
       lineMats.push(lm);
-      const sm = new THREE.SpriteMaterial({ transparent: true });
-      const label = new THREE.Sprite(sm);
-      label.name = `constellation-label:${c.name}`;
-      group.add(label);
-      labelMats.push(sm);
     }
     const dots = new THREE.Points(
       new THREE.BufferGeometry(),
@@ -97,17 +95,16 @@ describe('updateConstellationHighlight presence factor', () => {
     );
     dots.name = 'constellation-stars';
     group.add(dots);
-    return { group, lineMats, labelMats, dots };
+    return { group, lineMats, dots };
   }
 
-  it('scales lines, labels AND the shared star dots by the same factor', () => {
-    const { group, lineMats, labelMats, dots } = fakeSky();
+  it('scales lines AND the shared star dots by the same factor', () => {
+    const { group, lineMats, dots } = fakeSky();
     const emphases = new Array(CONSTELLATIONS.length).fill(1); // everything at peak
     const p = 0.4;
     updateConstellationHighlight(group, emphases, p);
     const expected = CONSTELLATION_PEAK_OPACITY * p;
     for (const m of lineMats) expect(m.opacity).toBeCloseTo(expected, 5);
-    for (const m of labelMats) expect(m.opacity).toBeCloseTo(expected, 5);
     expect((dots.material as THREE.PointsMaterial).opacity).toBeCloseTo(p, 5);
   });
 
