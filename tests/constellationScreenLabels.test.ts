@@ -18,9 +18,12 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   projectSkyDir,
+  selectVisibleLabels,
   CONSTELLATION_LABEL_SCREEN_PX,
   CONSTELLATION_LABEL_MIN_SCREEN_OPACITY,
   CONSTELLATION_LABEL_SCREEN_PAD_PX,
+  CONSTELLATION_LABEL_MAX_VISIBLE,
+  type ScreenLabelUpdate,
 } from '../src/render/constellationScreenLabels';
 import { CONSTELLATION_RADIUS } from '../src/render/scene';
 
@@ -141,5 +144,102 @@ describe('overlay constants (plan 016 P1)', () => {
     expect(CONSTELLATION_LABEL_MIN_SCREEN_OPACITY).toBeGreaterThan(0);
     expect(CONSTELLATION_LABEL_MIN_SCREEN_OPACITY).toBeLessThan(0.1);
     expect(CONSTELLATION_LABEL_SCREEN_PAD_PX).toBeGreaterThan(50);
+  });
+
+  it('plan 017 F2: the visible-label cap is a small handful', () => {
+    expect(CONSTELLATION_LABEL_MAX_VISIBLE).toBe(8);
+  });
+});
+
+describe('selectVisibleLabels (plan 017 F2 — view cone + de-collision + cap)', () => {
+  /** Build a ScreenLabelUpdate looking `deg` off the view axis, in screen +x. */
+  function upd(
+    name: string,
+    deg: number,
+    extra: Partial<ScreenLabelUpdate> = {},
+  ): ScreenLabelUpdate {
+    const a = (deg * Math.PI) / 180;
+    return {
+      name,
+      dir: [Math.sin(a), 0, -Math.cos(a)],
+      emphasis: 1,
+      emphasized: false,
+      occluded: false,
+      ...extra,
+    };
+  }
+
+  it('excludes figures outside the 48° emphasis cone (emphasis 0)', () => {
+    // 60° off axis → emphasis 0 (outside the 48° out-band).
+    const sel = selectVisibleLabels([upd('ORION', 60, { emphasis: 0 })], CAM(), W, H, 1);
+    expect(sel).toEqual([]);
+  });
+
+  it('includes figures inside the cone', () => {
+    const sel = selectVisibleLabels([upd('ORION', 20, { emphasis: 0.8 })], CAM(), W, H, 1);
+    expect(sel.map((s) => s.name)).toEqual(['ORION']);
+  });
+
+  it('hides a label whose box overlaps a stronger one (keeps the stronger)', () => {
+    // Two labels at 5° and 8° on the same horizontal (same y): 3° projects
+    // to ~56 px on a 1000 px square — well inside a CAMELOPARDALIS ink box
+    // (~108 px + pad each side), so they MUST collide. The one with higher
+    // emphasis wins.
+    const strong = upd('CAMELOPARDALIS', 5, { emphasis: 0.9 });
+    const weak = upd('CAMELOPARDALIS', 8, { emphasis: 0.4 });
+    const sel = selectVisibleLabels([strong, weak], CAM(), W, H, 1);
+    expect(sel.length).toBe(1);
+    expect(sel[0].opacity).toBeGreaterThan(0.6); // the stronger (higher emph) one
+  });
+
+  it('caps the list at MAX_VISIBLE even with many well-separated candidates', () => {
+    // 12 candidates spread VERTICALLY (same x, 5° steps → ≥44 px apart on a
+    // 1000 px square, more than the 38 px box height) so none de-collide:
+    // the only thing that can trim the list is the cap. Angles past ~52°
+    // project beyond the 260 px off-screen pad and are culled — 10 of the
+    // 12 stay candidates, and the cap must still win: 8 out, not 10.
+    const updates: ScreenLabelUpdate[] = [];
+    for (let i = 0; i < 12; i++) {
+      const deg = 2.5 + i * 5; // 2.5°…57.5° — first 10 within cone + pad
+      const a = (deg * Math.PI) / 180;
+      updates.push({
+        name: 'ORION',
+        dir: [0, Math.sin(a), -Math.cos(a)],
+        emphasis: 1 - i * 0.03,
+        emphasized: false,
+        occluded: false,
+      });
+    }
+    const sel = selectVisibleLabels(updates, CAM(), W, H, 1);
+    expect(sel.length).toBeLessThanOrEqual(CONSTELLATION_LABEL_MAX_VISIBLE);
+    expect(sel.length).toBe(8);
+  });
+
+  it('the picked label survives even when it overlaps a stronger one', () => {
+    // Picked at 0° (its emphasis would rank it LAST), another label at 2°
+    // with far higher emphasis overlapping its box (2° ≈ 37 px < the ~52 px
+    // LYRA ink box + pad). The picked figure must still win the slot (rank 1
+    // beats any emphasis), and the weaker-overlapping one must be hidden.
+    const picked = upd('LYRA', 0, { emphasized: true, emphasis: 0.3 });
+    const other = upd('LYRA', 2, { emphasis: 0.95 });
+    const sel = selectVisibleLabels([other, picked], CAM(), W, H, 1);
+    expect(sel.map((s) => s.name)).toEqual(['LYRA']);
+    expect(sel[0].emphasized).toBe(true);
+  });
+
+  it('returns an empty list when presence is below the floor', () => {
+    const sel = selectVisibleLabels([upd('ORION', 0, { emphasis: 1 })], CAM(), W, H, 0.005);
+    expect(sel).toEqual([]);
+  });
+
+  it('never returns more than the cap and always keeps the picked figure first', () => {
+    const updates: ScreenLabelUpdate[] = [upd('LYRA', 0, { emphasized: true, emphasis: 0.1 })];
+    for (let i = 0; i < 10; i++) {
+      updates.push(upd('ORION', 3 + i * 2, { emphasis: 1 - i * 0.04 }));
+    }
+    const sel = selectVisibleLabels(updates, CAM(), W, H, 1);
+    expect(sel[0].name).toBe('LYRA');
+    expect(sel[0].emphasized).toBe(true);
+    expect(sel.length).toBeLessThanOrEqual(CONSTELLATION_LABEL_MAX_VISIBLE);
   });
 });

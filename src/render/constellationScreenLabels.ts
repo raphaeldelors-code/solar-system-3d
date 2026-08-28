@@ -30,6 +30,7 @@ import {
   CONSTELLATION_NAME_CANVAS_H,
   CONSTELLATION_NAME_CANVAS_W,
   drawConstellationName,
+  layoutConstellationName,
 } from './textures';
 
 /**
@@ -44,6 +45,16 @@ export const CONSTELLATION_LABEL_SCREEN_PX = 30;
 export const CONSTELLATION_LABEL_MIN_SCREEN_OPACITY = 0.02;
 /** Skip labels whose anchor projects this far (CSS px) outside the viewport. */
 export const CONSTELLATION_LABEL_SCREEN_PAD_PX = 260;
+/**
+ * Plan 017 F2: hard cap on how many names a single frame may draw. The old
+ * "draw everything above the opacity floor" strategy projected 40+ names
+ * into a phone's small FOV and stacked them into an unreadable smear in
+ * the frame center. A handful of the MOST central names — never more than
+ * this many — is the simple, legible rule: on a phone screen the eye gets
+ * a few big names, not a wall of them. The picked figure always counts as
+ * one of the slots (it is what the user asked to see).
+ */
+export const CONSTELLATION_LABEL_MAX_VISIBLE = 8;
 
 export interface ProjectedPoint {
   /** CSS px from the viewport left. */
@@ -141,17 +152,142 @@ export interface ScreenLabelUpdate {
   name: string;
   dir: [number, number, number];
   emphasis: number;
-  /** Draw the emphasis (green) variant — picked or nearest figure. */
+  /** Draw the emphasis (green) variant — the picked figure (plan 017 F1). */
   emphasized: boolean;
   /** A body sits between the camera and this anchor (occlusion, plan 008 S2). */
   occluded: boolean;
 }
 
+/** A label the selector decided to draw this frame (plan 017 F2). */
+export interface SelectedLabel {
+  name: string;
+  emphasized: boolean;
+  /** Screen-space center (CSS px). */
+  x: number;
+  y: number;
+  /** Full 512×128 canvas draw size (CSS px) — the renderer draws this box. */
+  w: number;
+  h: number;
+  /** Final on-screen opacity (0..1). */
+  opacity: number;
+}
+
+/** Extra margin (CSS px) around each ink box for the de-collision test. */
+export const CONSTELLATION_LABEL_BOX_PAD_PX = 4;
+
 /**
- * Render one frame of the overlay. `presence` is the camera-distance sky
- * factor (plan 003 P4); per-label opacity is the same D4 label curve as the
- * old sprites (`constellationLabelOpacity(emph) * presence`). Labels are
- * drawn at a constant screen cap height, centered on their projected anchor.
+ * Plan 017 F2 — the phone-legible label selector. The old strategy drew
+ * EVERY label whose opacity exceeded the floor, so a phone's small FOV
+ * projected 40+ names that stacked into an unreadable smear. This replaces
+ * "draw them all" with two simple, testable rules:
+ *
+ *   1. VIEW CONE — only figures with D4 emphasis > 0 (inside the 48°
+ *      out-band of the view axis) are candidates at all. The picked figure
+ *      is ALWAYS a candidate (it is what the user asked to see, even if it
+ *      is currently off-center / low-emphasis).
+ *   2. DE-COLLISION + CAP — candidates are ranked (picked first, then by
+ *      emphasis descending) and walked in order. A candidate is dropped if
+ *      its ink box (name width × cap height, + pad) intersects any already
+ *      accepted box, and no more than {@link CONSTELLATION_LABEL_MAX_VISIBLE}
+ *      are drawn. The result is a handful of the most central, readable
+ *      names — never a wall of them.
+ *
+ * PURE (no DOM): `layoutConstellationName` / `projectSkyDir` /
+ * `constellationLabelOpacity` are all allocation-light math, so this runs in
+ * Node and is unit-tested. The renderer just paints the returned list.
+ */
+export function selectVisibleLabels(
+  updates: ScreenLabelUpdate[],
+  camera: THREE.PerspectiveCamera,
+  wCss: number,
+  hCss: number,
+  presence: number,
+  maxVisible: number = CONSTELLATION_LABEL_MAX_VISIBLE,
+): SelectedLabel[] {
+  if (presence <= CONSTELLATION_LABEL_MIN_SCREEN_OPACITY) return [];
+  const pad = CONSTELLATION_LABEL_SCREEN_PAD_PX;
+  const boxPad = CONSTELLATION_LABEL_BOX_PAD_PX;
+  const canvasAspect = CONSTELLATION_NAME_CANVAS_W / CONSTELLATION_NAME_CANVAS_H;
+
+  interface Cand {
+    name: string;
+    emphasized: boolean;
+    emphasis: number;
+    rank: number;
+    x: number;
+    y: number;
+    inkW: number;
+    h: number;
+    w: number;
+    opacity: number;
+  }
+  const cands: Cand[] = [];
+  for (const u of updates) {
+    if (u.occluded) continue;
+    // Rule 1 — view cone. Picked figures bypass the cone (always a
+    // candidate); the rest must be inside the 48° emphasis band.
+    if (!u.emphasized && u.emphasis <= 0) continue;
+    const op = constellationLabelOpacity(u.emphasis) * presence;
+    if (op <= CONSTELLATION_LABEL_MIN_SCREEN_OPACITY) continue;
+    const p = projectSkyDir(u.dir, camera, wCss, hCss);
+    if (!p.ok) continue;
+    if (p.x < -pad || p.x > wCss + pad || p.y < -pad || p.y > hCss + pad) continue;
+    const h = CONSTELLATION_LABEL_SCREEN_PX * (u.emphasized ? 1.12 : 1);
+    const w = canvasAspect * h;
+    // Ink width (tighter than the full canvas) drives the collision box so
+    // short names don't reserve a full-width row of dead space.
+    const inkFrac = layoutConstellationName(u.name).inkWidthPx / CONSTELLATION_NAME_CANVAS_W;
+    cands.push({
+      name: u.name,
+      emphasized: u.emphasized,
+      emphasis: u.emphasis,
+      rank: u.emphasized ? 1 : 0,
+      x: p.x,
+      y: p.y,
+      inkW: w * inkFrac,
+      h,
+      w,
+      opacity: Math.min(1, op),
+    });
+  }
+  // Rule 2 — rank: picked first, then most-central (highest emphasis).
+  cands.sort((a, b) => b.rank - a.rank || b.emphasis - a.emphasis);
+
+  const accepted: SelectedLabel[] = [];
+  const boxes: { x1: number; x2: number; y1: number; y2: number }[] = [];
+  for (const c of cands) {
+    if (accepted.length >= maxVisible) break;
+    const x1 = c.x - c.inkW / 2 - boxPad;
+    const x2 = c.x + c.inkW / 2 + boxPad;
+    const y1 = c.y - c.h / 2 - boxPad;
+    const y2 = c.y + c.h / 2 + boxPad;
+    let hit = false;
+    for (const b of boxes) {
+      if (x1 < b.x2 && x2 > b.x1 && y1 < b.y2 && y2 > b.y1) {
+        hit = true;
+        break;
+      }
+    }
+    if (hit) continue;
+    boxes.push({ x1, x2, y1, y2 });
+    accepted.push({
+      name: c.name,
+      emphasized: c.emphasized,
+      x: c.x,
+      y: c.y,
+      w: c.w,
+      h: c.h,
+      opacity: c.opacity,
+    });
+  }
+  return accepted;
+}
+
+/**
+ * Render one frame of the overlay. Plan 017 F2: the DECISION of which names
+ * to show (view cone + screen de-collision + max-8 cap) lives in the pure
+ * {@link selectVisibleLabels}; this function only paints that list — one
+ * cached name canvas per accepted label, at a constant screen cap height.
  */
 export function updateConstellationScreenLabels(
   layer: ScreenLabelLayer,
@@ -172,22 +308,13 @@ export function updateConstellationScreenLabels(
   ctx.clearRect(0, 0, wPx, hPx);
   if (presence <= 0.01) return;
 
-  const pad = CONSTELLATION_LABEL_SCREEN_PAD_PX;
-  for (const u of updates) {
-    const op = constellationLabelOpacity(u.emphasis) * presence;
-    if (op <= CONSTELLATION_LABEL_MIN_SCREEN_OPACITY) continue;
-    if (u.occluded) continue;
-    const p = projectSkyDir(u.dir, camera, wCss, hCss);
-    if (!p.ok) continue;
-    if (p.x < -pad || p.x > wCss + pad || p.y < -pad || p.y > hCss + pad) continue;
-    const src = nameCanvas(u.name, u.emphasized ? 'green' : 'base');
-    // Constant cap height; the 512×128 canvas aspect gives the width.
-    const h = CONSTELLATION_LABEL_SCREEN_PX * (u.emphasized ? 1.12 : 1);
-    const w = (src.width / src.height) * h;
-    ctx.globalAlpha = Math.min(1, op);
-    // Anchor = the far edge past the figure (solver margin) — center the
-    // text on it, the same way the old sprite centered on its anchor point.
-    ctx.drawImage(src, p.x - w / 2, p.y - h / 2, w, h);
+  const selected = selectVisibleLabels(updates, camera, wCss, hCss, presence);
+  for (const s of selected) {
+    const src = nameCanvas(s.name, s.emphasized ? 'green' : 'base');
+    ctx.globalAlpha = s.opacity;
+    // Draw the full 512×128 canvas centered on the anchor (the ink sits
+    // centered inside it); the de-collision already ran on the ink box.
+    ctx.drawImage(src, s.x - s.w / 2, s.y - s.h / 2, s.w, s.h);
   }
   ctx.globalAlpha = 1;
 }
