@@ -135,6 +135,17 @@ Gate: `npm test`, `tsc`, `vite build`, `prettier --check .` green; CDP sweep
 stepping), labels never intersecting figure ink, correct occlusion behind
 Saturn/Sun, screenshot PNG contains the labels.
 
+**SHIPPED `1444b3d` (2026-08-28).** Implemented exactly as specified: 88 label
+sprites removed from `buildConstellations`, new `src/render/constellationScreenLabels.ts`
+(`#cst-labels` overlay + pure `projectSkyDir` + cached name canvases +
+`updateConstellationScreenLabels`), per-frame emphasis loop in `main.ts`, per-label
+occlusion raycast, and screenshot compositing (WebGL + overlay → one `toBlob`).
+Live CDP (headless Chrome on `vite preview` :4173): overlay live with 40,790 label
+ink px (was 0 before the occlusion-ray fix), 6-frame camera hold = zero opacity
+stepping (the 5 Hz flicker is gone), camera nudge → label tracks, toggle off →
+`display:none`, Save-screenshot composites the overlay (181 KB vs 23 KB WebGL-only).
+Gates: 239/239 tests, tsc clean, build clean, prettier clean.
+
 ### P2 — `feat(sky): apple-green emphasis + glowing constellation stars`
 
 - `CONSTELLATION_EMPHASIS_COLOR` `0xffc46b` (warm gold) → **`0x7cfc5a` (light
@@ -167,6 +178,20 @@ Saturn/Sun, screenshot PNG contains the labels.
 Gate: CDP — aim at Orion: lines green + stars visibly brighter green (pixel
 probe), name label green; pan to a non-highlighted region: blue lines, dim
 blue-white stars, base-colored label; screenshot shows the green label.
+
+**SHIPPED `ee1c224` (2026-08-28).** Implemented as specified, with one scoping
+adjustment: the emphasis color is the single constant `0x7cfc5a` (gold
+`0xffc46b` removed from the codebase); per-constellation overlay
+`Points` named `constellation-stars-emph:<Name>` (positions = the already-built
+per-constellation star positions) bloom green at
+`constellationEmphasisOpacity` when picked / `proximityGoldMix(emph)` when
+nearest, `visible=false`-equivalent opacity 0 otherwise; picked/nearest label
+draws with the green lettering variant (`nameCanvas(name, 'green')`).
+Live A/B (identical Orion-aimed pose, plan-015 build on :4174 vs new build on
+:4173, pixel probe of the green/gold channels): old = 19 gold px / 1 green px;
+new = **150 green px / 0 gold px** — the highlight is unmistakably green now.
+Gates: 244/244 tests (5 new: green-channel pin, emph-Points build + pulse
+opacity assertions), tsc clean, build clean, prettier clean.
 
 ### P3 — `fix(figures): remove generated Serpens silhouette (duplicates Ophiuchus' snake)`
 
@@ -211,7 +236,30 @@ Gate: gates green; CDP Figures-on shot of 16.5–17.5 h / 0±15°: a single
 star-registered snake (Ophiuchus), no flat cream duplicate; `serpens.png`
 404s.
 
+**SHIPPED `8afbcb0` (2026-08-28).** Implemented as specified (data deletion,
+zero code): `git rm public/constellation-figures/serpens.png`, Serpens entry
+removed from `FIGURE_FITS` (88 → 87), deliberate-omission note added to the
+module header, `tests/figures.test.ts` reconciled (87 unique, Serpens absent,
+Hydra now the largest fit, Puppis still defined). Live CDP: 87 figure meshes in
+the scene, `constellation-figure:Serpens` absent, Ophiuchus/Puppis/Vela
+present; `serpens.png` 404s while the other plates serve as `image/png`.
+Centered Ophiuchus region shot (in-page NDC check: constellation center
+projects to exactly (640, 400) at camera distance 3225) vision-confirmed: one
+integrated Ophiuchus serpent-bearer figure, no separate flat cream Serpens
+duplicate. Audit re-run: Serpens×Ophiuchus (≈48 k) and Serpens×Libra (≈44 k)
+overlap pairs gone; top-5 otherwise unchanged. Gates: 244/244, tsc clean,
+build clean, prettier clean.
+
 ### P4 — `docs`: record P1–P3 hashes, flip todo lines, live-deploy verify.
+
+**SHIPPED (this commit).** CI (GitHub Actions API, 2026-08-28): push runs
+`1444b3d`, `ee1c224`, `8afbcb0` all `success`; gh-pages deploy `0d06c7f`
+`success`. Live deploy at `raphaeldelors-code.github.io/solar-system-3d/`
+(bundle `./assets/index-BIaOCoOg.js`, 632,679 bytes): P1 marker `cst-labels`
+present, P2 marker `constellation-stars-emph:` present, emphasis constant
+`0x7cfc5a` present as decimal `8191066` (minifier strips the hex form), old
+gold hex `ffc46b` absent (0), old sprite marker `constellation-label:` absent
+(0); `serpens.png` → 404 while `ophiuchus/puppis/vela.png` → 200 `image/png`.
 
 ## Conventions
 
