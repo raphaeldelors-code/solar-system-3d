@@ -17,12 +17,21 @@
  *   applied by the renderer via mesh.rotateZ (the renderer is the sole
  *   rotation authority; this value is the solved transform angle).
  *
- * The 3 constellations with no pre-1922 atlas figure (Puppis, Vela, Serpens
- * — the Argo Navis was only split in 1922/1930, and old painted plates
- * defeat clean extraction) use ORIGINAL generated line-art (a ship's stern,
- * a two-mast sail rig, and a serpent, respectively) placed on the star
- * cloud: centered on the cloud centroid, sized to the cloud's PCA-rotated
- * extent, rotated to its principal axis. Same struct, same renderer.
+ * The 2 constellations with no pre-1922 atlas figure (Puppis, Vela — the
+ * Argo Navis was only split in 1922/1930, and old painted plates defeat
+ * clean extraction) use ORIGINAL generated line-art (a ship's stern and a
+ * two-mast sail rig, respectively) placed on the star cloud: centered on
+ * the cloud centroid, sized to the cloud's PCA-rotated extent, rotated to
+ * its principal axis. Same struct, same renderer.
+ *
+ * Plan 016 P3: Serpens is the 87th — deliberately OMITTED. It originally
+ * got a generated serpent silhouette (plan 012 trio), but the plate audit
+ * (plans/016-...-plate-audit.md) showed it is the sky's #5 ink-on-ink
+ * duplicate: the Ophiuchus Stellarium plate already contains a full,
+ * star-registered serpent (head raised at his shoulder, body coiled at his
+ * waist, tail in both hands), and the generated silhouette sat on top of it
+ * (≈48 k overlapping ink points). The sky keeps Ophiuchus' registered
+ * serpent; Serpens' stars/lines/label remain — only the plate is gone.
  *
  * 3D placement (mesh position/up/size) is computed here (pure) and
  * rendered by `buildConstellationFigures` in render/scene.ts:
@@ -65,7 +74,7 @@ export interface FigureFit {
   rotationDeg: number;
 }
 
-/** All 88 figures, one per IAU constellation. */
+/** 87 figures: one per IAU constellation EXCEPT Serpens (plate omitted, plan 016 P3). */
 export const FIGURE_FITS: FigureFit[] = [
   {
     constellation: 'Andromeda',
@@ -666,14 +675,6 @@ export const FIGURE_FITS: FigureFit[] = [
     sizeW: 11.56,
     sizeH: 11.56,
     rotationDeg: 34.15,
-  },
-  {
-    constellation: 'Serpens',
-    centerRAHours: 16.601,
-    centerDecDeg: -0.93,
-    sizeW: 60.98,
-    sizeH: 38.47,
-    rotationDeg: 150.7,
   },
   {
     constellation: 'Sextans',

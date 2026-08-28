@@ -19,11 +19,16 @@ const FIT: FigureFit = {
 const CEN = raDecToUnit(FIT.centerRAHours, FIT.centerDecDeg);
 
 describe('figures data (plan 012)', () => {
-  it('covers exactly 88 unique constellations', () => {
-    expect(FIGURE_FITS).toHaveLength(88);
+  it('covers exactly 87 unique constellations (Serpens plate omitted, plan 016 P3)', () => {
+    // Plan 016 P3: all 88 IAU constellations are shown by stars + lines +
+    // label, but Serpens deliberately carries NO figure plate — its
+    // generated serpent silhouette duplicated the star-registered serpent
+    // in the adjacent Ophiuchus Stellarium art (see the figures.ts header).
+    expect(FIGURE_FITS).toHaveLength(87);
     const names = FIGURE_FITS.map((f) => f.constellation);
-    expect(new Set(names).size).toBe(88);
+    expect(new Set(names).size).toBe(87);
     expect(names).toEqual([...new Set(names)]);
+    expect(names).not.toContain('Serpens');
   });
 
   it('fits have sane solved centers, sizes, and rotations', () => {
@@ -35,8 +40,9 @@ describe('figures data (plan 012)', () => {
       expect(f.centerDecDeg).toBeLessThanOrEqual(90);
       expect(f.sizeW).toBeGreaterThan(0.5);
       expect(f.sizeH).toBeGreaterThan(0.5);
-      // Largest figure (Serpens, a cloud-center fit) is the only one this
-      // wide; every anchor-registered figure is far smaller.
+      // Largest figure (Hydra, a cloud-center fit) is the only one this
+      // wide; every anchor-registered figure is far smaller. (Serpens was
+      // 60.98 wide before its plan 016 P3 removal.)
       expect(Math.max(f.sizeW, f.sizeH)).toBeLessThan(70);
       expect(Math.abs(f.rotationDeg)).toBeLessThanOrEqual(180);
     }
@@ -46,6 +52,8 @@ describe('figures data (plan 012)', () => {
     expect(findFigureFit('Orion')).toBeDefined();
     expect(findFigureFit('Puppis')).toBeDefined();
     expect(findFigureFit('Not A Constellation')).toBeUndefined();
+    // Plan 016 P3: the Serpens plate is the one deliberate omission.
+    expect(findFigureFit('Serpens')).toBeUndefined();
   });
 });
 
