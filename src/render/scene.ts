@@ -757,6 +757,8 @@ export function constellationLabelOpacity(emph: number): number {
  * variant all follow it (the green label is a distinct 'green' texture
  * variant with the same hue).
  */
+/** Base sky-blue line color for every (unpicked) constellation. */
+export const CONSTELLATION_BASE_LINE_COLOR = 0x8fb0ff;
 /** Light apple green: the picked figure's line/star/label color (vs base 0x8fb0ff blue). */
 export const CONSTELLATION_EMPHASIS_COLOR = 0x7cfc5a;
 /** Pulse amplitude: the selected line's opacity swings 1.0 ± this. */
@@ -775,29 +777,14 @@ export function constellationEmphasisOpacity(tSec: number): number {
 }
 
 /**
- * Proximity gold (plan 015 P5): the constellation CLOSEST to the view gets
- * the same warm-gold treatment the search-bar pick uses — except instead of
- * an always-on pulse it rides on its own view emphasis, so it fades in as
- * the figure approaches the view center and fades out (back to blue) as the
- * camera moves away: "a fade in/out following motion".
- *
- * `figureEmph` is that figure's D4 emphasis (0..1); `isNearest` is the
- * caller's true angular-distance argmin (the emphasis curve SATURATES at 1
- * within 22°, so a max-emphasis test ties across several figures — distance
- * is the only unambiguous "nearest"); `picked` whether THIS figure is
- * explicitly picked (picked figures keep the always-on gold + pulse and win
- * — the caller applies the pulse before consulting this). Pure — unit-tested.
+ * Plan 017 F1: the "proximity gold / green nearest-figure" auto-emphasis is
+ * GONE. Only a figure the user explicitly PICKS gets the accent (green line
+ * color + breathing pulse + emphasis stars + green label). The per-figure
+ * view-center D4 emphasis curve still drives every figure's line/label
+ * OPACITY fade (smooth, no jumping), but it no longer tints a "nearest"
+ * figure green — that was the unwanted highlight hopping between figures as
+ * the camera nudged (especially intrusive in planet close-ups).
  */
-export const PROXIMITY_GOLD_MIN_EMPH = 0.55;
-/** Proximity-gold blend 0..1: 0 = base blue, 1 = full gold. */
-export function proximityGoldMix(figureEmph: number, isNearest: boolean, picked: boolean): number {
-  if (picked) return 1;
-  if (!isNearest || figureEmph <= 0) return 0;
-  if (figureEmph < PROXIMITY_GOLD_MIN_EMPH) return 0;
-  // Ramped over [0.55, 1] so the tint eases in/out with the same emphasis
-  // that already drives the opacity fade — no second, visible threshold.
-  return (figureEmph - PROXIMITY_GOLD_MIN_EMPH) / (1 - PROXIMITY_GOLD_MIN_EMPH);
-}
 
 /**
  * Name-label geometry (plan 003 P3, re-anchored plan 004 Q1, re-sized +
@@ -1183,14 +1170,14 @@ export function buildConstellations(): THREE.Group {
     const lineGeo = new THREE.BufferGeometry();
     lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lineVerts, 3));
     const lineMat = new THREE.LineBasicMaterial({
-      color: 0x8fb0ff,
+      color: CONSTELLATION_BASE_LINE_COLOR,
       transparent: true,
       opacity: CONSTELLATION_BASE_OPACITY,
       depthWrite: false,
     });
     // Base color remembered so a pick-emphasis (plan 010) can restore it
     // exactly when the selection is cleared.
-    lineMat.userData.baseColor = 0x8fb0ff;
+    lineMat.userData.baseColor = CONSTELLATION_BASE_LINE_COLOR;
     const lines = new THREE.LineSegments(lineGeo, lineMat);
     lines.name = `constellation-lines:${c.name}`;
     group.add(lines);
@@ -1381,10 +1368,10 @@ export function updateConstellationFigureHighlights(
  * consumes the same emphasis values at display rate. This pass only writes
  * the line materials + the shared star dots + the per-figure emphasis stars.
  *
- * Plan 016 P2: each figure's OWN star overlay (`constellation-stars-emph:<name>`)
- * blooms in the emphasis green when the figure is picked (breathing pulse,
- * same phase as its lines) or nearest (tint blend `proximityGoldMix`);
- * all others return to invisible.
+ * Plan 017 F1: the per-figure emphasis stars bloom in the emphasis green ONLY
+ * when the figure is picked (breathing pulse, same phase as its lines);
+ * every other figure's stars are invisible. The old "nearest figure" tint is
+ * gone (the highlight no longer jumps between figures as the camera moves).
  *
  * `presence` (plan 003 P4) multiplies everything — lines, the shared star
  * dots, and the emphasis stars — so the whole sky fades together when the
@@ -1398,7 +1385,6 @@ export function updateConstellationHighlight(
   presence: number = 1,
   selectedName?: string | null,
   tSec = 0,
-  nearestIdx?: number,
 ): void {
   for (const child of group.children) {
     const name = child.name ?? '';
@@ -1412,7 +1398,6 @@ export function updateConstellationHighlight(
     if (name.startsWith('constellation-stars-emph:')) {
       const idx = CONSTELLATION_NAME_INDEX.get(name.slice('constellation-stars-emph:'.length));
       if (idx === undefined) continue;
-      const emph = emphases[idx] ?? 0;
       const isPicked =
         selectedName != null &&
         selectedName !== '' &&
@@ -1422,10 +1407,8 @@ export function updateConstellationHighlight(
         // Same breathing pulse as the picked figure's lines (in phase).
         emphMat.opacity = constellationEmphasisOpacity(tSec);
       } else {
-        // Nearest figure: ease in/out with its D4 emphasis blend, and fade
-        // with the sky presence like everything else.
-        const mix = proximityGoldMix(emph, idx === nearestIdx, false);
-        emphMat.opacity = mix * presence;
+        // Not picked: invisible (plan 017 F1 — no nearest-figure tint).
+        emphMat.opacity = 0;
       }
       child.visible = emphMat.opacity > 0.005;
       continue;
@@ -1443,9 +1426,8 @@ export function updateConstellationHighlight(
     // Line segments: D4 base curve, then the pick emphasis overrides — the
     // selected figure's lines take the light apple-green color + a breathing
     // pulse (plan 010, recolor plan 016 P2); everyone else returns to the
-    // base color + D4 opacity.
+    // base color + D4 opacity (plan 017 F1: no nearest-figure tint).
     const mat = (child as THREE.LineSegments).material as THREE.LineBasicMaterial;
-    const baseColor = (mat.userData.baseColor ?? 0x8fb0ff) as number;
     const isPicked =
       selectedName != null && selectedName !== '' && name === `constellation-lines:${selectedName}`;
     if (isPicked) {
@@ -1455,13 +1437,7 @@ export function updateConstellationHighlight(
       // units where presence ≈ 0.55 and would half-dim the emphasis).
       mat.opacity = constellationEmphasisOpacity(tSec);
     } else {
-      // Plan 015 P5: the nearest figure (by true angular distance, resolved
-      // by the caller) eases into the SAME light green the search-bar pick
-      // uses (tint only — its opacity still follows the D4 curve, so the
-      // in/out fade tracks view motion exactly).
-      const mix = proximityGoldMix(emph, idx === nearestIdx, false);
-      mat.color.setHex(baseColor);
-      if (mix > 0) mat.color.lerp(PROXIMITY_GOLD_SCRATCH.setHex(CONSTELLATION_EMPHASIS_COLOR), mix);
+      mat.color.setHex(CONSTELLATION_BASE_LINE_COLOR);
       mat.opacity =
         (CONSTELLATION_BASE_OPACITY +
           (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph) *
@@ -1544,8 +1520,6 @@ export function updatePositions(built: BuiltScene, tDays: number, scale: VisualS
 // Module-level scratch for the render loop (single-threaded, never nested).
 const UPDATE_POS_SCRATCH = new THREE.Vector3();
 const UPDATE_AU_SCRATCH: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
-/** Allocation-free scratch for the proximity-gold color lerp (plan 015 P5). */
-const PROXIMITY_GOLD_SCRATCH = new THREE.Color();
 
 /** Advance every belt field to simulation time `tDays` (per frame). */
 export function updateBeltFields(

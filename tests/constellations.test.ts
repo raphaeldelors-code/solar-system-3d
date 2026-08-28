@@ -8,9 +8,8 @@ import {
   CONSTELLATION_EMPHASIS_PERIOD,
   CONSTELLATION_EMPHASIS_COLOR,
   buildConstellations,
-  proximityGoldMix,
-  PROXIMITY_GOLD_MIN_EMPH,
 } from '../src/render/scene';
+import * as sceneModule from '../src/render/scene';
 
 describe('raDecToUnit', () => {
   it('maps the equatorial pole straight up', () => {
@@ -352,51 +351,15 @@ describe('constellationEmphasisOpacity (pick pulse, plan 010 S4)', () => {
   });
 });
 
-describe('proximity gold (plan 015 P5)', () => {
-  it('returns 1 for a picked figure regardless of emphasis', () => {
-    expect(proximityGoldMix(0, false, true)).toBe(1);
-    expect(proximityGoldMix(0.1, false, true)).toBe(1);
-  });
-
-  it('returns 0 when the figure is not the nearest, no matter how high its emphasis', () => {
-    // The D4 curve saturates at 1 within 22°, so a FAR figure can still read
-    // emph=1 while a NEAR figure is only 0.6 — the tint must follow the
-    // caller's true-distance argmin, not the emphasis value.
-    expect(proximityGoldMix(1, false, false)).toBe(0);
-    expect(proximityGoldMix(0.6, false, false)).toBe(0);
-  });
-
-  it('returns 0 below the minimum emphasis threshold even when nearest', () => {
-    expect(proximityGoldMix(0.54, true, false)).toBe(0);
-    expect(proximityGoldMix(0, true, false)).toBe(0);
-  });
-
-  it('ramps 0→1 linearly over [PROXIMITY_GOLD_MIN_EMPH, 1] for the nearest figure', () => {
-    const mid = (PROXIMITY_GOLD_MIN_EMPH + 1) / 2;
-    expect(proximityGoldMix(PROXIMITY_GOLD_MIN_EMPH, true, false)).toBe(0);
-    expect(proximityGoldMix(mid, true, false)).toBeCloseTo(0.5, 12);
-    expect(proximityGoldMix(1, true, false)).toBe(1);
-  });
-
-  it('is monotone non-decreasing in emphasis (fade in as the view centers on it)', () => {
-    let prev = 0;
-    for (let e = PROXIMITY_GOLD_MIN_EMPH; e <= 1.0000001; e += 0.01) {
-      const v = proximityGoldMix(e, true, false);
-      expect(v, `e=${e.toFixed(2)}`).toBeGreaterThanOrEqual(prev - 1e-12);
-      prev = v;
-    }
-  });
-
-  it('fades to exactly 0 when it is no longer the nearest figure (fade out)', () => {
-    const e = PROXIMITY_GOLD_MIN_EMPH + 1e-9;
-    expect(proximityGoldMix(e, true, false)).toBeGreaterThan(0);
-    // Next frame ANOTHER figure is nearer: this one is instantly blue.
-    expect(proximityGoldMix(e, false, false)).toBe(0);
-  });
-
-  it("fades to exactly 0 as the nearest figure's emphasis drops below threshold", () => {
-    expect(proximityGoldMix(PROXIMITY_GOLD_MIN_EMPH + 0.01, true, false)).toBeGreaterThan(0);
-    expect(proximityGoldMix(PROXIMITY_GOLD_MIN_EMPH - 0.01, true, false)).toBe(0);
+describe('plan 017 F1: no proximity auto-emphasis', () => {
+  it('the nearest-figure machinery is gone from the module', () => {
+    // The plan-015 P5 proximityGoldMix export and the per-frame nearest-argmin
+    // were the source of the green highlight "jumping" between constellations
+    // on small camera nudges. If either resurfaces, this import/type surface
+    // changes and the build fails.
+    const keys = Object.keys(sceneModule);
+    expect(keys).not.toContain('proximityGoldMix');
+    expect(keys).not.toContain('PROXIMITY_GOLD_MIN_EMPH');
   });
 });
 

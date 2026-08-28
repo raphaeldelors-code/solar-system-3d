@@ -164,9 +164,6 @@ let labelLayer: ScreenLabelLayer | null = null;
 // The plan-006 solver's per-figure anchor directions — unchanged math; the
 // overlay only renders them in screen space.
 const LABEL_ANCHOR_DIRS = resolveConstellationLabels(CONSTELLATIONS).map((p) => p.dir);
-// Nearest-figure index (plan 015 P5), recomputed per frame in
-// computeConstellationEmphases; read by the 5 Hz material pass below.
-let LABEL_NEAREST_IDX = -1;
 // Scratch: label-occlusion ray + direction (one per label, reused).
 const LABEL_OCCL_RAY = new THREE.Raycaster();
 const LABEL_OCCL_DIR = new THREE.Vector3();
@@ -199,10 +196,15 @@ function deRollCameraUp(t: number): void {
 }
 
 /**
- * Plan 016 P1: per-frame constellation emphases. The 88-dot-product argmin
- * loop moved out of the 5 Hz pose-gated pass (below) into the render loop so
+ * Plan 016 P1: per-frame constellation emphases. The 88-dot-product loop
+ * moved out of the 5 Hz pose-gated pass (below) into the render loop so
  * the screen-space label overlay can re-evaluate every name's opacity at
  * display rate — 5 Hz opacity stepping was half of the old sprite flicker.
+ *
+ * Plan 017 F1: the per-frame NEAREST-figure argmin is gone — it is what made
+ * the green highlight hop between figures on small camera nudges. Only the
+ * D4 per-figure emphasis curve is computed now (drives opacity fades); no
+ * "nearest" index is tracked anywhere.
  */
 function computeConstellationEmphases(): void {
   // Camera forward = its local −Z expressed in world space.
@@ -210,21 +212,10 @@ function computeConstellationEmphases(): void {
   const vx = HIGHLIGHT_FWD.x,
     vy = HIGHLIGHT_FWD.y,
     vz = HIGHLIGHT_FWD.z;
-  // Plan 015 P5: nearest figure by TRUE angular distance (the D4 emphasis
-  // saturates at 1 within 22°, so a max-emphasis test would tie several
-  // figures). One argmin per frame — 88 dot products, ~µs.
-  let nearestIdx = -1;
-  let bestDot = -Infinity;
   for (let i = 0; i < CONSTELLATION_CENTER_DIRS.length; i++) {
     const d = CONSTELLATION_CENTER_DIRS[i];
     CONSTELLATION_EMPHASES[i] = constellationEmphasis(d, [vx, vy, vz]);
-    const dot = d[0] * vx + d[1] * vy + d[2] * vz;
-    if (dot > bestDot) {
-      bestDot = dot;
-      nearestIdx = i;
-    }
   }
-  LABEL_NEAREST_IDX = nearestIdx;
 }
 
 function updateConstellationHighlightThrottled(nowMs: number): void {
@@ -248,7 +239,6 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
     presence,
     selectedConstellation || null,
     nowMs / 1000,
-    LABEL_NEAREST_IDX,
   );
   // Plan 012: the constellation figures breathe with the same curves.
   if (figuresOn) {
@@ -1591,12 +1581,10 @@ function updateConstellationScreenLabelFrame(): void {
       name: CONSTELLATIONS[i].name,
       dir,
       emphasis: emph,
-      // Plan 016 P2: the picked or nearest constellation's name draws with
-      // the green lettering variant — matching its green lines + stars.
-      emphasized:
-        selIdx >= 0
-          ? i === selIdx
-          : LABEL_NEAREST_IDX === i && CONSTELLATION_EMPHASES[LABEL_NEAREST_IDX] >= 0.55,
+      // Plan 017 F1: only a picked constellation's name draws with the
+      // green lettering variant — the nearest-figure auto-emphasis is gone,
+      // so the label no longer hops green between figures on camera nudges.
+      emphasized: selIdx >= 0 ? i === selIdx : false,
       occluded,
     });
   }

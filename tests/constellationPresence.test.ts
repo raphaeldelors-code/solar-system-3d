@@ -175,22 +175,19 @@ describe('updateConstellationHighlight emphasis stars (plan 016 P2)', () => {
     }
   });
 
-  it('nearest figure (no pick): star opacity = proximityGoldMix(emph) * presence', () => {
+  it('unpicked peak-emphasis figure: its stars stay invisible (plan 017 F1 — no nearest auto-emphasis)', () => {
+    // The nearest-figure auto-emphasis (plan 015 P5) is gone: only an
+    // explicitly picked constellation lights up. A peak-emphasis figure with
+    // no pick must remain invisible, no matter how close to the view axis it is.
     const { group, emphByName } = fakeSky();
     const emphs = new Array(CONSTELLATIONS.length).fill(0) as number[];
     const idx = 3;
     const name = CONSTELLATIONS[idx].name;
-    emphs[idx] = 1; // at peak emphasis → mix = 1 for the nearest
+    emphs[idx] = 1; // at peak emphasis, but UNPICKED
     const p = 0.5;
-    updateConstellationHighlight(group, emphs, p, null, 0, idx);
-    const nearest = emphByName.get(name)!;
-    expect((nearest.material as THREE.PointsMaterial).opacity).toBeCloseTo(1 * p, 5);
-    expect(nearest.visible).toBe(true);
-    // A non-nearest peak-emphasis figure stays invisible (the curve is
-    // distance-gated, not emphasis-gated).
-    for (const [n, dots] of emphByName) {
-      if (n === name) continue;
-      expect((dots.material as THREE.PointsMaterial).opacity).toBe(0);
-    }
+    updateConstellationHighlight(group, emphs, p, null, 0);
+    const unpicked = emphByName.get(name)!;
+    expect((unpicked.material as THREE.PointsMaterial).opacity).toBe(0);
+    expect(unpicked.visible).toBe(false);
   });
 });
