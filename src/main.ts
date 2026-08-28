@@ -1515,6 +1515,10 @@ function updateConstellationScreenLabelFrame(): void {
     py = camPos.y,
     pz = camPos.z;
   const presence = constellationPresence(camPos.length());
+  // Plan 016 P2: index of the picked constellation (−1 when none).
+  const selIdx = selectedConstellation
+    ? CONSTELLATIONS.findIndex((c) => c.name === selectedConstellation)
+    : -1;
   const updates: ScreenLabelUpdate[] = [];
   for (let i = 0; i < CONSTELLATIONS.length; i++) {
     const emph = CONSTELLATION_EMPHASES[i];
@@ -1587,10 +1591,12 @@ function updateConstellationScreenLabelFrame(): void {
       name: CONSTELLATIONS[i].name,
       dir,
       emphasis: emph,
-      // Plan 016 P2 colorizes the picked/nearest name (green variant); P1
-      // keeps the base lettering for all names so the commit stays one
-      // concern.
-      emphasized: false,
+      // Plan 016 P2: the picked or nearest constellation's name draws with
+      // the green lettering variant — matching its green lines + stars.
+      emphasized:
+        selIdx >= 0
+          ? i === selIdx
+          : LABEL_NEAREST_IDX === i && CONSTELLATION_EMPHASES[LABEL_NEAREST_IDX] >= 0.55,
       occluded,
     });
   }

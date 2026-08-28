@@ -748,11 +748,17 @@ export function constellationLabelOpacity(emph: number): number {
 /**
  * Pick emphasis (plan 010, S4): when the user picks a constellation from
  * the find box, ITS figure stands out from the 87 others with a distinct
- * warm-gold line color (max contrast against the 0x8fb0ff sky blue) and a
- * gentle breathing pulse. Pure — unit-tested.
+ * light apple-green line color (max contrast against the 0x8fb0ff sky blue)
+ * and a gentle breathing pulse. Pure — unit-tested.
+ *
+ * Plan 016 P2: the accent moved from warm gold (0xffc46b) to light apple
+ * green (0x7cfc5a, 124/252/90) — the user's explicit request. One constant:
+ * picked lines, the proximity lerp, the emphasis stars, and the label
+ * variant all follow it (the green label is a distinct 'green' texture
+ * variant with the same hue).
  */
-/** Warm gold: the picked figure's line color (vs the base 0x8fb0ff blue). */
-export const CONSTELLATION_EMPHASIS_COLOR = 0xffc46b;
+/** Light apple green: the picked figure's line/star/label color (vs base 0x8fb0ff blue). */
+export const CONSTELLATION_EMPHASIS_COLOR = 0x7cfc5a;
 /** Pulse amplitude: the selected line's opacity swings 1.0 ± this. */
 export const CONSTELLATION_EMPHASIS_PULSE = 0.15;
 /** Pulse period (seconds) — a slow, calm breathe, not a strobe. */
@@ -1159,6 +1165,9 @@ export function buildConstellations(): THREE.Group {
   // main.ts can feed the overlay every frame (same math, 2D rendering).
   const labelDirs: [number, number, number][] = [];
   const dotVerts: number[] = [];
+  // Plan 016 P2: per-constellation emphasis stars (kept for disposal).
+  const emphGeos: THREE.BufferGeometry[] = [];
+  const emphMats: THREE.PointsMaterial[] = [];
   for (let i = 0; i < CONSTELLATIONS.length; i++) {
     labelDirs.push(placements[i].dir);
     const c = CONSTELLATIONS[i];
@@ -1186,6 +1195,31 @@ export function buildConstellations(): THREE.Group {
     lines.name = `constellation-lines:${c.name}`;
     group.add(lines);
 
+    // Plan 016 P2: the shared `dots` Points carries ONE opacity for all 88
+    // figures, so it cannot highlight one. Each figure therefore gets its
+    // own overlay Points of the SAME star positions in the emphasis green,
+    // a touch larger, sitting at R+4 (in front of the line plane, no
+    // z-fight) — invisible unless the figure is picked or nearest.
+    const emphScale = (CONSTELLATION_RADIUS + 4) / CONSTELLATION_RADIUS;
+    const emphVerts: number[] = [];
+    for (const p of pos) emphVerts.push(p[0] * emphScale, p[1] * emphScale, p[2] * emphScale);
+    const emphGeo = new THREE.BufferGeometry();
+    emphGeo.setAttribute('position', new THREE.Float32BufferAttribute(emphVerts, 3));
+    const emphMat = new THREE.PointsMaterial({
+      color: CONSTELLATION_EMPHASIS_COLOR,
+      size: 5.2,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const emphDots = new THREE.Points(emphGeo, emphMat);
+    emphDots.name = `constellation-stars-emph:${c.name}`;
+    emphDots.visible = false;
+    group.add(emphDots);
+    emphGeos.push(emphGeo);
+    emphMats.push(emphMat);
+
     for (const p of pos) dotVerts.push(...p);
   }
 
@@ -1208,6 +1242,8 @@ export function buildConstellations(): THREE.Group {
         (o.material as THREE.Material).dispose();
       }
     }
+    for (const g of emphGeos) g.dispose();
+    for (const m of emphMats) m.dispose();
     dotGeo.dispose();
     dotMat.dispose();
   };
@@ -1343,11 +1379,18 @@ export function updateConstellationFigureHighlights(
  * The name LABELS no longer live here (plan 016 P1): they are rendered on
  * the 2D screen-space overlay (`render/constellationScreenLabels.ts`), which
  * consumes the same emphasis values at display rate. This pass only writes
- * the line materials + the shared star dots.
+ * the line materials + the shared star dots + the per-figure emphasis stars.
  *
- * `presence` (plan 003 P4) multiplies everything — lines AND the shared
- * star dots — so the whole sky fades together when the camera is close to a
- * body and returns at sky-view distances (default 1).
+ * Plan 016 P2: each figure's OWN star overlay (`constellation-stars-emph:<name>`)
+ * blooms in the emphasis green when the figure is picked (breathing pulse,
+ * same phase as its lines) or nearest (tint blend `proximityGoldMix`);
+ * all others return to invisible.
+ *
+ * `presence` (plan 003 P4) multiplies everything — lines, the shared star
+ * dots, and the emphasis stars — so the whole sky fades together when the
+ * camera is close to a body and returns at sky-view distances (default 1).
+ * A PICKED figure's emphasis stars ignore presence (like its lines — the
+ * user asked to see it).
  */
 export function updateConstellationHighlight(
   group: THREE.Group,
@@ -1364,6 +1407,29 @@ export function updateConstellationHighlight(
       ((child as THREE.Points).material as THREE.Material).opacity = presence;
       continue;
     }
+    // Plan 016 P2: per-figure emphasis stars. The shared `dots` Points
+    // carries one opacity for all 88 figures, so it cannot highlight one.
+    if (name.startsWith('constellation-stars-emph:')) {
+      const idx = CONSTELLATION_NAME_INDEX.get(name.slice('constellation-stars-emph:'.length));
+      if (idx === undefined) continue;
+      const emph = emphases[idx] ?? 0;
+      const isPicked =
+        selectedName != null &&
+        selectedName !== '' &&
+        name === `constellation-stars-emph:${selectedName}`;
+      const emphMat = (child as THREE.Points).material as THREE.PointsMaterial;
+      if (isPicked) {
+        // Same breathing pulse as the picked figure's lines (in phase).
+        emphMat.opacity = constellationEmphasisOpacity(tSec);
+      } else {
+        // Nearest figure: ease in/out with its D4 emphasis blend, and fade
+        // with the sky presence like everything else.
+        const mix = proximityGoldMix(emph, idx === nearestIdx, false);
+        emphMat.opacity = mix * presence;
+      }
+      child.visible = emphMat.opacity > 0.005;
+      continue;
+    }
     // Resolve the constellation index from the child's NAME rather than its
     // position in the group: labels interleave after their line meshes
     // (lines0, label0, lines1, label1, …), so a running counter would fade
@@ -1375,8 +1441,9 @@ export function updateConstellationHighlight(
     if (idx === undefined) continue;
     const emph = emphases[idx] ?? 0;
     // Line segments: D4 base curve, then the pick emphasis overrides — the
-    // selected figure's lines take the warm-gold color + a breathing pulse
-    // (plan 010); everyone else returns to the base color + D4 opacity.
+    // selected figure's lines take the light apple-green color + a breathing
+    // pulse (plan 010, recolor plan 016 P2); everyone else returns to the
+    // base color + D4 opacity.
     const mat = (child as THREE.LineSegments).material as THREE.LineBasicMaterial;
     const baseColor = (mat.userData.baseColor ?? 0x8fb0ff) as number;
     const isPicked =
@@ -1389,7 +1456,7 @@ export function updateConstellationHighlight(
       mat.opacity = constellationEmphasisOpacity(tSec);
     } else {
       // Plan 015 P5: the nearest figure (by true angular distance, resolved
-      // by the caller) eases into the SAME warm gold the search-bar pick
+      // by the caller) eases into the SAME light green the search-bar pick
       // uses (tint only — its opacity still follows the D4 curve, so the
       // in/out fade tracks view motion exactly).
       const mix = proximityGoldMix(emph, idx === nearestIdx, false);

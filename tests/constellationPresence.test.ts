@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   constellationPresence,
+  constellationEmphasisOpacity,
   updateConstellationHighlight,
   CONSTELLATION_PRESENCE_NEAR,
   CONSTELLATION_PRESENCE_FAR,
@@ -75,19 +76,25 @@ describe('presence floor (plan 004 Q2)', () => {
 });
 
 describe('updateConstellationHighlight presence factor', () => {
-  // Plan 016 P1: name labels left the scene graph (2D screen-space overlay),
-  // so this pass only touches the per-constellation LINE materials + the
-  // shared star dots — the fake sky matches what buildConstellations() now
-  // produces.
+  // Plan 016 P1: name labels left the scene graph (2D screen-space overlay).
+  // Plan 016 P2: each figure gained its own emphasis-star Points
+  // (`constellation-stars-emph:<name>`) — the fake sky matches what
+  // buildConstellations() now produces.
   function fakeSky() {
     const group = new THREE.Group();
     const lineMats: THREE.LineBasicMaterial[] = [];
+    const emphMats: THREE.PointsMaterial[] = [];
     for (const c of CONSTELLATIONS) {
       const lm = new THREE.LineBasicMaterial({ transparent: true });
       const lines = new THREE.LineSegments(new THREE.BufferGeometry(), lm);
       lines.name = `constellation-lines:${c.name}`;
       group.add(lines);
       lineMats.push(lm);
+      const em = new THREE.PointsMaterial({ transparent: true, opacity: 1 });
+      const edots = new THREE.Points(new THREE.BufferGeometry(), em);
+      edots.name = `constellation-stars-emph:${c.name}`;
+      group.add(edots);
+      emphMats.push(em);
     }
     const dots = new THREE.Points(
       new THREE.BufferGeometry(),
@@ -95,7 +102,7 @@ describe('updateConstellationHighlight presence factor', () => {
     );
     dots.name = 'constellation-stars';
     group.add(dots);
-    return { group, lineMats, dots };
+    return { group, lineMats, dots, emphMats };
   }
 
   it('scales lines AND the shared star dots by the same factor', () => {
@@ -121,5 +128,69 @@ describe('updateConstellationHighlight presence factor', () => {
     const { group, lineMats } = fakeSky();
     updateConstellationHighlight(group, new Array(CONSTELLATIONS.length).fill(1));
     expect(lineMats[0].opacity).toBeCloseTo(CONSTELLATION_PEAK_OPACITY, 5);
+  });
+});
+
+describe('updateConstellationHighlight emphasis stars (plan 016 P2)', () => {
+  // The fake sky carries ONLY the emph-Points (lines are optional for these
+  // assertions — unknown children are skipped by the index lookup).
+  function fakeSky() {
+    const group = new THREE.Group();
+    const emphByName = new Map<string, THREE.Points>();
+    for (const c of CONSTELLATIONS) {
+      const em = new THREE.PointsMaterial({ transparent: true, opacity: 1 });
+      const edots = new THREE.Points(new THREE.BufferGeometry(), em);
+      edots.name = `constellation-stars-emph:${c.name}`;
+      group.add(edots);
+      emphByName.set(c.name, edots);
+    }
+    return { group, emphByName };
+  }
+
+  it('idle (no pick, no nearest): every emphasis star is invisible at opacity 0', () => {
+    const { group, emphByName } = fakeSky();
+    updateConstellationHighlight(group, new Array(CONSTELLATIONS.length).fill(0), 1);
+    for (const dots of emphByName.values()) {
+      expect((dots.material as THREE.PointsMaterial).opacity).toBe(0);
+      expect(dots.visible).toBe(false);
+    }
+  });
+
+  it('picked figure: its stars pulse at constellationEmphasisOpacity(tSec) and ignore presence', () => {
+    const name = CONSTELLATIONS[0].name;
+    const { group, emphByName } = fakeSky();
+    const emphs = new Array(CONSTELLATIONS.length).fill(0);
+    const tSec = 1.3;
+    const expected = constellationEmphasisOpacity(tSec);
+    // Presence floor must NOT dim the picked figure's stars — it is what
+    // the user asked to see.
+    updateConstellationHighlight(group, emphs, CONSTELLATION_PRESENCE_FLOOR, name, tSec);
+    const picked = emphByName.get(name)!;
+    expect((picked.material as THREE.PointsMaterial).opacity).toBeCloseTo(expected, 5);
+    expect(picked.visible).toBe(true);
+    for (const [n, dots] of emphByName) {
+      if (n === name) continue;
+      expect((dots.material as THREE.PointsMaterial).opacity).toBe(0);
+      expect(dots.visible).toBe(false);
+    }
+  });
+
+  it('nearest figure (no pick): star opacity = proximityGoldMix(emph) * presence', () => {
+    const { group, emphByName } = fakeSky();
+    const emphs = new Array(CONSTELLATIONS.length).fill(0) as number[];
+    const idx = 3;
+    const name = CONSTELLATIONS[idx].name;
+    emphs[idx] = 1; // at peak emphasis → mix = 1 for the nearest
+    const p = 0.5;
+    updateConstellationHighlight(group, emphs, p, null, 0, idx);
+    const nearest = emphByName.get(name)!;
+    expect((nearest.material as THREE.PointsMaterial).opacity).toBeCloseTo(1 * p, 5);
+    expect(nearest.visible).toBe(true);
+    // A non-nearest peak-emphasis figure stays invisible (the curve is
+    // distance-gated, not emphasis-gated).
+    for (const [n, dots] of emphByName) {
+      if (n === name) continue;
+      expect((dots.material as THREE.PointsMaterial).opacity).toBe(0);
+    }
   });
 });

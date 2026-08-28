@@ -6,6 +6,8 @@ import {
   constellationEmphasisOpacity,
   CONSTELLATION_EMPHASIS_PULSE,
   CONSTELLATION_EMPHASIS_PERIOD,
+  CONSTELLATION_EMPHASIS_COLOR,
+  buildConstellations,
   proximityGoldMix,
   PROXIMITY_GOLD_MIN_EMPH,
 } from '../src/render/scene';
@@ -395,5 +397,34 @@ describe('proximity gold (plan 015 P5)', () => {
   it("fades to exactly 0 as the nearest figure's emphasis drops below threshold", () => {
     expect(proximityGoldMix(PROXIMITY_GOLD_MIN_EMPH + 0.01, true, false)).toBeGreaterThan(0);
     expect(proximityGoldMix(PROXIMITY_GOLD_MIN_EMPH - 0.01, true, false)).toBe(0);
+  });
+});
+
+describe('plan 016 P2: apple-green emphasis', () => {
+  it('pins the emphasis color to light apple green (0x7cfc5a), not the old gold', () => {
+    // 124/252/90: G is the dominant channel by a wide margin, R < G, B < G —
+    // a green, not the warm gold (255/196/107, R > G) it replaced.
+    expect(CONSTELLATION_EMPHASIS_COLOR).toBe(0x7cfc5a);
+    const r = (CONSTELLATION_EMPHASIS_COLOR >> 16) & 0xff;
+    const g = (CONSTELLATION_EMPHASIS_COLOR >> 8) & 0xff;
+    const b = CONSTELLATION_EMPHASIS_COLOR & 0xff;
+    expect(g).toBeGreaterThanOrEqual(200);
+    expect(r).toBeLessThan(g);
+    expect(b).toBeLessThan(g);
+  });
+
+  it('builds one per-constellation emphasis-star Points, idle-invisible, in green', () => {
+    const group = buildConstellations();
+    const emph = group.children.filter((c) => c.name.startsWith('constellation-stars-emph:'));
+    expect(emph.length).toBe(CONSTELLATIONS.length);
+    for (const c of emph) {
+      const p = c as unknown as {
+        visible: boolean;
+        material: { opacity: number; color: { getHex(): number } };
+      };
+      expect(p.visible).toBe(false);
+      expect(p.material.opacity).toBe(0);
+      expect(p.material.color.getHex()).toBe(CONSTELLATION_EMPHASIS_COLOR);
+    }
   });
 });
