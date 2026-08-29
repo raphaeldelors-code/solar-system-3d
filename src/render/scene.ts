@@ -25,6 +25,7 @@ import {
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
+import { createRollControls } from './rollControls';
 import { CONSTELLATIONS, raDecToUnit, type Constellation } from '../data/constellations';
 import { FIGURE_FITS, figurePlacement } from '../data/figures';
 import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows';
@@ -282,8 +283,13 @@ export function buildScene(
   controls.rotateSpeed = 4.0;
   controls.zoomSpeed = 1.2;
   controls.dynamicDampingFactor = 0.2;
-  // (Trackball's default A/S/D keyboard pan is kept — the app uses no global
-  // key bindings that would conflict; it's a bonus input path.)
+  // Plan 017 F3: panning is GONE — the view center is the selection, always.
+  // noPan kills every pan path in the stock trackball at once: right-drag
+  // pan, 2-finger midpoint pan, and the A/S/D keyboard pan. The RIGHT
+  // button and the 2-finger gesture become the ROLL input instead
+  // (render/rollControls.ts: rotation around the view Z axis).
+  controls.noPan = true;
+  const roll = createRollControls(renderer.domElement, camera, controls);
 
   // Lighting: Sun point light at origin + faint ambient.
   const sunLight = new THREE.PointLight(0xfff2d8, 3.5, 0, 0);
@@ -554,6 +560,7 @@ export function buildScene(
       (mesh.material as THREE.MeshBasicMaterial).dispose();
       // Plate textures stay in the shared FIGURE_TEX_CACHE for rebuilds.
     }
+    roll.dispose();
     controls.dispose();
     renderer.dispose();
   }
