@@ -108,6 +108,18 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] F4 feat(camera): Sky + System anchors select the Sun (two zooms); Free camera removed; pick = new center — `f0f3ba7`
 - [x] P5 docs: record F1–F4 hashes + implementation record in the plan file — this commit (all four features live-verified on the headless build before commit)
 
+## User queue — 2026-08-29 — plan 018 (exclusive 2-finger gesture: twist vs pinch)
+
+`plans/018-exclusive-2finger-gesture-twist-vs-pinch.md` — a 2-finger gesture used to drive zoom and roll at once (the zoom won perceptually: "works sometimes, otherwise it zooms"); now a per-gesture race locks ONE mode.
+
+- [x] F1 feat(touch): exclusive 2-finger gesture — twist (3.4°) vs pinch (10%) race, larger ratio wins, ties → roll; roll lock suppresses pinch zoom + restores the seed eye length (position/target exactly fixed); zoom lock = stock pinch; one-finger release hands back to 1-finger orbit — `338c274`
+
+## User queue — 2026-08-29 — plan 019 (constellation-label DPR fix)
+
+`plans/019-fix-constellation-label-dpr-mismatch.md` — constellation labels crammed into the top-left quadrant at half size on hi-DPI displays (the "worse than v1" regression); the 2D overlay's device-pixel buffer was addressed with CSS-pixel coords.
+
+- [x] F1 fix(sky): DPR-matched 2D label overlay — `ctx.setTransform(dpr,0,0,dpr,0,0)` so CSS-px label coords land at full size across the whole viewport; `selectVisibleLabels` de-collision untouched (scale-invariant). CDP dpr=2 before/after: top-left half-size cluster → full-screen normal-size labels. `105c393`
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
