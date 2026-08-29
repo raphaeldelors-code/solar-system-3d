@@ -597,7 +597,7 @@
           </div>
         </div>
         <div class="hint" id="hint">
-          Drag: rotate · Wheel: zoom · Right-drag: pan · Click a body to fly to it
+          Drag: rotate · Wheel: zoom · Right-drag: roll · Click a body to fly to it
         </div>
         <div class="hint" id="credit">
           Constellation figures: Stellarium "western" illustrations by Johan Meuris (Free Art
@@ -613,7 +613,7 @@
         var hint = document.getElementById('hint');
         if (window.innerWidth < 560) panel.classList.add('collapsed');
         if (window.matchMedia('(pointer: coarse)').matches) {
-          hint.textContent = 'Drag: rotate · Pinch: zoom · Two-finger drag: pan';
+          hint.textContent = 'Drag: rotate · Pinch: zoom · Twist: roll';
         }
         toggle.addEventListener('click', function () {
           panel.classList.toggle('collapsed');
