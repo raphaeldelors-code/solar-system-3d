@@ -609,7 +609,9 @@ function camAnchorForConstellation(name: string): CamAnchor | null {
  * Start an eased flight from the current camera pose to `dest`.
  * `bodyId` (optional) is the picked body being tracked — the orbit-target
  * follows its live position each frame so a fast-moving planet isn't landed
- * behind; leave `null` for the global Sun / constellations anchors.
+ * behind; leave `null` ONLY for a destination that selects nothing (none of
+ * the current call sites do — the Sky/System anchors select the Sun, and
+ * constellation picks use `flyToConstellation`).
  */
 function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sky = false): void {
   // Picking a body arms the follow so after landing the camera keeps it
@@ -692,8 +694,8 @@ function wireAnchorButtons(): void {
     const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-fly]');
     if (!btn) return;
     const fly = btn.dataset.fly!;
-    if (fly === 'system') flyTo(camAnchorFor('system'), 1.6);
-    else if (fly === 'constellations') flyTo(camAnchorFor('constellations'), 1.8, null, true);
+    if (fly === 'system') flyTo(camAnchorFor('system'), 1.6, 'sun');
+    else if (fly === 'constellations') flyTo(camAnchorFor('constellations'), 1.8, 'sun', true);
     else {
       const dest = camAnchorForBody(fly);
       if (dest) flyTo(dest, 1.4, fly);
@@ -994,7 +996,9 @@ datePickEl.addEventListener('change', () => {
 // so one dropdown, one keyboard-nav path and one `findPick` handle both kinds.
 // Selecting a body flies the camera exactly like a pick; selecting a
 // constellation flies to a sky-dome view that centres it and lights its lines
-// gold. The empty query / "Free camera" row drops both. The `f` / `c` URL
+// gold. Plan 017 F4: the "Free camera" row is GONE — the anchor is the
+// selection, always; the global Sky/System anchors select the Sun (at their
+// two zooms) instead of dropping to a free camera. The `f` / `c` URL
 // params keep `followId` / `selectedConstellation` as the sources of truth.
 
 const findMenu = groupedBodyMenu(ALL_BODIES); // body display order, unfiltered
@@ -1038,7 +1042,6 @@ function findRowsFor(query: string): FindRow[] {
 }
 
 function findLabel(id: string): string {
-  if (id === '') return 'Free camera';
   if (id.startsWith(CONSTELLATION_ID_PREFIX)) return id.slice(CONSTELLATION_ID_PREFIX.length);
   return byId.get(id)?.name ?? id;
 }
@@ -1063,22 +1066,7 @@ function findRender(query: string): void {
   const rows = findRowsFor(query);
   findListEl.replaceChildren();
   const frag = document.createDocumentFragment();
-  if (!query.trim()) {
-    // Unfiltered: Free camera row first, then bodies + a slice of constellations.
-    const free = document.createElement('div');
-    free.className = 'fr fr-free';
-    free.innerHTML =
-      '<span class="fr-name">Free camera</span><span class="fr-sub">orbit wherever</span>';
-    free.addEventListener('click', () => findPick(''));
-    frag.appendChild(free);
-    for (const r of rows) {
-      const row = document.createElement('div');
-      row.className = r.c ? 'fr fr-const' : 'fr';
-      row.innerHTML = `<span class="fr-name">${r.name}</span><span class="fr-sub">${r.sub}</span>`;
-      row.addEventListener('click', () => findPick(r.id));
-      frag.appendChild(row);
-    }
-  } else if (rows.length === 0) {
+  if (rows.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'fr-empty';
     empty.textContent = 'No matches';
@@ -1099,11 +1087,13 @@ function findRender(query: string): void {
 }
 
 /**
- * Select a body (or `const:<Name>` constellation, or '' = free camera) from
- * the dropdown and fly to it. Constellations fly to a sky-dome view that
- * centres the figure and lights its lines gold (plan 010, S4); the
- * body/constellation pick clears the other's selection so only one target is
- * ever emphasized.
+ * Select a body (or `const:<Name>` constellation) from the dropdown and fly
+ * to it. Constellations fly to a sky-dome view that centres the figure and
+ * lights its lines gold (plan 010, S4); the body/constellation pick clears
+ * the other's selection so only one target is ever emphasized.
+ * Plan 017 F4: there is no "free camera" pick — an empty or unknown id
+ * (e.g. Esc with the list closed) falls back to the Sun anchor, keeping the
+ * selection the single source of the view anchor.
  */
 function findPick(id: string): void {
   findInputEl.value = findLabel(id);
@@ -1113,18 +1103,9 @@ function findPick(id: string): void {
     flyToConstellation(id.slice(CONSTELLATION_ID_PREFIX.length));
     return;
   }
-  if (id) {
-    const dest = camAnchorForBody(id);
-    if (dest) {
-      flyTo(dest, 1.4, id);
-      return;
-    }
-  }
-  // "Free camera" (or a body with no frame): drop both selections.
-  followId = '';
-  selectedConstellation = '';
-  updateInfo();
-  syncUrl();
+  const destId = id && camAnchorForBody(id) ? id : 'sun';
+  const dest = camAnchorForBody(destId);
+  if (dest) flyTo(dest, 1.4, destId);
 }
 
 findInputEl.addEventListener('focus', () => findRender(findInputEl.value));
@@ -1136,7 +1117,8 @@ findInputEl.addEventListener('input', () => {
 findInputEl.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape') {
     ev.preventDefault();
-    // Esc closes the list; pressed again (list closed), it drops the follow.
+    // Esc closes the list; pressed again (list closed), it re-anchors on the
+    // Sun (plan 017 F4: there is no free-camera state to drop back to).
     if (!findListEl.hidden) findClose();
     else findPick('');
     return;
@@ -1226,19 +1208,31 @@ if (urlState.eventsOpen != null) {
 }
 // Restore an opened events list from a shared link.
 if (!eventsRowEl.hidden) refreshEvents();
+// Plan 017 F4: the selection is ALWAYS the view anchor — a restored body
+// keeps its follow, a restored constellation keeps its pick, and anything
+// else (no/unknown follow) re-anchors on the Sun. There is no free-camera
+// state anymore.
+const restoredConstellation =
+  urlState.constellation && CONSTELLATIONS.some((c) => c.name === urlState.constellation)
+    ? urlState.constellation
+    : null;
 if (urlState.follow && byId.has(urlState.follow)) {
   setFindValue(urlState.follow);
   followId = urlState.follow;
   // Restoring a body selection re-arms its highlight ring too (plan 015 P6:
   // any body — planet or satellite).
   selectedBodyId = urlState.follow;
+} else if (!restoredConstellation) {
+  setFindValue('sun');
+  followId = 'sun';
+  selectedBodyId = 'sun';
 }
 // Restored constellation pick (plan 010, S4): re-arm the gold emphasis + the
 // find box label. No flight on load — a shared link's `cam` param (applied
 // below) already restores the exact view the picker parked the camera in.
-if (urlState.constellation && CONSTELLATIONS.some((c) => c.name === urlState.constellation)) {
-  selectedConstellation = urlState.constellation;
-  setFindValue(`const:${urlState.constellation}`);
+if (restoredConstellation) {
+  selectedConstellation = restoredConstellation;
+  setFindValue(`const:${restoredConstellation}`);
   lastHighlightPoseKey = ''; // refresh the highlight pass immediately
 }
 
@@ -1735,7 +1729,9 @@ function frame(): void {
         // so user drag/wheel resumes smoothly from here (plan 015 P2: with
         // Trackball this is just a no-op re-derivation of the eye vector).
         built.controls.update();
-        // the user can break free any time via the Free-camera option.
+        // Re-anchor the orbit pivot on the selected body (plan 017 F4: the
+        // selection is the anchor — Sky/System landings leave this on the
+        // Sun, whose worldPos IS the origin the anchors frame).
         if (followId) {
           const e = built.bodies.get(followId);
           if (e) built.controls.target.copy(e.worldPos);
