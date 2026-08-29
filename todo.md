@@ -120,6 +120,14 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 fix(sky): DPR-matched 2D label overlay — `ctx.setTransform(dpr,0,0,dpr,0,0)` so CSS-px label coords land at full size across the whole viewport; `selectVisibleLabels` de-collision untouched (scale-invariant). CDP dpr=2 before/after: top-left half-size cluster → full-screen normal-size labels. `105c393`
 
+## User queue — 2026-08-29 — plan 020 (panel width, stale hints, pick-view labels)
+
+`plans/020-panel-width-stale-hints-pick-label-pull-in.md` — visual-audit follow-up: the control panel covers 38% of the viewport and hides the view center (the Sun in the boot view, every pick's figure); the hint still teaches panning (removed in plan 017); and pick-view names float ~185px (median) from their figures.
+
+- [ ] F1 fix(ui): control hints describe the actual gestures (right-drag / 2-finger twist = roll; panning was removed in plan 017)
+- [ ] F2 fix(ui): cap #panel width (360px) — right edge 689→402 at 1280 wide, un-occludes the view center and the picked figure + its green label (measured: Andromeda/Vela/Lyra/Puppis labels were inside the panel rect)
+- [ ] F3 fix(sky): pull pick-view constellation labels toward their figures in screen space (measure-after-F2 gate in the plan; only if the median distance is still user-visible)
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
