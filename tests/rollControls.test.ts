@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { rollPose, ROLL_SPEED_FACTOR, twistDelta } from '../src/render/rollControls';
+import {
+  rollPose,
+  ROLL_SPEED_FACTOR,
+  twistDelta,
+  twistOrPinch,
+  TwistPinchRace,
+} from '../src/render/rollControls';
 
 /**
  * Plan 017 F3 — the ROLL gesture (right-drag / 2-finger twist) rotates the
@@ -174,5 +180,143 @@ describe('twistDelta (plan 017 F3)', () => {
     for (let a = 0; a < 60; a += 15)
       total += twistDelta(at(a), at(a + 180), at(a + 15), at(a + 195));
     expect(total).toBeCloseTo(rad(60), 9);
+  });
+});
+
+/**
+ * twistOrPinch — the plan 018 classifier: from the gesture's FIRST pose to
+ * now, is this a roll (twist dominates), a zoom (pinch dominates), or not
+ * yet decidable?
+ */
+describe('twistOrPinch (plan 018)', () => {
+  const P = (x: number, y: number) => ({ x, y });
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  /** Fingers ±r px around (640,400), pair rotated `deg` about the midpoint. */
+  const at = (deg: number, r = 50) => P(640 + r * Math.cos(rad(deg)), 400 + r * Math.sin(rad(deg)));
+
+  it('pure pinch (50% closer, same inter-finger line) → zoom, twist ≈ 0', () => {
+    const c = twistOrPinch({ a: P(600, 400), b: P(700, 400) }, { a: P(625, 400), b: P(675, 400) });
+    expect(c.decision).toBe('zoom');
+    expect(Math.abs(c.twist)).toBeLessThan(1e-12);
+    expect(c.pinch).toBeCloseTo(-0.5, 9);
+  });
+
+  it('pure twist (15° about the midpoint) → roll, pinch ≈ 0', () => {
+    const c = twistOrPinch({ a: at(0), b: at(180) }, { a: at(15), b: at(195) });
+    expect(c.decision).toBe('roll');
+    expect(c.twist).toBeCloseTo(rad(15), 9);
+    expect(Math.abs(c.pinch)).toBeLessThan(1e-9);
+  });
+
+  it('below both thresholds → pending (the gesture is not yet decidable)', () => {
+    // 2° twist + 3% pinch: real noise, no decision.
+    const c = twistOrPinch({ a: at(0), b: at(180) }, { a: at(2), b: at(182) });
+    expect(c.decision).toBe('pending');
+  });
+
+  it('a drifting pinch (30% closer AND 2° of incidental angle) still locks as zoom', () => {
+    // The classifier compares TOTALS vs the first pose — not per-event
+    // deltas — so the incidental angle drift of a real pinch (a couple of
+    // degrees) never reaches the twist threshold, while the distance change
+    // crosses the pinch threshold: zoom wins, roll stays out.
+    const cx = 640,
+      cy = 400;
+    const r0 = 50;
+    const r1 = 35; // 30% closer
+    const a0 = at(0, r0);
+    const b0 = at(180, r0);
+    const a1 = P(cx + r1 * Math.cos(rad(2)), cy + r1 * Math.sin(rad(2)));
+    const b1 = P(cx - r1 * Math.cos(rad(2)), cy - r1 * Math.sin(rad(2)));
+    const c = twistOrPinch({ a: a0, b: b0 }, { a: a1, b: b1 });
+    expect(c.pinch).toBeCloseTo(-0.3, 9);
+    expect(c.decision).toBe('zoom');
+    expect(Math.abs(c.twist)).toBeLessThan(0.0592); // below the twist threshold
+  });
+});
+
+/**
+ * TwistPinchRace — the per-gesture state machine (plan 018): it locks ONE
+ * mode per 2-finger touch-down, applies roll 1:1 (including the pre-lock
+ * accumulation) in roll mode, stays silent in zoom mode, and re-arms on
+ * reset.
+ */
+describe('TwistPinchRace (plan 018)', () => {
+  const P = (x: number, y: number) => ({ x, y });
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  const at = (deg: number, r = 50) => P(640 + r * Math.cos(rad(deg)), 400 + r * Math.sin(rad(deg)));
+
+  it('deliberate twist: locks as roll, applies the pre-lock angle at lock, 1:1 after', () => {
+    const rolls: number[] = [];
+    const locks: string[] = [];
+    const race = new TwistPinchRace({
+      onRoll: (t) => rolls.push(t),
+      onLock: (m) => locks.push(m),
+    });
+    race.seed(at(0), at(180));
+    race.update(at(2), at(182)); // 2°: below threshold — nothing happens
+    expect(race.mode).toBe('none');
+    expect(rolls).toHaveLength(0);
+    race.update(at(5), at(185)); // 5° total ≥ 3.4° → roll lock
+    expect(race.mode).toBe('roll');
+    expect(locks).toEqual(['roll']);
+    expect(rolls).toHaveLength(1);
+    expect(rolls[0]).toBeCloseTo(rad(5), 9); // FULL pre-lock accumulation
+    race.update(at(10), at(190)); // +5° increment, 1:1
+    expect(rolls[1]).toBeCloseTo(rad(5), 9);
+    expect(rolls.reduce((s, t) => s + t, 0)).toBeCloseTo(rad(10), 9);
+  });
+
+  it('deliberate pinch: locks as zoom and NEVER applies roll (not even after)', () => {
+    const rolls: number[] = [];
+    const locks: string[] = [];
+    const race = new TwistPinchRace({
+      onRoll: (t) => rolls.push(t),
+      onLock: (m) => locks.push(m),
+    });
+    race.seed(P(600, 400), P(700, 400));
+    race.update(P(610, 400), P(690, 400)); // 10% closer → zoom lock
+    expect(race.mode).toBe('zoom');
+    expect(locks).toEqual(['zoom']);
+    race.update(P(625, 400), P(675, 400)); // keep pinching — still silent
+    expect(race.mode).toBe('zoom');
+    expect(rolls).toHaveLength(0);
+  });
+
+  it('a micro-gesture (below both thresholds) decides nothing and re-races on the next move', () => {
+    const race = new TwistPinchRace({});
+    race.seed(P(600, 400), P(700, 400));
+    race.update(P(601, 400), P(701, 400)); // 1 px drift
+    expect(race.mode).toBe('none');
+    // A later move measures from the ORIGINAL seed — not from the micro-
+    // move — so a real twist that starts with noise still wins:
+    race.update(P(625, 400), P(675, 400)); // 50% pinch → zoom
+    expect(race.mode).toBe('zoom');
+  });
+
+  it('reset unlocks (onUnlock), clears the latch, and re-arms a fresh gesture', () => {
+    const unlocks: number[] = [];
+    const locks: string[] = [];
+    const race = new TwistPinchRace({
+      onLock: (m) => locks.push(m),
+      onUnlock: () => unlocks.push(1),
+    });
+    race.seed(at(0), at(180));
+    race.update(at(5), at(185));
+    expect(race.mode).toBe('roll');
+    race.reset();
+    expect(race.mode).toBe('none');
+    expect(unlocks).toHaveLength(1);
+    // A NEW gesture races afresh: the same move pattern locks again.
+    race.seed(P(600, 400), P(700, 400));
+    race.update(P(610, 400), P(690, 400));
+    expect(race.mode).toBe('zoom');
+    expect(locks).toEqual(['roll', 'zoom']);
+    race.reset();
+    expect(unlocks).toHaveLength(2);
+  });
+
+  it('update() before seed() is a safe no-op (mode stays none)', () => {
+    const race = new TwistPinchRace({});
+    expect(race.update(P(0, 0), P(10, 0))).toBe('none');
   });
 });

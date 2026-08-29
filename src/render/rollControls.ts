@@ -1,23 +1,42 @@
 /**
- * Plan 017 F3 — ROLL gesture: right-drag (mouse) and 2-finger twist (touch)
- * rotate the view AROUND ITS OWN Z AXIS (the view axis), i.e. spin the
- * screen in place. Left drag / 1 finger stays on the trackball (free X+Y
- * rotation, pole-passing); 2-finger pinch stays on the trackball too (zoom).
+ * Plan 017 F3 + Plan 018 — ROLL gesture with an EXCLUSIVE 2-finger mode.
  *
- * The view center never moves: the roll axis IS the view axis, and it
+ * Mouse: RIGHT-drag rolls the view AROUND ITS OWN Z AXIS (the view axis),
+ * i.e. spins the screen in place. LEFT drag stays on the trackball (free
+ * X+Y rotation, pole-passing). The view center never moves: the roll axis
  * passes through the camera and the target — so `rollPose` rotates ONLY
  * `camera.up`; position and target sit on the axis and stay exactly fixed.
- * Panning was deleted entirely (the stock trackball is created with
- * `noPan = true`, which also removes the A/S/D keyboard pan).
  *
- * This listener runs in PARALLEL with TrackballControls on the same canvas:
- * trackball's right-button branch goes to its (disabled) pan state and
- * two-finger pan goes to the same, so the two never fight over an input.
- * It honors `controls.enabled` (flights / the sky tour disable the controls
- * while they run).
+ * Touch: 1 finger = trackball orbit. 2 fingers = ONE exclusive gesture,
+ * decided by a startup race (plan 018): a real 2-finger gesture always
+ * contains a bit of pinch AND a bit of twist, so running both in parallel
+ * made the pinch (visually dominant) "win" and roll felt dead. Instead,
+ * from the second finger's touch-down the race accumulates (a) the total
+ * inter-finger ANGLE change and (b) the total inter-finger DISTANCE change;
+ * whichever crosses its threshold first locks the gesture mode:
+ *   - angle ≥ TWO_FINGER_TWIST_THRESHOLD  → ROLL mode: twist applies 1:1
+ *     (including the pre-lock accumulation), the trackball's pinch zoom is
+ *     suppressed for the rest of the gesture, and the tiny pre-lock zoom
+ *     the trackball already applied is undone so position/target stay
+ *     EXACTLY fixed;
+ *   - distance ≥ TWO_FINGER_PINCH_THRESHOLD → ZOOM mode: stock trackball
+ *     pinch does everything, the roll listener stays silent.
+ * A micro-gesture below both thresholds decides nothing; the race restarts
+ * from the live pose on the next move. Releasing one finger ends the
+ * gesture — the survivor becomes a 1-finger orbit and the next 2-finger
+ * gesture races afresh.
  *
- * PURE CORE: {@link rollPose} has no DOM dependency — unit-tested in Node
- * (tests/rollControls.test.ts).
+ * Panning is deleted entirely (the stock trackball is created with
+ * `noPan = true`), so the right button and the 2-finger midpoint pan are
+ * inert there and the two input paths never fight.
+ *
+ * This listener runs in PARALLEL with TrackballControls on the same canvas
+ * and honors `controls.enabled` (flights / the sky tour disable the
+ * controls while they run).
+ *
+ * PURE CORES (no DOM dependency — unit-tested in Node,
+ * tests/rollControls.test.ts): {@link twistDelta}, {@link rollPose},
+ * {@link twistOrPinch} and {@link TwistPinchRace}.
  */
 import * as THREE from 'three';
 import type { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js';
@@ -33,28 +52,180 @@ import type { TrackballControls } from 'three/examples/jsm/controls/TrackballCon
 export const ROLL_SPEED_FACTOR = 0.00184;
 
 /**
+ * Plan 018 — total inter-finger ANGLE change (radians) that locks a 2-finger
+ * gesture as ROLL. ≈3.4°: a deliberate twist accumulates ≥1° per pointermove
+ * at 60 Hz, so ~3 events (≈50 ms) of clear twist wins the race, while the
+ * incidental angle noise of a deliberate pinch stays under it.
+ */
+export const TWO_FINGER_TWIST_THRESHOLD = 0.0592;
+
+/**
+ * Plan 018 — total inter-finger DISTANCE change (as a fraction of the start
+ * distance) that locks a 2-finger gesture as ZOOM. 10%: a deliberate pinch
+ * moves 20–50% within a few events; a deliberate twist keeps the distance
+ * within a few percent.
+ */
+export const TWO_FINGER_PINCH_THRESHOLD = 0.1;
+
+/** A 2-D pointer position (CSS pixels). */
+export interface Pt {
+  x: number;
+  y: number;
+}
+
+/**
  * Change in the inter-finger angle (radians) between two 2-finger poses — the
  * ROLL a twist gesture should apply, 1:1. A is the first finger, B the second;
  * the angle is that of the A→B vector (`atan2(B−A)`), so a pure PINCH (fingers
- * sliding radially toward/away from each other) changes no angle and returns 0
- * (the trackball zooms on that part), while a TWIST (fingers rotating about
- * their midpoint) returns the rotation. The result is normalized to (−π, π] so
- * crossing the ±180° wrap doesn't jump.
+ * sliding radially toward/away from each other) changes no angle and returns 0,
+ * while a TWIST (fingers rotating about their midpoint) returns the rotation.
+ * The result is normalized to (−π, π] so crossing the ±180° wrap doesn't jump.
  *
  * PURE: no DOM dependency — unit-tested in Node (tests/rollControls.test.ts).
  */
-export function twistDelta(
-  a0: { x: number; y: number },
-  b0: { x: number; y: number },
-  a1: { x: number; y: number },
-  b1: { x: number; y: number },
-): number {
-  const ang = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
-    Math.atan2(b.y - a.y, b.x - a.x);
+export function twistDelta(a0: Pt, b0: Pt, a1: Pt, b1: Pt): number {
+  const ang = (a: Pt, b: Pt): number => Math.atan2(b.y - a.y, b.x - a.x);
   let d = ang(a1, b1) - ang(a0, b0);
   if (d > Math.PI) d -= 2 * Math.PI;
   else if (d < -Math.PI) d += 2 * Math.PI;
   return d;
+}
+
+/**
+ * Classify a 2-finger pose pair (gesture start → now) as roll, zoom, or
+ * pending — the plan 018 exclusive-gesture rule. Each accumulated component
+ * is normalized by its own threshold; whichever has the LARGER ratio wins
+ * (it must have crossed its threshold, ratio ≥ 1). This is pace-robust: a
+ * slow pinch that drifts a few degrees never loses to a slow twist, and a
+ * fast twist that nudges the fingers inward is not swallowed by the pinch.
+ * A true tie (equal ratios ≥ 1) goes to ROLL — the rarer, harder-to-trigger
+ * gesture (the whole point of plan 018 is making it reachable).
+ *
+ * PURE: unit-tested in Node (tests/rollControls.test.ts).
+ */
+export function twistOrPinch(
+  start: { a: Pt; b: Pt },
+  now: { a: Pt; b: Pt },
+  opts: { twistThreshold?: number; pinchThreshold?: number } = {},
+): { twist: number; pinch: number; decision: 'roll' | 'zoom' | 'pending' } {
+  const t = opts.twistThreshold ?? TWO_FINGER_TWIST_THRESHOLD;
+  const p = opts.pinchThreshold ?? TWO_FINGER_PINCH_THRESHOLD;
+  const twist = twistDelta(start.a, start.b, now.a, now.b);
+  const d0 = Math.hypot(start.b.x - start.a.x, start.b.y - start.a.y);
+  const d1 = Math.hypot(now.b.x - now.a.x, now.b.y - now.a.y);
+  const pinch = d0 > 1e-6 ? (d1 - d0) / d0 : 0;
+  const rT = Math.abs(twist) / t;
+  const rP = Math.abs(pinch) / p;
+  let decision: 'roll' | 'zoom' | 'pending' = 'pending';
+  if (rT >= 1 && rT >= rP) decision = 'roll';
+  else if (rP >= 1) decision = 'zoom';
+  return { twist, pinch, decision };
+}
+
+/** The effective mode of a 2-finger gesture. */
+export type TwoFingerMode = 'none' | 'roll' | 'zoom';
+
+/**
+ * The per-gesture state machine behind the exclusive 2-finger input (plan
+ * 018). Feed it the live pair via {@link TwistPinchRace.update} on every
+ * pointermove; it applies roll callbacks 1:1 once (and only once the race
+ * has locked the gesture) as ROLL, and stays completely silent in ZOOM mode
+ * (the stock trackball pinch owns the gesture then).
+ *
+ * PURE: no DOM dependency — unit-tested in Node
+ * (tests/rollControls.test.ts).
+ */
+export class TwistPinchRace {
+  private readonly twistThreshold: number;
+  private readonly pinchThreshold: number;
+  private readonly cb: {
+    onRoll?: (theta: number) => void;
+    onLock?: (mode: 'roll' | 'zoom') => void;
+    onUnlock?: () => void;
+  };
+  private startA: Pt | null = null;
+  private startB: Pt | null = null;
+  private prevA: Pt | null = null;
+  private prevB: Pt | null = null;
+  private _mode: TwoFingerMode = 'none';
+
+  constructor(
+    opts: {
+      twistThreshold?: number;
+      pinchThreshold?: number;
+      onRoll?: (theta: number) => void;
+      onLock?: (mode: 'roll' | 'zoom') => void;
+      onUnlock?: () => void;
+    } = {},
+  ) {
+    this.twistThreshold = opts.twistThreshold ?? TWO_FINGER_TWIST_THRESHOLD;
+    this.pinchThreshold = opts.pinchThreshold ?? TWO_FINGER_PINCH_THRESHOLD;
+    this.cb = opts;
+  }
+
+  /** Current mode (latched once the race locks, until reset). */
+  get mode(): TwoFingerMode {
+    return this._mode;
+  }
+
+  /** The pose the race was seeded with (gesture start), if any. */
+  get startPose(): { a: Pt; b: Pt } | null {
+    return this.startA && this.startB ? { a: this.startA, b: this.startB } : null;
+  }
+
+  /** The last pose fed via update(), if any. */
+  get nowPose(): { a: Pt; b: Pt } | null {
+    return this.prevA && this.prevB ? { a: this.prevA, b: this.prevB } : null;
+  }
+
+  /** Begin a fresh 2-finger gesture (call when the second finger lands). */
+  seed(a: Pt, b: Pt): void {
+    if (this._mode !== 'none') this.cb.onUnlock?.();
+    this._mode = 'none';
+    this.startA = { x: a.x, y: a.y };
+    this.startB = { x: b.x, y: b.y };
+    this.prevA = this.startA;
+    this.prevB = this.startB;
+  }
+
+  /** Feed the live 2-finger pose. Returns the effective mode. */
+  update(a: Pt, b: Pt): TwoFingerMode {
+    if (!this.startA || !this.startB || !this.prevA || !this.prevB) {
+      return this._mode;
+    }
+    if (this._mode === 'none') {
+      const cls = twistOrPinch(
+        { a: this.startA, b: this.startB },
+        { a, b },
+        {
+          twistThreshold: this.twistThreshold,
+          pinchThreshold: this.pinchThreshold,
+        },
+      );
+      if (cls.decision !== 'pending') {
+        this._mode = cls.decision;
+        this.cb.onLock?.(cls.decision);
+        if (cls.decision === 'roll') {
+          // Apply the FULL accumulation from the gesture start, not just
+          // this event's delta, so the roll is 1:1 over the whole gesture.
+          this.cb.onRoll?.(cls.twist);
+        }
+      }
+    } else if (this._mode === 'roll') {
+      // Latched: keep applying 1:1 increments for the rest of the gesture.
+      this.cb.onRoll?.(twistDelta(this.prevA, this.prevB, a, b));
+    }
+    this.prevA = { x: a.x, y: a.y };
+    this.prevB = { x: b.x, y: b.y };
+    return this._mode;
+  }
+
+  /** End the gesture (finger lifted): latch released, re-armed via seed(). */
+  reset(): void {
+    if (this._mode !== 'none') this.cb.onUnlock?.();
+    this._mode = 'none';
+    this.startA = this.startB = this.prevA = this.prevB = null;
+  }
 }
 
 /**
@@ -121,9 +292,18 @@ export function createRollControls(
   /** Live mouse (non-touch) pointer currently down, if any. */
   let mouseId: number | null = null;
   let lastMouseX = 0;
-  /** The two touch pointers being tracked for the twist, if any. */
+  /** The two touch pointers being tracked for the 2-finger gesture, if any. */
   let touchA: { id: number; x: number; y: number } | null = null;
   let touchB: { id: number; x: number; y: number } | null = null;
+  /** The active 2-finger gesture's race (plan 018). */
+  let race: TwistPinchRace | null = null;
+  /**
+   * Eye length at the moment the second finger landed — the zoom reference
+   * the lock restores, so a roll gesture ends with position and target
+   * EXACTLY where the 2-finger gesture began (the trackball zooms on every
+   * frame before the race decides, so its baked-in zoom is undone).
+   */
+  let seedEyeLen = 0;
 
   /** Apply a roll of `theta` radians around the view axis (Z). */
   const applyRoll = (theta: number): void => {
@@ -137,13 +317,52 @@ export function createRollControls(
     controls.dispatchEvent({ type: 'change' });
   };
 
+  /**
+   * Suppress (or re-arm) the stock trackball's pinch zoom for the duration
+   * of a gesture locked as ROLL. three's update() gates _zoomCamera() on
+   * noZoom, and _checkDistances() skips while noZoom && noPan (noPan is
+   * permanent here) — safe, because a locked roll gesture never changes the
+   * eye length (position is re-dodged back to exactly start length below).
+   */
+  const gateZoom = (suppress: boolean): void => {
+    controls.noZoom = suppress;
+  };
+
   const onPointerDown = (e: PointerEvent): void => {
     if (!controls.enabled) return;
     if (e.pointerType === 'touch') {
-      // Track the first two fingers for the twist gesture.
+      // Track the first two fingers; the SECOND finger's landing seeds a
+      // fresh exclusive-gesture race (plan 018).
       if (!touchA) touchA = { id: e.pointerId, x: e.clientX, y: e.clientY };
-      else if (!touchB && e.pointerId !== touchA.id)
+      else if (!touchB && e.pointerId !== touchA.id) {
         touchB = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        // Zoom reference for the roll-lock undo: the eye length AT gesture
+        // start (before the trackball has zoomed on this gesture's frames).
+        seedEyeLen = camera.position.distanceTo(controls.target);
+        race = new TwistPinchRace({
+          onRoll: applyRoll,
+          onLock: (mode) => {
+            if (mode !== 'roll') return;
+            gateZoom(true);
+            // The trackball zoomed on every frame BEFORE our lock (it owns
+            // the gesture until the race decides) — its update() scaled the
+            // eye by the inter-finger distance ratio. A roll must keep
+            // position and target EXACTLY where the gesture began, so undo
+            // the baked-in zoom by re-scaling the eye to its seed length.
+            // update() re-reads the eye from the camera position on its
+            // next call, so this is exact.
+            if (seedEyeLen > 1e-6) {
+              const lenNow = camera.position.distanceTo(controls.target);
+              if (lenNow > 1e-6) {
+                const f = seedEyeLen / lenNow;
+                camera.position.sub(controls.target).multiplyScalar(f).add(controls.target);
+              }
+            }
+          },
+          onUnlock: () => gateZoom(false),
+        });
+        race.seed(touchA, touchB);
+      }
       return;
     }
     // Mouse: only the RIGHT button rolls; ignore if another pointer is
@@ -159,18 +378,13 @@ export function createRollControls(
     if (e.pointerType === 'touch') {
       const pt = touchA?.id === e.pointerId ? touchA : touchB?.id === e.pointerId ? touchB : null;
       if (!pt) return;
-      // 2-finger twist: the change in the inter-finger angle IS the roll,
-      // applied 1:1 (a 360° twist rolls the screen 360°). A pure pinch —
-      // equal-length scale — changes no angle and rolls nothing; the
-      // trackball zooms on that part. The PREVIOUS pose must be sampled
-      // BEFORE the moved finger is written, or prev === next and the delta
-      // is always 0 (silent no-op twist).
-      const beforeA = { x: touchA?.x ?? 0, y: touchA?.y ?? 0 };
-      const beforeB = { x: touchB?.x ?? 0, y: touchB?.y ?? 0 };
       pt.x = e.clientX;
       pt.y = e.clientY;
-      if (!touchA || !touchB) return;
-      applyRoll(twistDelta(beforeA, beforeB, touchA, touchB));
+      // Drive the exclusive-gesture race: it decides roll vs zoom once and
+      // applies only the winning component (plan 018).
+      if (touchA && touchB && race) {
+        race.update({ x: touchA.x, y: touchA.y }, { x: touchB.x, y: touchB.y });
+      }
       return;
     }
     if (e.pointerId !== mouseId) return;
@@ -187,6 +401,15 @@ export function createRollControls(
       if (touchA?.id === e.pointerId) touchA = touchB; // the remaining finger continues
       if (touchB?.id === e.pointerId) touchB = null;
       if (!touchA && !touchB) touchA = touchB = null;
+      // The pair is broken (or gone): the 2-finger gesture ends — unlock
+      // any roll latch and re-arm. The survivor finger is now a plain
+      // 1-finger orbit (stock trackball); a NEW second finger seeds a
+      // fresh race. A lift of an untracked (third) finger leaves the pair
+      // and the race intact.
+      if (!touchA || !touchB) {
+        race?.reset();
+        race = null;
+      }
       return;
     }
     if (e.pointerId === mouseId) mouseId = null;
@@ -205,6 +428,8 @@ export function createRollControls(
       domElement.removeEventListener('pointermove', onPointerMove);
       domElement.removeEventListener('pointerup', release);
       domElement.removeEventListener('pointercancel', onPointerCancel);
+      race?.reset();
+      race = null;
       mouseId = null;
       touchA = null;
       touchB = null;
