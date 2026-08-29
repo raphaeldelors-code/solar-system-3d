@@ -14,11 +14,12 @@
  *  - the anchor ring radius (CONSTELLATION_RADIUS) is a distance, not a
  *    direction: it never changes where on screen a direction lands
  */
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   projectSkyDir,
   selectVisibleLabels,
+  updateConstellationScreenLabels,
   CONSTELLATION_LABEL_SCREEN_PX,
   CONSTELLATION_LABEL_MIN_SCREEN_OPACITY,
   CONSTELLATION_LABEL_SCREEN_PAD_PX,
@@ -241,5 +242,112 @@ describe('selectVisibleLabels (plan 017 F2 — view cone + de-collision + cap)',
     expect(sel[0].name).toBe('LYRA');
     expect(sel[0].emphasized).toBe(true);
     expect(sel.length).toBeLessThanOrEqual(CONSTELLATION_LABEL_MAX_VISIBLE);
+  });
+});
+
+/**
+ * Plan 019 — regression for the hi-DPI (devicePixelRatio > 1) label bug.
+ *
+ * The overlay's backing store is sized in DEVICE pixels (`wCss * dpr`) for
+ * retina crispness, but every coordinate we draw with (label x/y, de-collision
+ * boxes) is in CSS pixels. Without scaling the 2D context by `dpr` first, at
+ * dpr=2 a 2560×1600 buffer is addressed as if it were 1280×800, so every
+ * label lands in the top-left quadrant at half size — the "labels worse than
+ * v1" regression on retina phones. This test locks the fix in: the context
+ * MUST be scaled by dpr and cleared in CSS-pixel units, and the backing
+ * store MUST be the device-pixel size.
+ *
+ * Node-safe: `updateConstellationScreenLabels` reads `window.devicePixelRatio`
+ * (stubbed below) and drives a fake canvas/ctx that only records calls.
+ * `presence=0` trips the `presence <= 0.01` early return BEFORE `nameCanvas`
+ * is ever called, so no real `document`/canvas is touched.
+ */
+describe('updateConstellationScreenLabels DPR transform (plan 019)', () => {
+  /** A recording 2D context: captures setTransform + clearRect calls. */
+  function fakeCtx() {
+    const rec = { transforms: [] as number[][], clears: [] as number[][] };
+    return {
+      rec,
+      setTransform(...m: number[]) {
+        rec.transforms.push(m);
+      },
+      clearRect(...a: number[]) {
+        rec.clears.push(a);
+      },
+      // no-op for any other method that might be called
+      globalAlpha: 0,
+    };
+  }
+  /** A fake canvas whose width/height are live and whose 2d ctx records. */
+  function fakeCanvas() {
+    const ctx = fakeCtx();
+    return {
+      ctx,
+      canvas: {
+        width: 0,
+        height: 0,
+        style: {} as Record<string, string>,
+        getContext() {
+          return ctx;
+        },
+      },
+    };
+  }
+  const realWindow = globalThis.window;
+  const realDpr = (globalThis as { devicePixelRatio?: number }).devicePixelRatio;
+
+  /** Set `window.devicePixelRatio` to `n` (Node has no `window` by default). */
+  function setDpr(n: number) {
+    (globalThis as { window?: { devicePixelRatio: number } }).window = { devicePixelRatio: n };
+  }
+
+  afterAll(() => {
+    // Restore whatever the environment had (nothing in Node, or the real window).
+    if (realWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else (globalThis as { window?: unknown }).window = realWindow;
+    if (realDpr === undefined)
+      delete (globalThis as { devicePixelRatio?: number }).devicePixelRatio;
+    else (globalThis as { devicePixelRatio?: number }).devicePixelRatio = realDpr;
+  });
+
+  it('scales the context by dpr and clears in CSS px at dpr=2', () => {
+    // Hi-DPI: the device canvas is 2× the CSS layout.
+    setDpr(2);
+    const { canvas, ctx } = fakeCanvas();
+    const layer = { canvas, setVisible() {}, dispose() {} } as never;
+    const wCss = 1280;
+    const hCss = 800;
+    // presence=0 → early return after setTransform + clearRect, before nameCanvas.
+    updateConstellationScreenLabels(layer, CAM(), [], 0, wCss, hCss);
+
+    // Backing store is the DEVICE-pixel size (capped at dpr 2).
+    expect(canvas.width).toBe(wCss * 2);
+    expect(canvas.height).toBe(hCss * 2);
+    // The context is scaled by dpr (NOT identity) so CSS-px coords land at
+    // full device-pixel size — the actual fix.
+    expect(ctx.rec.transforms.at(-1)).toEqual([2, 0, 0, 2, 0, 0]);
+    // clearRect is issued in CSS-pixel units (×dpr via the transform = full buffer).
+    expect(ctx.rec.clears.at(-1)).toEqual([0, 0, wCss, hCss]);
+  });
+
+  it('still scales correctly (identity) at dpr=1 — no over-correction', () => {
+    setDpr(1);
+    const { canvas, ctx } = fakeCanvas();
+    const layer = { canvas, setVisible() {}, dispose() {} } as never;
+    updateConstellationScreenLabels(layer, CAM(), [], 0, 1280, 800);
+    expect(canvas.width).toBe(1280);
+    expect(canvas.height).toBe(800);
+    // dpr=1 → transform is the identity (1,0,0,1,0,0), never 0.
+    expect(ctx.rec.transforms.at(-1)).toEqual([1, 0, 0, 1, 0, 0]);
+  });
+
+  it('caps the backing-store scale at dpr=2 even on a 3× display', () => {
+    // A 3× retina phone: Math.min(dpr,2) → 2, matching the renderer's pixel ratio.
+    setDpr(3);
+    const { canvas, ctx } = fakeCanvas();
+    const layer = { canvas, setVisible() {}, dispose() {} } as never;
+    updateConstellationScreenLabels(layer, CAM(), [], 0, 1280, 800);
+    expect(canvas.width).toBe(1280 * 2); // capped at 2×, not 3×
+    expect(ctx.rec.transforms.at(-1)).toEqual([2, 0, 0, 2, 0, 0]);
   });
 });

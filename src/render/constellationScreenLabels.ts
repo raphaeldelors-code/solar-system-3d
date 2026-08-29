@@ -304,8 +304,18 @@ export function updateConstellationScreenLabels(
   if (canvas.width !== wPx) canvas.width = wPx;
   if (canvas.height !== hPx) canvas.height = hPx;
   const ctx = canvas.getContext('2d')!;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, wPx, hPx);
+  // The backing store is sized in DEVICE pixels (wCss*dpr) so the overlay is
+  // crisp on hi-DPI displays, but every coordinate we draw with (label x/y,
+  // de-collision margins, box sizes) is in CSS pixels — the same space the
+  // WebGL canvas is laid out in. Without this transform, at dpr > 1 every
+  // label lands in the top-left quadrant at half size, detached from its
+  // figure (the 1:1 buffer/coord mismatch was the "labels worse than v1"
+  // regression on retina phones). Scale the context once to device pixels:
+  // drawing at CSS-px coords then lands at the correct device-px position
+  // AND at full (retina) size. `selectVisibleLabels` stays in CSS px — its
+  // de-collision boxes are scale-invariant, so no change is needed there.
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, wCss, hCss);
   if (presence <= 0.01) return;
 
   const selected = selectVisibleLabels(updates, camera, wCss, hCss, presence);
