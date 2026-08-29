@@ -75,6 +75,16 @@
         min-width: 220px;
         user-select: none;
       }
+      /* Plan 020 F2: shrink-to-fit made this 677px wide (widest text line) at
+         13px/1.5, covering 38% of a 1280px viewport with the view center
+         behind it (the Sun on boot, every pick's figure + label). Capped at
+         360px on wide screens — right edge 689→402, zero content overflow
+         (measured live). Phones (<560px) keep the full-width media query. */
+      @media (min-width: 561px) {
+        #panel {
+          max-width: 360px;
+        }
+      }
       #panel h1 {
         font-size: 13px;
         margin: 0 0 8px;
