@@ -98,6 +98,16 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] P3 fix(figures): remove generated Serpens silhouette (duplicates the snake already in the Ophiuchus plate; 87 fits); Puppis/Vela audited + kept — `8afbcb0`
 - [x] P4 docs: record P1–P3 hashes + live-deploy verify (CI 3×push success + gh-pages deploy success; live bundle has cst-labels + constellation-stars-emph + green constant 0x7cfc5a, gold ffc46b and sprite labels gone, serpens.png 404)
 
+## User queue — 2026-08-28 — plan 017 (no-jump emphasis, phone labels, roll controls, selection anchor)
+
+`plans/017-no-jump-emphasis-phone-labels-roll-controls-selection-anchor.md` — no free view: the view center is always the current selection; panning is deleted.
+
+- [x] F1 fix(sky): only picked constellations get emphasis — remove the per-frame nearest-argmin (the "jump" the user didn't ask for); D4 center-fade kept — `e1295db`
+- [x] F2 feat(sky): phone-legible labels — view-cone filter + screen de-collision, max 8 names drawn — `ce251f4`
+- [x] F3 feat(camera): right-drag / 2-finger = roll around view Z; `noPan = true` kills all pan paths (mouse/2-finger/keyboard); 1-finger stays full trackball — `5868677`
+- [x] F4 feat(camera): Sky + System anchors select the Sun (two zooms); Free camera removed; pick = new center — `f0f3ba7`
+- [x] P5 docs: record F1–F4 hashes + implementation record in the plan file — this commit (all four features live-verified on the headless build before commit)
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
