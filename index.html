@@ -235,6 +235,45 @@
         color: #8fa3bf;
         font-variant-numeric: tabular-nums;
       }
+      /* ---- Always-visible mini date/speed strip (plan 022 F3) ----
+         Top-right, pointer-events: none so it never blocks the canvas or
+         the panel. On phones (<560 px) the panel is full-width and its
+         collapsed toggle bar sits at the top — so the strip drops down
+         clear of it (measured in the live check). */
+      #hud-mini {
+        position: fixed;
+        top: calc(10px + env(safe-area-inset-top));
+        right: calc(12px + env(safe-area-inset-right));
+        z-index: 20;
+        pointer-events: none;
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        background: rgba(10, 16, 28, 0.6);
+        border: 1px solid rgba(120, 150, 200, 0.2);
+        border-radius: 8px;
+        padding: 4px 12px;
+        font:
+          12px/1.4 system-ui,
+          sans-serif;
+        font-variant-numeric: tabular-nums;
+        color: #9fd6a8;
+        user-select: none;
+      }
+      #hud-mini #hud-date {
+        color: #9fd6a8;
+      }
+      #hud-mini #hud-speed {
+        color: #8fa3bf;
+      }
+      @media (max-width: 560px) {
+        #hud-mini {
+          /* Below the collapsed full-width panel toggle bar: its measured
+             bottom is 57.5 px (12 top + 14px coarse font + 2×12 padding),
+             so 68 px leaves an 11 px gap (verified by the F3 live check). */
+          top: calc(68px + env(safe-area-inset-top));
+        }
+      }
       /* ---- Body search combobox (B2) ---- */
       #find-wrap {
         position: relative;
@@ -530,6 +569,15 @@
       </div>
     </div>
     <div id="tooltip" aria-hidden="true"></div>
+    <!-- Plan 022 F3: always-visible mini date/speed strip (top-right).
+         pointer-events: none — it never blocks the canvas or the panel.
+         Deliberately NOT aria-live: 60 fps updates would spam screen
+         readers; the panel's Date/Speed rows are the accessible source
+         of truth. -->
+    <div id="hud-mini" aria-hidden="true">
+      <span id="hud-date">—</span>
+      <span id="hud-speed">1.0 d/s</span>
+    </div>
     <div id="time-scrub" aria-hidden="true" hidden>
       <div id="time-scrub-date">—</div>
       <div id="time-scrub-sub"></div>

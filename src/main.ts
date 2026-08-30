@@ -261,6 +261,15 @@ const glReloadBtn = document.getElementById('gl-reload') as HTMLButtonElement;
 const scrubEl = document.getElementById('time-scrub') as HTMLDivElement;
 const scrubDateEl = document.getElementById('time-scrub-date') as HTMLDivElement;
 const scrubSubEl = document.getElementById('time-scrub-sub') as HTMLDivElement;
+// Plan 022 F3: always-visible mini date/speed strip (top-right). Written by
+// the same fmtDate()/fmtSpeed() as the panel, so the strip can never
+// diverge from the control panel. Day-only vs full date is chosen in
+// hudDateDayOnly (re-checked on resize).
+const hudDateEl = document.getElementById('hud-date') as HTMLSpanElement;
+const hudSpeedEl = document.getElementById('hud-speed') as HTMLSpanElement;
+// F3: day-only vs full date for the mini strip. Matches the phone breakpoint
+// the panel collapses under (560 px) — re-checked on resize below.
+let hudDateDayOnly = window.innerWidth < 560;
 const infoNameEl = document.getElementById('info-name') as HTMLDivElement;
 const infoPeriodEl = document.getElementById('info-period') as HTMLSpanElement;
 const infoDistanceEl = document.getElementById('info-distance') as HTMLSpanElement;
@@ -727,7 +736,9 @@ function speedValueStr(): string {
 }
 
 function fmtSpeed(): void {
-  speedValueEl.textContent = speedValueStr();
+  const s = speedValueStr();
+  speedValueEl.textContent = s;
+  hudSpeedEl.textContent = s; // F3: the mini strip shares the exact string
 }
 
 function fmtDate(): void {
@@ -738,6 +749,10 @@ function fmtDate(): void {
   const h = String(d.getUTCHours()).padStart(2, '0');
   const min = String(d.getUTCMinutes()).padStart(2, '0');
   dateEl.textContent = `${y}-${m}-${day} ${h}:${min} UTC`;
+  // F3: the mini strip. Day-only on phones (<560 px) to keep the strip
+  // narrow next to the full-width panel; full `YYYY-MM-DD HH:MM` elsewhere.
+  // The panel's Date row always keeps the full form.
+  hudDateEl.textContent = hudDateDayOnly ? `${y}-${m}-${day}` : `${y}-${m}-${day} ${h}:${min}`;
   // Keep the date picker in sync (it shows the calendar day the sim clock is
   // on). Setting .value programmatically never fires 'change', so this can't
   // loop with the picker's own change handler. Skip while the user is
@@ -1153,6 +1168,14 @@ window.addEventListener('resize', () => {
   built.camera.aspect = window.innerWidth / window.innerHeight;
   built.camera.updateProjectionMatrix();
   built.renderer.setSize(window.innerWidth, window.innerHeight);
+  // F3: re-check the phone breakpoint for the mini strip's day-only date.
+  // Only rewrite when it actually flips (a refresh mid-frame is otherwise a
+  // no-op for the date, but avoid redundant DOM writes on every resize).
+  const dayOnly = window.innerWidth < 560;
+  if (dayOnly !== hudDateDayOnly) {
+    hudDateDayOnly = dayOnly;
+    fmtDate();
+  }
 });
 
 // --- Shareable URL state ----------------------------------------------------
