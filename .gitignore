@@ -4,6 +4,9 @@ dist/
 .DS_Store
 npm-debug.log*
 
+# Chrome / dev-server crash dumps (large binaries; eslint chokes reading them).
+core.*
+
 # Heavy source plates + intermediate extraction output (regenerable via
 # assets/constellation-figures/mkfig2.py; not shipped, served from public/).
 assets/constellation-figures/src/

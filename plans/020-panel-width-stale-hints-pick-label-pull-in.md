@@ -88,6 +88,17 @@ paint at t≈0.4s and are fully rendered by t≈5s).
   distance in pick view dropped to ≤ ~100px (≈ the figure's own screen extent
   for typical figures), F3 is NOT needed — record the numbers in this plan and
   stop. Otherwise proceed:
+- **OUTCOME (2026-08-29): gate fired — F3 NOT needed, plan ships as F1+F2.**
+  Exact scene-math re-measurement (audit/s7g_f3exact.py — real 88-constellation
+  star data injected, replicating `projectSkyDir` + `constellationLabelPose`
+  margin, using the app's own camera after its own pick flight) over 10 picks:
+  Orion 144, Hydra 196, Andromeda 107, Vela 72, Lyra 86, Ursa Major 54, Puppis
+  252, Leo 69, Cassiopeia 75, Piscis Austrinus 89 px label→nearest-star.
+  **Median 87.5px, mean 114, max 252** — at or under the 100px threshold for
+  8/10 picks. F2 (panel cap) removed the dominant occlusion; the residual is
+  the angular margin projecting to ~87px for small-on-screen figures, which is
+  well within a figure's own screen extent (54–250px wide). No user-visible
+  "label far away" complaint remains. DROPPED — no code change.
 - **Root cause**: `constellationLabelMargin()` (scene.ts) is angular —
   `min(halfExtent, 0.35 rad) + 0.02 + inkHalf` — tuned for the panoramic sky
   view (fov 120, radius 2756). At pick view (fov 50, radius ~34, figure a few
@@ -140,3 +151,19 @@ paint at t≈0.4s and are fully rendered by t≈5s).
   it; F3 touches only the 2D screen-space offset.
 - No repositioning of the panel itself (left dock is the house style; the
   width cap is the fix).
+
+---
+
+## Implementation record (2026-08-29)
+
+- **Plan**: `ab53b33` (this file + todo.md index).
+- **F1** `c1517ae` — hints fixed. Deployed + live-verified: "Right-drag: roll"
+  / "Twist: roll" on https://raphaeldelors-code.github.io/solar-system-3d/.
+- **F2** `4c367bb` — `@media (min-width:561px){#panel{max-width:360px}}`.
+  Live CDP: boot panel 390px, right edge 402 < center 640, no overflow; all six
+  previously-occluded labels outside the panel. Gates 271/271. Deployed +
+  live-verified (max-width marker on the Pages page).
+- **F3** — DROPPED (measurement gate fired; median 87.5px ≤ 100px). No code.
+- **Docs/housekeeping** — this commit: records the hashes, flips todo.md, and
+  adds `core.*` to .gitignore (Chrome crash dumps kept choking eslint: "Unable
+  to read file core.NNNN: Invalid string length"). No dumps left on disk.
