@@ -62,6 +62,7 @@ import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
 import { findEvents, type Event as SimEvent } from './sim/events';
 import { J2000_UTC } from './sim/types';
+import { scrubDeltaDays, scrubSpeedLog, formatScrubDelta } from './render/scrubMath';
 
 // PWA: register the offline service worker in production builds only
 // (vite preview / dev use a live server; a cached shell would be confusing).
@@ -255,6 +256,11 @@ const tooltipEl = document.getElementById('tooltip') as HTMLDivElement;
 const infoEl = document.getElementById('info') as HTMLDivElement;
 const glLostEl = document.getElementById('gl-lost') as HTMLDivElement;
 const glReloadBtn = document.getElementById('gl-reload') as HTMLButtonElement;
+// Plan 022 — time-scrub live readout (bottom-centre, visible while the
+// right-drag / 3-finger gesture is held; pointer-events: none in the CSS).
+const scrubEl = document.getElementById('time-scrub') as HTMLDivElement;
+const scrubDateEl = document.getElementById('time-scrub-date') as HTMLDivElement;
+const scrubSubEl = document.getElementById('time-scrub-sub') as HTMLDivElement;
 const infoNameEl = document.getElementById('info-name') as HTMLDivElement;
 const infoPeriodEl = document.getElementById('info-period') as HTMLSpanElement;
 const infoDistanceEl = document.getElementById('info-distance') as HTMLSpanElement;
@@ -688,7 +694,13 @@ function applyToggles(): void {
   built.constellationFigures.visible = figuresOn;
 }
 
-function fmtSpeed(): void {
+/**
+ * Format the current speed as the panel readout (and the scrub overlay's)
+ * string: magnitude + unit + an explicit reverse arrow. Kept separate from
+ * fmtSpeed so the time-scrub readout (plan 022) shares the exact same
+ * formatting — one code path, no drift.
+ */
+function speedValueStr(): string {
   const s = clock.getSpeed();
   // The slider is a MAGNITUDE (log10 days/second, can go well below 1 for
   // slow satellite observation); direction lives on the Reverse toggle.
@@ -711,7 +723,11 @@ function fmtSpeed(): void {
     mag = (a * 24).toFixed(2);
     unit = 'h/s';
   }
-  speedValueEl.textContent = `${arrow}${mag} ${unit}`;
+  return `${arrow}${mag} ${unit}`;
+}
+
+function fmtSpeed(): void {
+  speedValueEl.textContent = speedValueStr();
 }
 
 function fmtDate(): void {
@@ -807,10 +823,21 @@ function updateInfo(): void {
 
 // --- UI wiring -------------------------------------------------------------
 
-speedEl.addEventListener('input', () => {
-  clock.setLogSpeed(parseFloat(speedEl.value));
+/**
+ * Set the speed from a slider value (log10 days/s) and sync the readout and
+ * URL. Both the slider's own `input` event and the time-scrub gesture
+ * (plan 022) write through here so the panel and the gesture can never
+ * diverge.
+ */
+function applySliderSpeed(logValue: number): void {
+  speedEl.value = String(logValue);
+  clock.setLogSpeed(logValue);
   fmtSpeed();
   syncUrl();
+}
+
+speedEl.addEventListener('input', () => {
+  applySliderSpeed(parseFloat(speedEl.value));
 });
 
 pauseBtn.addEventListener('click', () => {
@@ -1420,6 +1447,11 @@ canvas.addEventListener('pointerdown', (ev) => {
   pressY = ev.clientY;
 });
 canvas.addEventListener('pointerup', (ev) => {
+  if (suppressPickAfterScrub) {
+    suppressPickAfterScrub = false;
+    return; // a scrub release is never a pick
+  }
+  if (ev.button === 2) return; // right button never picks
   if (Math.hypot(ev.clientX - pressX, ev.clientY - pressY) > 6) return; // drag, not a click
   const rect = canvas.getBoundingClientRect();
   pointerNdc.set(
@@ -1433,6 +1465,130 @@ canvas.addEventListener('pointerup', (ev) => {
     const dest = id ? camAnchorForBody(id) : null;
     if (dest) flyTo(dest, 1.4, id);
   }
+});
+
+// --- Time scrubbing (plan 022 F1): right-drag = 2D time/speed pad --------
+// Desktop: hold the RIGHT mouse button and drag. Horizontal travel moves
+// through time (right = future, left = past) at a FIXED rate independent of
+// the speed slider; vertical travel moves the speed slider (up = faster,
+// down = slower, log scale). While held, the clock is frozen at the scrubbed
+// value and the #time-scrub readout shows the live date, travel distance and
+// speed; on release time resumes at the CURRENT slider speed.
+//
+// Both gesture slots are genuinely free (plan 021): OrbitControls maps the
+// right button to PAN, which is gated off by enablePan=false, and its touch
+// code only acts on 1-2 pointers, so the 3-finger twin (F2) has no
+// interference either. A scrub must never be mistaken for a click-pick: a
+// moved release arms suppressPickAfterScrub.
+let scrub: null | {
+  startX: number;
+  startY: number;
+  startDays: number;
+  startLog: number;
+  movedX: boolean;
+  movedY: boolean;
+} = null;
+let suppressPickAfterScrub = false;
+
+/** Write the live scrub readout (date line + travel/speed sub line). */
+function updateScrubOverlay(): void {
+  if (!scrub) return;
+  scrubDateEl.textContent = dateEl.textContent;
+  const dxDays = clock.t - scrub.startDays;
+  const parts: string[] = [];
+  if (scrub.movedX) parts.push(formatScrubDelta(dxDays));
+  parts.push(speedValueStr());
+  scrubSubEl.textContent = parts.join('  ·  ');
+}
+
+/**
+ * Apply a scrub move (px deltas from the press point) to clock + slider.
+ * Shared by the mouse path (F1) and the 3-finger path (F2). Commits an axis
+ * only past its dead zone (6 px X / 4 px Y) so jitter never nudges time or
+ * speed. Returns true when the move was committed (URL/moon/overlay work).
+ */
+function applyScrubMove(s: NonNullable<typeof scrub>, dx: number, dy: number): boolean {
+  let committed = false;
+  const firstX = !s.movedX && Math.abs(dx) > 6;
+  const firstY = !s.movedY && Math.abs(dy) > 4;
+  if (firstX) s.movedX = true;
+  if (firstY) s.movedY = true;
+  // The readout appears only once a real move crosses a dead zone — a
+  // 4 px jitter must never flash the overlay (and never read back as one).
+  if (firstX || firstY) scrubEl.hidden = false;
+  if (s.movedX) {
+    clock.setDate(new Date(J2000_UTC + (s.startDays + scrubDeltaDays(dx)) * 86_400_000));
+    committed = true;
+  }
+  if (s.movedY) {
+    applySliderSpeed(scrubSpeedLog(s.startLog, dy));
+    committed = true;
+  }
+  return committed;
+}
+
+// The right button has no other use on this canvas — kill the native menu
+// (it would otherwise pop up on the release, mid- or post-gesture).
+canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
+
+canvas.addEventListener('pointerdown', (ev) => {
+  suppressPickAfterScrub = false; // a new press clears any leftover suppression
+  if (ev.pointerType !== 'mouse' || ev.button !== 2) return;
+  scrub = {
+    startX: ev.clientX,
+    startY: ev.clientY,
+    startDays: clock.t,
+    startLog: clock.getLogSpeed(),
+    movedX: false,
+    movedY: false,
+  };
+  clock.beginScrub();
+  // The overlay stays hidden until a move crosses the dead zone.
+});
+
+// On WINDOW so a drag that leaves the canvas keeps scrubbing (and the clock
+// can never be left frozen by the pointer escaping).
+window.addEventListener('pointermove', (ev) => {
+  // `buttons` is a bitmask: 1 = left, 2 = middle, 4 = RIGHT. The gesture
+  // only tracks while the right button is held.
+  if (!scrub || ev.pointerType !== 'mouse' || (ev.buttons & 4) === 0) return;
+  const dx = ev.clientX - scrub.startX;
+  const dy = ev.clientY - scrub.startY;
+  if (applyScrubMove(scrub, dx, dy)) {
+    lastMoonResampleMs = performance.now(); // moon line follows the scrub live
+    syncUrl();
+  }
+  if (scrub.movedX || scrub.movedY) updateScrubOverlay();
+});
+
+window.addEventListener('pointerup', (ev) => {
+  if (!scrub || ev.pointerType !== 'mouse' || ev.button !== 2) return;
+  const s = scrub;
+  scrub = null;
+  clock.endScrub();
+  if (s.movedX || s.movedY) {
+    resampleMoonNow(); // settle the moon line at the final epoch
+    suppressPickAfterScrub = true;
+    scrubDateEl.classList.remove('flash');
+    void scrubDateEl.offsetWidth; // restart the animation
+    scrubDateEl.classList.add('flash');
+    setTimeout(() => {
+      scrubEl.hidden = true;
+      scrubDateEl.classList.remove('flash');
+    }, 1200); // the time-flash keyframes' duration
+  } else {
+    // Plain right-click (no travel): hide immediately.
+    scrubEl.hidden = true;
+  }
+});
+
+// A cancelled gesture must restore the clock exactly as it was before the
+// press — never leave `paused` dangling (the one real failure mode).
+window.addEventListener('pointercancel', (ev) => {
+  if (!scrub || ev.pointerType !== 'mouse') return;
+  scrub = null;
+  clock.endScrub();
+  scrubEl.hidden = true;
 });
 
 // --- Animation loop ---------------------------------------------------------

@@ -20,10 +20,10 @@ tracked but never acts. So both new gesture slots are genuinely free.
 
 One two-dimensional gesture, two controls:
 
-| Input | Horizontal (X) | Vertical (Y) |
-| --- | --- | --- |
-| **Right-drag (mouse)** | travel time: **right = future, left = past** | change speed: **up = faster, down = slower** (slider magnitude, log scale) |
-| **3-finger drag (touch)** | same (mean finger position) | same |
+| Input                     | Horizontal (X)                               | Vertical (Y)                                                               |
+| ------------------------- | -------------------------------------------- | -------------------------------------------------------------------------- |
+| **Right-drag (mouse)**    | travel time: **right = future, left = past** | change speed: **up = faster, down = slower** (slider magnitude, log scale) |
+| **3-finger drag (touch)** | same (mean finger position)                  | same                                                                       |
 
 1-finger = rotate, 2-finger = pinch-zoom (unchanged from plan 021).
 
@@ -62,7 +62,7 @@ and "faster" means faster-backwards.
 
 1. **X rate fixed, independent of the current speed slider:**
    `SCRUB_DAYS_PER_PX = 0.002` d/px (1 px ≈ 2.9 sim-minutes). Rationale:
-   the slider is a *rate* (0.001…316 d/s); tying travel to it would make a
+   the slider is a _rate_ (0.001…316 d/s); tying travel to it would make a
    300 px drag span 1 s at the slowest setting and ~15 000 days at the
    fastest. Fixed rate is predictable: **300 px ≈ 0.6 yrs** of time travel
    on both desktop and phone.
@@ -111,10 +111,7 @@ export const SPEED_LOG_MAX = 2.5;
 
 /** Sim days added to the press epoch for a horizontal drag in pixels. */
 export function scrubDeltaDays(deltaPx: number): number {
-  return Math.max(
-    -SCRUB_CLAMP_DAYS,
-    Math.min(SCRUB_CLAMP_DAYS, deltaPx * SCRUB_DAYS_PER_PX),
-  );
+  return Math.max(-SCRUB_CLAMP_DAYS, Math.min(SCRUB_CLAMP_DAYS, deltaPx * SCRUB_DAYS_PER_PX));
 }
 
 /** New speed slider value (log10 d/s) for a vertical drag. Up (negative
@@ -154,9 +151,12 @@ by design.)
 - New state:
   ```ts
   let scrub: null | {
-    startX: number; startY: number;
-    startDays: number; startLog: number;
-    movedX: boolean; movedY: boolean;
+    startX: number;
+    startY: number;
+    startDays: number;
+    startLog: number;
+    movedX: boolean;
+    movedY: boolean;
   } = null;
   let suppressPickAfterScrub = false;
   ```
@@ -164,8 +164,8 @@ by design.)
   has no other use on this canvas, and the native menu mid-drag is noise).
 - **`pointerdown` on canvas** (`pointerType === 'mouse'`, `button === 2`):
   `scrub = { startX: ev.clientX, startY: ev.clientY, startDays: clock.t,
-  startLog: clock.logSpeed /* need getter — see below */, movedX: false,
-  movedY: false };` `clock.beginScrub();` show `#time-scrub`, update it.
+startLog: clock.logSpeed /* need getter — see below */, movedX: false,
+movedY: false };` `clock.beginScrub();` show `#time-scrub`, update it.
   - `SimClock` needs a `getLogSpeed(): number { return this.logMag; }`
     getter (2 lines, in `src/sim/clock.ts`).
 - **`pointermove` on window** while `scrub` (and button 2 still down):
@@ -180,7 +180,7 @@ by design.)
     `const v = scrubSpeedLog(scrub.startLog, dy);`
     `speedEl.value = String(v);` then run the EXACT path the slider's
     `input` handler runs (main.ts:810-813): `clock.setLogSpeed(v);
-    fmtSpeed(); syncUrl();` — factored as a small `applySliderSpeed()`
+fmtSpeed(); syncUrl();` — factored as a small `applySliderSpeed()`
     helper used by both, so the panel slider and the gesture can never
     diverge.
   - Update the overlay (date via `fmtDate()` output, `formatScrubDelta`,
@@ -196,12 +196,12 @@ by design.)
     right-button click never hit the pick handler anyway, but keep the
     invariant: pick suppression only when `movedX || movedY`).
   - Else: `clock.endScrub();` `resampleMoonNow();` `suppressPickAfterScrub
-    = true;` (cleared on next pointerdown); flash `#time-scrub` date (add
+= true;` (cleared on next pointerdown); flash `#time-scrub` date (add
     `.flash`, remove after the 1.2 s animation), hide overlay after the
     flash; `scrub = null`.
 - **click-pick guard**: the existing `pointerup` pick handler (main.ts:1422)
   gains `if (suppressPickAfterScrub) { suppressPickAfterScrub = false;
-  return; }` at its top — a right-button release must never flyTo.
+return; }` at its top — a right-button release must never flyTo.
 - **Sky tour**: the existing `stopSkyTour` listeners fire on any
   `pointerdown`, so grabbing right-button during a tour ends the tour
   (correct — the user grabbed it). No change.
@@ -233,6 +233,7 @@ already present for `#time.flash` — extend the selector to
 `#time-scrub-date.flash`) applied to the date line.
 
 **`tests/scrubMath.test.ts`** (NEW, pure):
+
 - `scrubDeltaDays`: 150 px → 0.3 d; −150 px → −0.3 d; 5 000 000 px →
   clamped 10 000; negative mirror; 0 → 0.
 - `scrubSpeedLog`: (0, −100) → 1 (up 100 px = 1 decade faster); (0, +100) →
@@ -243,6 +244,7 @@ already present for `#time.flash` — extend the selector to
   implementation).
 
 **`tests/clock.test.ts`** (extend if present, else NEW):
+
 - `beginScrub` freezes: `tick(10)` → `t` unchanged.
 - Pause memory: running→begin→end ⇒ `!isPaused`; paused→begin→end ⇒
   `isPaused`.
@@ -255,6 +257,7 @@ vite); `npx eslint .`; `npx prettier --write` changed files then
 `--check .` clean (CI runs prettier over the WHOLE repo incl. this plan
 file). **Live verify** (headless Chrome + CDP on `vite preview :4173`,
 fresh page per case, pattern of `/opt/data/audit/p021_live_check.py`):
+
 1. Idle pose: `#time-scrub` hidden.
 2. Right-drag (+120 px, 0 y): `clock.t` advanced ≈ 0.24 d (±5 %), panel
    date matches, overlay visible with `+68 d`-class sub text, speed
@@ -288,8 +291,10 @@ fresh page per case, pattern of `/opt/data/audit/p021_live_check.py`):
   ```ts
   const touchPointers = new Map<number, { x: number; y: number }>();
   let threeFingerScrub: null | {
-    startAvgX: number; startAvgY: number;
-    startDays: number; startLog: number;
+    startAvgX: number;
+    startAvgY: number;
+    startDays: number;
+    startLog: number;
     active: boolean;
   } = null;
   let suppressTouchPick = false;
@@ -297,7 +302,7 @@ fresh page per case, pattern of `/opt/data/audit/p021_live_check.py`):
 - **`pointerdown` on canvas** (`pointerType === 'touch'`): insert into
   `touchPointers`. If size reaches 3 → start scrub: centroid
   (`startAvgX/Y = mean`), `startDays = clock.t`, `startLog =
-  clock.getLogSpeed()`, `active = false`; `clock.beginScrub()`; show
+clock.getLogSpeed()`, `active = false`; `clock.beginScrub()`; show
   overlay. If size reaches 4 → ignore (4th finger is dead weight; the
   gesture continues with the first 3 — simplest correct behaviour).
 - **`pointermove` on canvas** (touch): update the stored position. While a
@@ -315,11 +320,11 @@ fresh page per case, pattern of `/opt/data/audit/p021_live_check.py`):
   scrub was live: run the SAME end path as the mouse release
   (`clock.endScrub()`, `resampleMoonNow()` if active, flash/hide if
   active, `suppressTouchPick = true` if active, `threeFingerScrub =
-  null`).
+null`).
   - OrbitControls handles the remainder gracefully: its `onPointerUp`
     re-runs `_onTouchStart` for the surviving pointer from the CURRENT
     position (r168: `case 1: this._onTouchStart({pointerId, pageX:
-    position.x, pageY: position.y})`), so the surviving pinch/rotate
+position.x, pageY: position.y})`), so the surviving pinch/rotate
     resumes without a jump.
   - Plain 1-finger / 2-finger gestures never set scrub state — zero
     interference with plan 021 behaviour.
@@ -338,6 +343,7 @@ fresh page per case, pattern of `/opt/data/audit/p021_live_check.py`):
 the behaviour; pure math is already F1's scrubMath/clock suites.
 
 **Live verify** (CDP `Input.dispatchTouchEvent`, fresh page per case):
+
 1. 3-finger press + 150 px centroid-x travel → `clock.t` ≈ +0.30 d,
    overlay visible, camera untouched; speed unchanged (no vertical).
 2. 3-finger press + 120 px centroid-y upward → `#speed` ≈ startLog + 1.2,
@@ -380,6 +386,7 @@ never blocks the canvas. Under 560 px the date renders day-only
 (`YYYY-MM-DD`); the panel's Date row keeps the full form.
 
 **`src/main.ts`**:
+
 - `hudDateEl` / `hudSpeedEl` refs.
 - `fmtDate()` (main.ts:717) also writes `hudDateEl` (full vs day-only
   chosen once at init, re-checked in the existing resize handler).
@@ -392,6 +399,7 @@ never blocks the canvas. Under 560 px the date renders day-only
   the panel's Date/Speed rows remain the accessible source of truth.
 
 **Live verify**:
+
 1. Desktop: strip top-right; date identical to `#date`; speed identical to
    `#speed-value`; both update live (sample t and t+2 s).
 2. 375 px viewport: panel auto-collapsed (existing), strip visible with

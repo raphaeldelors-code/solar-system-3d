@@ -201,6 +201,40 @@
           text-shadow: none;
         }
       }
+      /* ---- Time-scrub live readout (plan 022) ----
+         Bottom-centre pill shown while the right-drag / 3-finger gesture is
+         held. pointer-events: none — it never blocks the canvas or the
+         control panel. */
+      #time-scrub {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 64px;
+        z-index: 30;
+        pointer-events: none;
+        background: rgba(10, 16, 28, 0.82);
+        border: 1px solid #2b4a7a;
+        border-radius: 10px;
+        padding: 10px 18px;
+        text-align: center;
+        color: #dce8f7;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+      }
+      #time-scrub-date {
+        font-size: 22px;
+        font-variant-numeric: tabular-nums;
+        color: #9fd6a8;
+        line-height: 1.25;
+      }
+      #time-scrub-date.flash {
+        animation: time-flash 1.2s ease-out;
+      }
+      #time-scrub-sub {
+        margin-top: 3px;
+        font-size: 12px;
+        color: #8fa3bf;
+        font-variant-numeric: tabular-nums;
+      }
       /* ---- Body search combobox (B2) ---- */
       #find-wrap {
         position: relative;
@@ -496,6 +530,10 @@
       </div>
     </div>
     <div id="tooltip" aria-hidden="true"></div>
+    <div id="time-scrub" aria-hidden="true" hidden>
+      <div id="time-scrub-date">—</div>
+      <div id="time-scrub-sub"></div>
+    </div>
     <div id="panel">
       <h1 id="panel-toggle">Solar System</h1>
       <div class="panel-body">
@@ -606,7 +644,9 @@
             <span id="info-label-3">Peri / Apo</span><span id="info-range" class="value">—</span>
           </div>
         </div>
-        <div class="hint" id="hint">Drag: rotate · Wheel: zoom · Click a body to fly to it</div>
+        <div class="hint" id="hint">
+          Drag: rotate · Wheel: zoom · Right-drag: scrub time & speed · Click a body to fly to it
+        </div>
         <div class="hint" id="credit">
           Constellation figures: Stellarium "western" illustrations by Johan Meuris (Free Art
           License), registered to the real stars

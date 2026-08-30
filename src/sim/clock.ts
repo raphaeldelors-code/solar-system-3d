@@ -46,6 +46,11 @@ export class SimClock {
     this.logMag = v;
   }
 
+  /** Current speed slider value (log10 days/s magnitude). */
+  getLogSpeed(): number {
+    return this.logMag;
+  }
+
   /** True while time runs backwards. */
   get isReversed(): boolean {
     return this.reversed;
@@ -67,6 +72,23 @@ export class SimClock {
   /** Advance by a real-time delta in seconds. */
   tick(dtSeconds: number): void {
     if (!this.paused) this.days += this.getSpeed() * dtSeconds;
+  }
+
+  private preScrubPaused = false;
+
+  /**
+   * Freeze the clock for a scrub gesture (plan 022), remembering whether
+   * time was running before the press. `endScrub` restores only the pause
+   * flag — the speed is whatever the slider now holds, by design.
+   */
+  beginScrub(): void {
+    this.preScrubPaused = this.paused;
+    this.paused = true;
+  }
+
+  /** End the scrub: resume only if time was running before the scrub began. */
+  endScrub(): void {
+    this.paused = this.preScrubPaused;
   }
 
   /** Convert current sim time back to a Date. */
