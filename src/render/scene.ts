@@ -11,7 +11,7 @@
  * converted by the active VisualScale.
  */
 import * as THREE from 'three';
-import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAtInto, sampleOrbit, type Vec3 } from '../sim/kepler';
 import { moonGeocentricJ2000 } from '../sim/moon';
@@ -25,7 +25,6 @@ import {
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, type BeltField } from './belts';
-import { createRollControls } from './rollControls';
 import { CONSTELLATIONS, raDecToUnit, type Constellation } from '../data/constellations';
 import { FIGURE_FITS, figurePlacement } from '../data/figures';
 import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows';
@@ -166,7 +165,7 @@ export interface SceneBody {
 export interface BuiltScene {
   renderer: THREE.WebGLRenderer;
   camera: THREE.PerspectiveCamera;
-  controls: TrackballControls;
+  controls: OrbitControls;
   scene: THREE.Scene;
   bodies: Map<string, SceneBody>;
   /** Small-body fields (asteroid + Kuiper belts). */
@@ -272,24 +271,20 @@ export function buildScene(
   );
   camera.position.set(0, 16, 30);
 
-  const controls = new TrackballControls(camera, renderer.domElement);
-  // Trackball = free-axis rotation: it rotates the view around an arbitrary
-  // screen-space axis (and rolls camera.up), so the camera can pass OVER
-  // either celestial pole. OrbitControls kept up=+Y and clamped polar to
-  // [0, π] — that clamp was the user-visible "rotation blocked around the
-  // poles" (plan 015 P2). Speed constants tuned to match the old Orbit feel
-  // (OrbitControls damping 0.08 ≈ Trackball momentum decay 0.2; its default
-  // rotateSpeed 1.0 feels ~4x slower than Orbit's 1.0).
-  controls.rotateSpeed = 4.0;
-  controls.zoomSpeed = 1.2;
-  controls.dynamicDampingFactor = 0.2;
-  // Plan 017 F3: panning is GONE — the view center is the selection, always.
-  // noPan kills every pan path in the stock trackball at once: right-drag
-  // pan, 2-finger midpoint pan, and the A/S/D keyboard pan. The RIGHT
-  // button and the 2-finger gesture become the ROLL input instead
-  // (render/rollControls.ts: rotation around the view Z axis).
-  controls.noPan = true;
-  const roll = createRollControls(renderer.domElement, camera, controls);
+  // OrbitControls (restored by plan 021 — the plan-015 "360° trackball" and
+  // plan-017 Z-roll were reverted: they made the view roll up / cross poles
+  // and fought the flight+framing code). Orbit keeps camera.up = +Y and
+  // clamps the polar angle to [0, π] — rotation stops at the poles and
+  // never rolls, which is the stable feel the user wants back.
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  // The ONE thing kept from the plan-015 era (plan 017 F3): free-view PANNING
+  // is off. The view centre is the selection, always — panning (right-drag /
+  // 2-finger / A-S-D keys) used to drift it off. enablePan=false kills every
+  // pan path; 2-finger PINCH still dollies (zoom) — Orbit's pinch handler
+  // runs its zoom part independently of enablePan.
+  controls.enablePan = false;
 
   // Lighting: Sun point light at origin + faint ambient.
   const sunLight = new THREE.PointLight(0xfff2d8, 3.5, 0, 0);
@@ -560,7 +555,6 @@ export function buildScene(
       (mesh.material as THREE.MeshBasicMaterial).dispose();
       // Plate textures stay in the shared FIGURE_TEX_CACHE for rebuilds.
     }
-    roll.dispose();
     controls.dispose();
     renderer.dispose();
   }

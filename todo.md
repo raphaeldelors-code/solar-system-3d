@@ -128,6 +128,12 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] F2 fix(ui): cap #panel width (360px) — right edge 689→402 at 1280 wide, un-occludes the view center and the picked figure + its green label (measured: Andromeda/Vela/Lyra/Puppis labels were inside the panel rect) — `4c367bb`
 - [x] F3 fix(sky): pull pick-view constellation labels toward their figures in screen space (measure-after-F2 gate in the plan; only if the median distance is still user-visible) — DROPPED, gate fired: post-F2 median 87.5px ≤ 100px (n=10, see plan)
 
+## User queue — 2026-08-30 — plan 021 (restore OrbitControls camera, keep panning off)
+
+`plans/021-restore-orbit-camera-keep-nopan.md` — after living with plans 015–018, the user wants the OLD OrbitControls free-view back (polar-clamped at 180°, no Z-roll) but keeps panning disabled (the one good part). One user-visible change → one commit.
+
+- [ ] F1 revert(camera): restore OrbitControls free-view (polar-clamped, no roll); keep panning off (`enablePan=false`); delete rollControls + rewrite tests; hints fixed
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
