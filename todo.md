@@ -134,6 +134,14 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 revert(camera): restore OrbitControls free-view (polar-clamped, no roll); keep panning off (`enablePan=false`); delete rollControls + rewrite tests; hints fixed — `bdcaa8e`
 
+## User queue — 2026-08-30 — plan 022 (time scrubbing: right-drag / 3-finger, live HUD, mini strip)
+
+`plans/022-time-scrub-right-drag-3finger-hud.md` — right-drag (mouse) and 3-finger drag (touch) are a 2D gesture: horizontal travels time (fixed rate, ±27 yrs clamp), vertical moves the speed slider (log scale); press freezes, release resumes at the current slider speed.
+
+- [ ] F1 feat(time): right-drag scrubs time (X) and speed (Y); press freezes, release resumes at current speed
+- [ ] F2 feat(time): 3-finger drag = same 2D scrub on touch
+- [ ] F3 feat(hud): always-visible mini date/speed strip (top-right)
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
