@@ -132,7 +132,7 @@ loader, constellation tour, tooltips, screenshot button).
 
 `plans/021-restore-orbit-camera-keep-nopan.md` — after living with plans 015–018, the user wants the OLD OrbitControls free-view back (polar-clamped at 180°, no Z-roll) but keeps panning disabled (the one good part). One user-visible change → one commit.
 
-- [ ] F1 revert(camera): restore OrbitControls free-view (polar-clamped, no roll); keep panning off (`enablePan=false`); delete rollControls + rewrite tests; hints fixed
+- [x] F1 revert(camera): restore OrbitControls free-view (polar-clamped, no roll); keep panning off (`enablePan=false`); delete rollControls + rewrite tests; hints fixed — `bdcaa8e`
 
 ## Declined (user decision 2026-08-18)
 

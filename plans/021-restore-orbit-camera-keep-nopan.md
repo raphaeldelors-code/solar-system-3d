@@ -193,10 +193,10 @@ section exists in AGENTS.md — the trackball was never documented there.)
      crossing it.
   3. **No Z-roll**: from a known pose, right-drag 100+ px; assert
      `camera.up` unchanged and position/target unchanged (no roll, no pan).
-  4. **No free pan**: 2-finger / right-drag → the pivot (target) stays
-     centred on the selection; only the 2-finger _rotate_ component may
-     change the view direction (pinch is the only thing that changes
-     distance).
+  4. **No free pan**: 2-finger drag / right-drag → the pivot (target) and
+     distance stay fixed (r168 two-finger is dolly+PAN, NOT rotate: the
+     dolly part is a no-op when the gap is constant, the pan part is gated
+     by `enablePan=false`).
   5. **Pinch still zooms**: 2-finger pinch → camera-to-target distance
      changes (zoom works), but target unchanged.
   6. **Follow + flight still correct**: pick a planet → camera tracks it
@@ -204,6 +204,36 @@ section exists in AGENTS.md — the trackball was never documented there.)
      reframes.
   7. **Resize**: resize the window → no drag-mapping regression (Orbit reads
      bounds live).
+
+## Verification record (2026-08-30, commit `bdcaa8e`)
+
+- Gates: `npx vitest run` 253 passed; `npm run build` ok; `npx eslint .`
+  clean; `npx prettier --check .` clean. Pushed to `main`
+  (`bd13a8e..bdcaa8e`), Pages auto-deployed.
+- Live (headless Chrome + CDP on `vite preview :4173`, each gesture isolated
+  in a fresh page load so residual damping never leaks in —
+  `/opt/data/audit/p021_live_check.py`), ALL PASS:
+  1. left-drag rotates — pos moved 22.6, target drift 0.0, up (0,1,0).
+  2. right-drag INERT — pos/target/up all unchanged (default
+     RIGHT=MOUSE.PAN, gated by `enablePan=false`).
+  3. 2-finger pinch dollies — distance 23.31→47.56, target fixed.
+  4. 2-finger pan INERT — pos/target/distance all unchanged.
+  5. pole clamp — from `[0,29,4]` (φ0 0.137) a decisive downward drag lands
+     at φ ≈ 1e-6, `pos.y` 29.27 > 0 (no pole crossing), up (0,1,0), target
+     fixed.
+  6. hints — desktop `Drag: rotate · Wheel: zoom · Click a body to fly to
+it`, no roll/twist.
+- Pre-015 baseline cross-check: `git show ca46cba:index.html` hints were
+  `Drag: rotate · Wheel: zoom · Right-drag: pan · Click a body to fly to it`
+  (desktop) / `Drag: rotate · Pinch: zoom · Two-finger drag: pan` (coarse),
+  and its `scene.ts` controls block is `new OrbitControls` + damping with NO
+  `enablePan` — i.e. the original orbit HAD a working free pan
+  (right-drag / 2-finger). The "roll" wording never existed in the true
+  pre-015 era; it appeared later with the trackball (e.g. `c1517ae`:
+  "Twist: roll"). Plan 021 therefore restores the
+  original orbit (polar-clamped, up = +Y, no roll) and deliberately KILLS
+  the one part the original had — pan — per the user's decision that
+  removing the free view was the single good change of the 015–018 era.
 
 ## Rollback note
 
