@@ -1447,10 +1447,16 @@ canvas.addEventListener('pointerdown', (ev) => {
   pressY = ev.clientY;
 });
 canvas.addEventListener('pointerup', (ev) => {
+  if (rearmBounce) return; // the F2 pinch re-arm bounce is not a pick
   if (suppressPickAfterScrub) {
     suppressPickAfterScrub = false;
     return; // a scrub release is never a pick
   }
+  // A touch that lifts while other fingers are still down was part of a
+  // pinch / 3-finger scrub, never a tap — never fly there. (This fires
+  // BEFORE the window handler updates touchPointers, so the lifting
+  // finger is still registered and size > 1 iff it was multi-touch.)
+  if (ev.pointerType === 'touch' && touchPointers.size > 1) return;
   if (ev.button === 2) return; // right button never picks
   if (Math.hypot(ev.clientX - pressX, ev.clientY - pressY) > 6) return; // drag, not a click
   const rect = canvas.getBoundingClientRect();
@@ -1480,25 +1486,36 @@ canvas.addEventListener('pointerup', (ev) => {
 // code only acts on 1-2 pointers, so the 3-finger twin (F2) has no
 // interference either. A scrub must never be mistaken for a click-pick: a
 // moved release arms suppressPickAfterScrub.
-let scrub: null | {
+type ScrubState = {
   startX: number;
   startY: number;
   startDays: number;
   startLog: number;
   movedX: boolean;
   movedY: boolean;
-} = null;
+};
+let scrub: null | ScrubState = null;
 let suppressPickAfterScrub = false;
 
-/** Write the live scrub readout (date line + travel/speed sub line). */
-function updateScrubOverlay(): void {
-  if (!scrub) return;
+/**
+ * Write the live scrub readout (date line + travel/speed sub line) for a
+ * scrub that started at `startDays`; the travel chip shows only once the
+ * horizontal axis has moved. Shared by the mouse path (F1) and the 3-finger
+ * path (F2) so the two gestures can never render differently.
+ */
+function writeScrubOverlay(startDays: number, xMoved: boolean): void {
   scrubDateEl.textContent = dateEl.textContent;
-  const dxDays = clock.t - scrub.startDays;
+  const dxDays = clock.t - startDays;
   const parts: string[] = [];
-  if (scrub.movedX) parts.push(formatScrubDelta(dxDays));
+  if (xMoved) parts.push(formatScrubDelta(dxDays));
   parts.push(speedValueStr());
   scrubSubEl.textContent = parts.join('  ·  ');
+}
+
+/** Write the live scrub readout for the mouse gesture (F1). */
+function updateScrubOverlay(): void {
+  if (!scrub) return;
+  writeScrubOverlay(scrub.startDays, scrub.movedX);
 }
 
 /**
@@ -1507,7 +1524,7 @@ function updateScrubOverlay(): void {
  * only past its dead zone (6 px X / 4 px Y) so jitter never nudges time or
  * speed. Returns true when the move was committed (URL/moon/overlay work).
  */
-function applyScrubMove(s: NonNullable<typeof scrub>, dx: number, dy: number): boolean {
+function applyScrubMove(s: ScrubState, dx: number, dy: number): boolean {
   let committed = false;
   const firstX = !s.movedX && Math.abs(dx) > 6;
   const firstY = !s.movedY && Math.abs(dy) > 4;
@@ -1573,8 +1590,10 @@ window.addEventListener('pointerup', (ev) => {
     void scrubDateEl.offsetWidth; // restart the animation
     scrubDateEl.classList.add('flash');
     setTimeout(() => {
-      scrubEl.hidden = true;
-      scrubDateEl.classList.remove('flash');
+      if (scrub === null && threeFinger === null) {
+        scrubEl.hidden = true;
+        scrubDateEl.classList.remove('flash');
+      }
     }, 1200); // the time-flash keyframes' duration
   } else {
     // Plain right-click (no travel): hide immediately.
@@ -1589,6 +1608,148 @@ window.addEventListener('pointercancel', (ev) => {
   scrub = null;
   clock.endScrub();
   scrubEl.hidden = true;
+});
+
+// --- Time scrubbing (plan 022 F2): 3-finger drag = the same 2D pad --------
+// Touch twin of F1: while >= 3 fingers are down on the canvas, the centroid
+// is the "press point" — horizontal centroid travel moves through time
+// (right = future), vertical travel moves the speed slider (up = faster).
+// The shared applyScrubMove() commits axes past the same dead zones, so the
+// two gestures are behaviourally identical. OrbitControls never reacts to a
+// 3rd pointer (its touch switch only handles 1-2), so the scrub owns the
+// extra finger cleanly.
+//
+// ONE correction to the plan's handoff assumption (verified against the
+// vendored r168 source, OrbitControls.onPointerUp): it re-seeds its
+// multi-touch state only when a lift leaves EXACTLY ONE pointer (`case 1`)
+// — a 3→2 lift falls through and the surviving pinch stays dead. So when a
+// scrub ends by dropping to 2 fingers we bounce one surviving finger
+// (pointerup + immediate pointerdown at its current position): OrbitControls
+// removes then re-adds it and re-runs _onTouchStart at length 2, re-arming
+// the pinch/dolly from the live positions — no jump.
+const touchPointers = new Map<number, { x: number; y: number }>();
+type ThreeFingerScrub = ScrubState & {
+  live: boolean; // a scrub was once live (re-armed while <3 fingers remain)
+  ended: boolean; // the end path already ran (lift or cancel)
+};
+let threeFinger: null | ThreeFingerScrub = null;
+// Set while the synthetic re-arm bounce (survivor pointerup+down) is in
+// flight, so the touch handlers below ignore exactly those two events and
+// only OrbitControls sees them.
+let rearmBounce = false;
+
+function endThreeFingerScrub(active: boolean): void {
+  const s = threeFinger;
+  if (!s || s.ended) return;
+  s.ended = true;
+  clock.endScrub();
+  if (active) {
+    resampleMoonNow(); // settle the moon line at the final epoch
+    suppressPickAfterScrub = true; // a scrub release is never a pick
+    scrubDateEl.classList.remove('flash');
+    void scrubDateEl.offsetWidth; // restart the animation
+    scrubDateEl.classList.add('flash');
+    setTimeout(() => {
+      if (scrub === null && threeFinger === null) {
+        scrubEl.hidden = true;
+        scrubDateEl.classList.remove('flash');
+      }
+    }, 1200); // the time-flash keyframes' duration
+  } else {
+    scrubEl.hidden = true;
+  }
+}
+
+canvas.addEventListener('pointerdown', (ev) => {
+  if (ev.pointerType !== 'touch') return;
+  if (touchPointers.size >= 4) return; // the 4th finger is dead weight
+  touchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (touchPointers.size !== 3) return;
+  // Third finger down: the gesture takes over (OrbitControls is inert at
+  // 3 pointers) and the clock freezes at the centroid press point.
+  const pts = [...touchPointers.values()];
+  const avgX = (pts[0].x + pts[1].x + pts[2].x) / 3;
+  const avgY = (pts[0].y + pts[1].y + pts[2].y) / 3;
+  threeFinger = {
+    startX: avgX,
+    startY: avgY,
+    startDays: clock.t,
+    startLog: clock.getLogSpeed(),
+    movedX: false,
+    movedY: false,
+    live: false,
+    ended: false,
+  };
+  clock.beginScrub();
+});
+
+canvas.addEventListener('pointermove', (ev) => {
+  if (ev.pointerType !== 'touch' || !touchPointers.has(ev.pointerId)) return;
+  touchPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  const s = threeFinger;
+  if (!s || s.ended || touchPointers.size < 3) return;
+  const pts = [...touchPointers.values()];
+  const avgX = (pts[0].x + pts[1].x + pts[2].x) / 3;
+  const avgY = (pts[0].y + pts[1].y + pts[2].y) / 3;
+  if (applyScrubMove(s, avgX - s.startX, avgY - s.startY)) {
+    s.live = true;
+    lastMoonResampleMs = performance.now(); // moon line follows the scrub live
+    syncUrl();
+  }
+  if (s.movedX || s.movedY) writeScrubOverlay(s.startDays, s.movedX);
+});
+
+// On WINDOW so a lift / cancel outside the canvas still ends the gesture and
+// the clock can never be left frozen.
+window.addEventListener('pointerup', (ev) => {
+  if (ev.pointerType !== 'touch' || rearmBounce) return;
+  if (touchPointers.size === 0) return;
+  const wasThree = touchPointers.size >= 3;
+  touchPointers.delete(ev.pointerId);
+  const s = threeFinger;
+  if (!s) return;
+  if (!wasThree) return; // the scrub was already over (or never moved)
+  if (s.ended) return;
+  suppressPickAfterScrub = true; // a 3-finger lift is never a pick, even idle
+  endThreeFingerScrub(s.live);
+  threeFinger = null;
+  if (touchPointers.size === 2) {
+    // Re-arm the surviving pinch: OrbitControls' own onPointerUp does not
+    // re-seed at 2 pointers (see block comment), so bounce one survivor —
+    // remove + re-add it and it re-runs _onTouchStart at the live positions.
+    const id = [...touchPointers.keys()][0];
+    const p = touchPointers.get(id)!;
+    // The synthetic pair bubbles back into these own handlers (window +
+    // canvas); the rearmBounce flag makes them ignore exactly this bounce.
+    rearmBounce = true;
+    // pageX/pageY are computed from clientX/Y + scroll (the app never
+    // scrolls), so clientX/Y alone re-seeds OrbitControls' pinch correctly.
+    canvas.dispatchEvent(
+      new PointerEvent('pointerup', {
+        pointerId: id,
+        pointerType: 'touch',
+        clientX: p.x,
+        clientY: p.y,
+      }),
+    );
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerId: id,
+        pointerType: 'touch',
+        clientX: p.x,
+        clientY: p.y,
+      }),
+    );
+    rearmBounce = false;
+  }
+});
+
+window.addEventListener('pointercancel', (ev) => {
+  if (ev.pointerType !== 'touch') return;
+  touchPointers.delete(ev.pointerId);
+  const s = threeFinger;
+  if (s && !s.ended && touchPointers.size < 3) endThreeFingerScrub(s.live);
+  if (s && touchPointers.size < 3) threeFinger = null;
 });
 
 // --- Animation loop ---------------------------------------------------------

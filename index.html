@@ -661,7 +661,7 @@
         var hint = document.getElementById('hint');
         if (window.innerWidth < 560) panel.classList.add('collapsed');
         if (window.matchMedia('(pointer: coarse)').matches) {
-          hint.textContent = 'Drag: rotate · Pinch: zoom';
+          hint.textContent = 'Drag: rotate · Pinch: zoom · 3 fingers: time & speed';
         }
         toggle.addEventListener('click', function () {
           panel.classList.toggle('collapsed');
