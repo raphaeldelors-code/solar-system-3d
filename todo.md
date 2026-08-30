@@ -142,6 +142,14 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] F2 feat(time): 3-finger drag = same 2D scrub on touch — `1e9c107` (live CDP 7/7 incl. the 3→2 re-arm bounce: surviving pinch verified dollied 23.3→9.99 after lift; OrbitControls r168 `case 2` gap documented in the plan)
 - [x] F3 feat(hud): always-visible mini date/speed strip (top-right) — `d0aa102` (live CDP 5/5: identical to panel via atomic same-call snapshot, tracks running clock, slider/Reverse incl. ← arrow, tracks F1 scrub overlay mid-hold, 375 px day-only + bounding boxes disjoint from full-width panel toggle bar (measured 57.5 px tall → strip at 68 px))
 
+## User queue — 2026-08-30 (b) — plan 023 (scrub v2: speed-proportional travel, HUD emphasis + gauge, year event timeline)
+
+`plans/023-scrub-v2-speed-proportional-gauge-timeline.md` — lateral drag now travels `spanDays·tanh(px/500)` (span = min(±10 000 d, speed×1 h), slowest at the pressed epoch, max at edges); the bottom `#time-scrub` banner is deleted — the top-right `#hud-mini` strip gets a pulsing `scrubbing` emphasis + a directional gauge (released on lift); bonus: a per-year event timeline (eclipse/transit/opposition/conjunction emoji) with a moving "you" caret while scrubbing, data cached per year from `findEvents`.
+
+- [ ] F1 feat(scrub): speed-proportional lateral travel with center easing (replaces the fixed 0.002 d/px rate)
+- [ ] F2 feat(hud): scrub emphasis on the mini strip + directional gauge; delete bottom banner
+- [ ] F3 feat(hud): per-year event timeline (emoji markers + moving caret) under the gauge
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
