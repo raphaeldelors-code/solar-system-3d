@@ -412,7 +412,11 @@ never blocks the canvas. Under 560 px the date renders day-only
    `#speed-value`; both update live (sample t and t+2 s).
 2. 375 px viewport: panel auto-collapsed (existing), strip visible with
    day-only date; no overlap with `#hint`/credit or the panel toggle
-   (bounding boxes disjoint).
+   (bounding boxes disjoint). DONE: the full-width collapsed panel toggle
+   bar measured 57.5 px tall (12 top + 14 px coarse font + 2×12 padding),
+   so the strip sits at `top: 68 px` on phones (11 px gap, verified:
+   disjoint bounding boxes). Credit sits inside the collapsed panel body
+   (hidden), so it is never a collision.
 3. Slider change / Reverse: strip speed updates within 1 frame, `← `
    included when reversed.
 4. Scrub (F1/F2): strip tracks the overlay (date while X moves, speed

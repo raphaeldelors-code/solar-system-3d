@@ -140,7 +140,7 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 feat(time): right-drag scrubs time (X) and speed (Y); press freezes, release resumes at current speed — `9709e6c` (live CDP 9/9: travel frozen-mid-hold exact, speed/camera untouched, URL t/sp, resume-speed exact state, sub-threshold no-op, paused/reversed restore, contextmenu prevented via real input path)
 - [x] F2 feat(time): 3-finger drag = same 2D scrub on touch — `1e9c107` (live CDP 7/7 incl. the 3→2 re-arm bounce: surviving pinch verified dollied 23.3→9.99 after lift; OrbitControls r168 `case 2` gap documented in the plan)
-- [ ] F3 feat(hud): always-visible mini date/speed strip (top-right)
+- [x] F3 feat(hud): always-visible mini date/speed strip (top-right) — `d0aa102` (live CDP 5/5: identical to panel via atomic same-call snapshot, tracks running clock, slider/Reverse incl. ← arrow, tracks F1 scrub overlay mid-hold, 375 px day-only + bounding boxes disjoint from full-width panel toggle bar (measured 57.5 px tall → strip at 68 px))
 
 ## Declined (user decision 2026-08-18)
 

@@ -187,6 +187,25 @@ deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
   the path ~132,000 y in the future (the "Moon not on its orbit line" bug).
   It writes the same position/unit-dir/km buffers `reprojectOrbitLine`
   reads, so the scale morph's re-projection stays consistent for free.
+- **Time scrubbing** (`src/render/scrubMath.ts` pure + `SimClock`
+  `beginScrub`/`endScrub` + `main.ts` pointer wiring): right-drag (mouse)
+  or 3-finger drag (touch) is a 2D gesture — horizontal travels time at a
+  FIXED `SCRUB_DAYS_PER_PX = 0.002` (speed-slider-independent) clamped to
+  `±SCRUB_CLAMP_DAYS = 10 000 d`; vertical moves the speed slider at
+  `SCRUB_SPEED_LOG_PER_PY = 0.01` log10(d/s)/px (up = faster) within the
+  slider's `[SPEED_LOG_MIN, SPEED_LOG_MAX] = [−3, 2.5]` domain. Press
+  freezes (`beginScrub` remembers the pre-scrub pause state), release
+  resumes (`endScrub`) at the CURRENT slider speed and re-samples the Moon
+  orbit line. OrbitControls' right-drag is inert (`enablePan=false`) and
+  its touch handlers only act on 1–2 pointers — but its `onPointerUp` has
+  no `case 2`, so a 3→2 finger lift leaves the surviving pinch dead; F2
+  re-arms it with a synthetic pointerup+pointerdown bounce
+  (`rearmBounce`-guarded). `#time-scrub` (bottom-centre, during the
+  gesture) and `#hud-mini` (top-right, always) are DOM overlays with
+  `pointer-events: none` (not in screenshots). `#hud-mini` is written by
+  the SAME `fmtDate()`/`fmtSpeed()` as the panel (never a second code
+  path) and is deliberately NOT `aria-live` — the panel stays the
+  accessible source of truth.
 
 ## Code style
 
