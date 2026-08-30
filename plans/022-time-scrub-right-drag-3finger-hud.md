@@ -321,11 +321,19 @@ clock.getLogSpeed()`, `active = false`; `clock.beginScrub()`; show
   (`clock.endScrub()`, `resampleMoonNow()` if active, flash/hide if
   active, `suppressTouchPick = true` if active, `threeFingerScrub =
 null`).
-  - OrbitControls handles the remainder gracefully: its `onPointerUp`
-    re-runs `_onTouchStart` for the surviving pointer from the CURRENT
-    position (r168: `case 1: this._onTouchStart({pointerId, pageX:
-position.x, pageY: position.y})`), so the surviving pinch/rotate
-    resumes without a jump.
+  - **CORRECTION (verified against vendored r168 source):**
+    `onPointerUp` only re-seeds in `case 0` and `case 1` — a 3→2 lift
+    falls through with NO re-seed, so the surviving pinch would stay DEAD
+    (state stuck at NONE). F2 fixes it with a synthetic **re-arm bounce**:
+    on the 3→2 transition, dispatch a `pointerup` then `pointerdown` for
+    one surviving finger (public API, no monkey-patching). OrbitControls
+    processes them as remove → `case 1` re-seed (`_onTouchStart` from the
+    stored position) → re-add → `case 2` DOLLY_PAN from the live
+    positions — pinch resumes with no jump. The bounce is bracketed by a
+    `rearmBounce` flag so F2's own window/canvas handlers ignore exactly
+    those two synthetic events. `setPointerCapture` is not touched by the
+    bounce (it only runs when `_pointers.length === 0`), so the synthetic
+    pointer ids are safe.
   - Plain 1-finger / 2-finger gestures never set scrub state — zero
     interference with plan 021 behaviour.
 - **`pointercancel` safety**: if all pointers cancel while a scrub is

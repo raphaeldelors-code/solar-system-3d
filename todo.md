@@ -138,8 +138,8 @@ loader, constellation tour, tooltips, screenshot button).
 
 `plans/022-time-scrub-right-drag-3finger-hud.md` — right-drag (mouse) and 3-finger drag (touch) are a 2D gesture: horizontal travels time (fixed rate, ±27 yrs clamp), vertical moves the speed slider (log scale); press freezes, release resumes at the current slider speed.
 
-- [ ] F1 feat(time): right-drag scrubs time (X) and speed (Y); press freezes, release resumes at current speed
-- [ ] F2 feat(time): 3-finger drag = same 2D scrub on touch
+- [x] F1 feat(time): right-drag scrubs time (X) and speed (Y); press freezes, release resumes at current speed — `9709e6c` (live CDP 9/9: travel frozen-mid-hold exact, speed/camera untouched, URL t/sp, resume-speed exact state, sub-threshold no-op, paused/reversed restore, contextmenu prevented via real input path)
+- [x] F2 feat(time): 3-finger drag = same 2D scrub on touch — `1e9c107` (live CDP 7/7 incl. the 3→2 re-arm bounce: surviving pinch verified dollied 23.3→9.99 after lift; OrbitControls r168 `case 2` gap documented in the plan)
 - [ ] F3 feat(hud): always-visible mini date/speed strip (top-right)
 
 ## Declined (user decision 2026-08-18)
