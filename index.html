@@ -285,6 +285,66 @@
         border-radius: 2px;
         background: #57c785;
       }
+      /* Plan 023 F3 timeline: the CURRENT calendar year as a Jan→Dec strip —
+         month ticks, the year's events as small emoji at their day-of-year
+         position, and a "you are here" caret at the current sim day. Visible
+         only while scrubbing (mirrors #hud-sub / #hud-gauge). */
+      #hud-timeline {
+        position: relative;
+        width: 180px;
+        height: 14px;
+        margin-top: 2px;
+        border-top: 1px solid rgba(120, 150, 200, 0.3);
+      }
+      #hud-mini:not(.scrubbing) #hud-timeline {
+        display: none;
+      }
+      #hud-timeline .tl-tick {
+        position: absolute;
+        top: 0;
+        width: 1px;
+        height: 4px;
+        background: rgba(120, 150, 200, 0.45);
+      }
+      #hud-timeline .tl-tick.tl-year-start,
+      #hud-timeline .tl-tick.tl-year-end {
+        height: 8px;
+        background: rgba(120, 150, 200, 0.75);
+      }
+      #hud-timeline .tl-event {
+        position: absolute;
+        bottom: 1px;
+        font-size: 11px;
+        line-height: 1;
+        transform: translateX(-50%);
+        pointer-events: none;
+      }
+      #hud-timeline .tl-overflow {
+        position: absolute;
+        right: 0;
+        top: -1px;
+        font-size: 9px;
+        color: #8fa3bf;
+      }
+      #hud-timeline .tl-caret {
+        position: absolute;
+        top: -3px;
+        width: 2px;
+        height: 18px;
+        background: #57c785;
+        border-radius: 1px;
+        box-shadow: 0 0 6px 1px rgba(87, 199, 133, 0.7);
+        transform: translateX(-50%);
+      }
+      #hud-timeline .tl-year {
+        position: absolute;
+        left: 4px;
+        bottom: 1px;
+        font-size: 9px;
+        line-height: 1;
+        color: #8fa3bf;
+        pointer-events: none;
+      }
       /* Plan 023 F2 emphasis: pulses while a scrub is active, released on
          release (mouse right-button up / 3-finger lift / cancel). */
       #hud-mini.scrubbing {
@@ -310,6 +370,9 @@
           top: calc(68px + env(safe-area-inset-top));
         }
         #hud-gauge {
+          width: 140px;
+        }
+        #hud-timeline {
           width: 140px;
         }
       }
@@ -615,14 +678,18 @@
          of truth. -->
     <div id="hud-mini" aria-hidden="true">
       <div id="hud-mini-row1">
-        <span id="hud-date">—</span>
-        <span id="hud-speed">1.0 d/s</span>
+        <span id="hud-date"></span>
+        <span id="hud-speed"></span>
       </div>
       <div id="hud-sub"></div>
       <div id="hud-gauge">
         <div id="hud-gauge-fill"></div>
         <div id="hud-gauge-notch"></div>
         <div id="hud-gauge-knob"></div>
+      </div>
+      <div id="hud-timeline">
+        <div id="hud-timeline-caret" class="tl-caret"></div>
+        <span id="hud-timeline-year" class="tl-year"></span>
       </div>
     </div>
     <div id="panel">

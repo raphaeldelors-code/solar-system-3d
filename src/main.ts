@@ -66,9 +66,11 @@ import {
   scrubDeltaDays,
   scrubSpeedLog,
   formatScrubDelta,
+  timelineLayout,
   SCRUB_CLAMP_DAYS,
   SCRUB_SPAN_SIM_SECONDS,
 } from './render/scrubMath';
+import { yearEvents, yearSpan, hasYearEvents } from './render/yearEvents';
 
 // PWA: register the offline service worker in production builds only
 // (vite preview / dev use a live server; a cached shell would be confusing).
@@ -275,6 +277,12 @@ const hudSpeedEl = document.getElementById('hud-speed') as HTMLSpanElement;
 const hudSubEl = document.getElementById('hud-sub') as HTMLDivElement;
 const hudGaugeFillEl = document.getElementById('hud-gauge-fill') as HTMLDivElement;
 const hudGaugeKnobEl = document.getElementById('hud-gauge-knob') as HTMLDivElement;
+// Plan 023 F3: per-year event timeline (visible while scrubbing). The caret
+// is the only persistent child; ticks/markers are rebuilt on year change and
+// when a deferred event sweep lands.
+const hudTimelineEl = document.getElementById('hud-timeline') as HTMLDivElement;
+const hudTimelineCaretEl = document.getElementById('hud-timeline-caret') as HTMLDivElement;
+const hudTimelineYearEl = document.getElementById('hud-timeline-year') as HTMLSpanElement;
 // F3: day-only vs full date for the mini strip. Matches the phone breakpoint
 // the panel collapses under (560 px) — re-checked on resize below.
 let hudDateDayOnly = window.innerWidth < 560;
@@ -1573,6 +1581,99 @@ function clearScrubHud(): void {
   hudGaugeKnobEl.style.left = 'calc(50% - 2px)';
   hudGaugeFillEl.style.left = '50%';
   hudGaugeFillEl.style.width = '0%';
+  // Plan 023 F3: drop the timeline (it is a scrub-only affordance, like the
+  // sub-line and gauge) so no stale strip lingers after the gesture ends.
+  tlActiveYear = null;
+  tlSweeping.clear();
+  hudTimelineYearEl.textContent = '';
+  hudTimelineEl.replaceChildren(hudTimelineCaretEl, hudTimelineYearEl);
+}
+
+// --- Plan 023 F3: per-year event timeline ----------------------------------
+// While a scrub is active, #hud-timeline shows the CURRENT calendar year
+// (Jan→Dec): month ticks, that year's events as emoji at their day-of-year
+// position (timelineLayout), and the "you are here" caret at clock.t. The
+// event scan is expensive (~0.1–0.3 s per year, measured), so a newly
+// entered year paints its ticks + caret immediately and defers the sweep to
+// a rAF — the markers appear the next frame(s), never blocking a pointermove.
+// Each year is swept once and cached (yearEvents), so re-scrubbing the same
+// span is free.
+
+let tlActiveYear: number | null = null; // year the strip currently shows
+const tlSweeping = new Set<number>(); // years with a deferred sweep in flight
+let tlSpan0 = 0; // Jan 1 of tlActiveYear, days since J2000 (cached per year)
+let tlSpanLen = 365; // that year's length in days
+
+function tlCurrentYear(): number {
+  return new Date(J2000_UTC + clock.t * 86_400_000).getUTCFullYear();
+}
+
+function tlSetCaret(frac: number): void {
+  hudTimelineCaretEl.style.left = `${frac * 100}%`;
+}
+
+function tlPaint(year: number): void {
+  const { span0Days, spanLenDays } = yearSpan(year);
+  tlSpan0 = span0Days;
+  tlSpanLen = spanLenDays;
+  const events = hasYearEvents(year) ? yearEvents(year).events : [];
+  const { markers, overflow, caretFrac } = timelineLayout(span0Days, spanLenDays, events, clock.t);
+  // The caret + year label are the persistent children; everything else is
+  // rebuilt so a year with markers never accumulates stale markers from a
+  // prior paint.
+  hudTimelineYearEl.textContent = String(year);
+  hudTimelineEl.replaceChildren(hudTimelineCaretEl, hudTimelineYearEl);
+  const frag = document.createDocumentFragment();
+  for (let m = 0; m <= 12; m++) {
+    const tick = document.createElement('div');
+    tick.className = 'tl-tick' + (m === 0 ? ' tl-year-start' : m === 12 ? ' tl-year-end' : '');
+    tick.style.left = `${(m / 12) * 100}%`;
+    frag.appendChild(tick);
+  }
+  for (const mk of markers) {
+    const el = document.createElement('span');
+    el.className = 'tl-event';
+    el.style.left = `${mk.frac * 100}%`;
+    el.textContent = mk.emoji;
+    el.title = mk.title;
+    frag.appendChild(el);
+  }
+  if (overflow > 0) {
+    const chip = document.createElement('span');
+    chip.className = 'tl-overflow';
+    chip.textContent = `+${overflow}`;
+    frag.appendChild(chip);
+  }
+  hudTimelineEl.appendChild(frag);
+  tlSetCaret(caretFrac);
+}
+
+/** Rebuild the strip when the scrub enters a new year; defer the (expensive)
+ *  event sweep of a not-yet-cached year to a rAF so the gesture's own frame
+ *  paints first. Called from both scrub move paths on committed moves. */
+function tlRefresh(): void {
+  const year = tlCurrentYear();
+  if (year === tlActiveYear && !tlSweeping.has(year)) return;
+  tlActiveYear = year;
+  if (hasYearEvents(year)) {
+    tlPaint(year); // cache hit — free
+    return;
+  }
+  if (tlSweeping.has(year)) return; // a sweep is already in flight
+  tlSweeping.add(year);
+  tlPaint(year); // ticks + caret now, no markers yet
+  requestAnimationFrame(() => {
+    tlSweeping.delete(year);
+    yearEvents(year); // pay the ~0.1–0.3 s sweep (cached for the session)
+    if (tlActiveYear === year) tlPaint(year); // only if we're still on it
+  });
+}
+
+/** Per frame while a scrub is active: keep the caret glued to clock.t. */
+function tlFrame(): void {
+  if (tlActiveYear === null) return;
+  const { caretFrac } = timelineLayout(tlSpan0, tlSpanLen, [], clock.t);
+  tlSetCaret(caretFrac);
 }
 
 /**
@@ -1640,7 +1741,10 @@ window.addEventListener('pointermove', (ev) => {
     lastMoonResampleMs = performance.now(); // moon line follows the scrub live
     syncUrl();
   }
-  if (scrub.movedX || scrub.movedY) updateScrubHud();
+  if (scrub.movedX || scrub.movedY) {
+    updateScrubHud();
+    tlRefresh(); // plan 023 F3: rebuild/paint the per-year timeline
+  }
 });
 
 window.addEventListener('pointerup', (ev) => {
@@ -1744,6 +1848,7 @@ canvas.addEventListener('pointermove', (ev) => {
     syncUrl();
   }
   if (s.movedX || s.movedY) writeScrubHud(s);
+  if (s.movedX || s.movedY) tlRefresh(); // plan 023 F3: per-year timeline
 });
 
 // On WINDOW so a lift / cancel outside the canvas still ends the gesture and
@@ -2112,6 +2217,7 @@ function frame(): void {
   // pass after the 3D render, so the names sit crisp above the frame.
   updateConstellationScreenLabelFrame();
   fmtDate();
+  tlFrame(); // plan 023 F3: caret follows the clock while scrubbing
   updateInfo();
 }
 requestAnimationFrame(frame);

@@ -1,3 +1,5 @@
+import type { EventType } from '../sim/events';
+
 /**
  * Plan 023 F1 — time-scrub gesture math (pure, unit-tested).
  *
@@ -85,4 +87,90 @@ export function formatScrubDelta(days: number): string {
   const r = Number((a / 365.25).toFixed(1));
   const sign = r === 0 ? '' : days < 0 ? '−' : '+';
   return `${sign}${r.toFixed(1)} yrs`;
+}
+
+// --- Plan 023 F3: per-year event timeline (pure, unit-tested) --------------
+// While scrubbing, the mini strip shows the CURRENT calendar year as a
+// Jan→Dec track: the year's celestial events as small emoji at their day-of-
+// year fraction, and a "you are here" caret at the current day-of-year. As
+// the scrub crosses into a new year the strip reloads that year's events
+// (lazy per-year findEvents, cached in src/render/yearEvents.ts). All the
+// geometry here is width-agnostic (fractions in 0..1) so the strip can be any
+// pixel width (desktop 180 px, phone 140 px) without re-deriving positions.
+
+/** Astrological body symbols (the "small icons" the user asked for). */
+export const BODY_SYMBOL: Record<string, string> = {
+  mercury: '☿',
+  venus: '♀',
+  earth: '⊕',
+  mars: '♂',
+  jupiter: '♃',
+  saturn: '♄',
+  uranus: '♅',
+  neptune: '♆',
+};
+/** Fixed-emoji events that do not depend on a body id. */
+export const EVENT_EMOJI: Partial<Record<EventType, string>> = {
+  'solar-eclipse': '🌑',
+  'lunar-eclipse': '🌕',
+  'saturn-edge-on': '♄',
+};
+/** Structural shape of the events the timeline consumes (matches SimEvent). */
+export interface TimelineEventLike {
+  type: EventType;
+  tDays: number;
+  title: string;
+  bodyId?: string;
+  bodyId2?: string;
+}
+/**
+ * Emoji for one event: fixed glyphs for eclipses / Saturn edge-on, the
+ * body's astrological symbol for a transit / opposition, and the pair's two
+ * symbols for a conjunction (e.g. "☿♀").
+ */
+export function eventEmoji(e: TimelineEventLike): string {
+  const fixed = EVENT_EMOJI[e.type];
+  if (fixed) return fixed;
+  const sym = (id?: string) => (id && BODY_SYMBOL[id]) || '●';
+  if (e.type === 'transit') return sym(e.bodyId);
+  if (e.type === 'conjunction') return sym(e.bodyId) + sym(e.bodyId2);
+  if (e.type === 'opposition') return sym(e.bodyId);
+  return '✦';
+}
+export interface TimelineMarker {
+  /** Day-of-year fraction 0..1 (Jan 1 → 0, Dec 31 → 1). */
+  frac: number;
+  emoji: string;
+  title: string;
+}
+export interface TimelineLayoutResult {
+  markers: TimelineMarker[]; // sorted by frac, capped at `cap`
+  overflow: number; // markers beyond the cap (rendered as a "+N" chip)
+  caretFrac: number; // "you are here" 0..1, clamped
+}
+/** Max event markers painted per year (busy years collapse the rest). */
+export const TIMELINE_MARKER_CAP = 40;
+
+/**
+ * Lay out one calendar year's timeline. Pure + width-agnostic: returns
+ * 0..1 fractions the caller turns into `left: <frac>·100%`. `span0Days` is
+ * Jan 1 00:00 of the year (days since J2000); `spanLenDays` is that year's
+ * length (365 or 366). Events outside the year are dropped; the caret is the
+ * current sim time clamped to the year.
+ */
+export function timelineLayout(
+  span0Days: number,
+  spanLenDays: number,
+  events: TimelineEventLike[],
+  caretTDays: number,
+  cap = TIMELINE_MARKER_CAP,
+): TimelineLayoutResult {
+  const span = spanLenDays > 0 ? spanLenDays : 1;
+  const toFrac = (t: number) => Math.max(0, Math.min(1, (t - span0Days) / span));
+  const markers: TimelineMarker[] = events
+    .filter((e) => e.tDays >= span0Days - 1e-6 && e.tDays < span0Days + span + 1e-6)
+    .map((e) => ({ frac: toFrac(e.tDays), emoji: eventEmoji(e), title: e.title }))
+    .sort((a, b) => a.frac - b.frac);
+  const overflow = Math.max(0, markers.length - cap);
+  return { markers: markers.slice(0, cap), overflow, caretFrac: toFrac(caretTDays) };
 }
