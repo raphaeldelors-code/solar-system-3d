@@ -278,6 +278,34 @@
         border-radius: 2px;
         background: #57c785;
       }
+      /* Plan 024 F3: the ±1/±5 year jump buttons — always visible (they are
+         the fast-travel complement of the within-year scrub, not scrub-only
+         feedback), same small-button look as the rest of the mini pane. */
+      #hud-yearjump {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+      }
+      #hud-yearjump button {
+        font:
+          600 10px/1.4 'SF Mono',
+          ui-monospace,
+          Menlo,
+          monospace;
+        color: #c9d4cf;
+        background: rgba(14, 22, 19, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 4px;
+        padding: 1px 6px;
+        cursor: pointer;
+      }
+      #hud-yearjump button:hover {
+        background: rgba(87, 199, 133, 0.22);
+        border-color: rgba(87, 199, 133, 0.6);
+      }
+      #hud-yearjump button:active {
+        background: rgba(87, 199, 133, 0.4);
+      }
       /* Plan 024 F2: the event timeline is a FULL-WIDTH BOTTOM bar — the
          old 180 px mini-strip clogged the events together. YouTube
          video-progress-bar inspiration: the year's events sit ON the track
@@ -684,7 +712,7 @@
         border-color: #6ea8ff;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-CUBWLKgw.js"></script>
+    <script type="module" crossorigin src="./assets/index-W5rIu9pi.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -714,6 +742,15 @@
       <div id="hud-gauge">
         <div id="hud-gauge-fill"></div>
         <div id="hud-gauge-knob"></div>
+      </div>
+      <!-- Plan 024 F3: quick whole-year jumps — the within-year left/right
+           drag can't cross a year boundary, so these hop N years ahead/behind
+           (same month/day/time of day) to fast-travel through time. -->
+      <div id="hud-yearjump">
+        <button id="yj-minus5" type="button" title="Jump back 5 years">−5 y</button>
+        <button id="yj-minus1" type="button" title="Jump back 1 year">−1 y</button>
+        <button id="yj-plus1" type="button" title="Jump forward 1 year">+1 y</button>
+        <button id="yj-plus5" type="button" title="Jump forward 5 years">+5 y</button>
       </div>
     </div>
     <!-- Plan 024 F2: the event timeline moved OUT of the mini strip (the
