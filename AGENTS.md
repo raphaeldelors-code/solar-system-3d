@@ -187,25 +187,46 @@ deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
   the path ~132,000 y in the future (the "Moon not on its orbit line" bug).
   It writes the same position/unit-dir/km buffers `reprojectOrbitLine`
   reads, so the scale morph's re-projection stays consistent for free.
-- **Time scrubbing** (`src/render/scrubMath.ts` pure + `SimClock`
-  `beginScrub`/`endScrub` + `main.ts` pointer wiring): right-drag (mouse)
-  or 3-finger drag (touch) is a 2D gesture — horizontal travels time at a
-  FIXED `SCRUB_DAYS_PER_PX = 0.002` (speed-slider-independent) clamped to
-  `±SCRUB_CLAMP_DAYS = 10 000 d`; vertical moves the speed slider at
-  `SCRUB_SPEED_LOG_PER_PY = 0.01` log10(d/s)/px (up = faster) within the
-  slider's `[SPEED_LOG_MIN, SPEED_LOG_MAX] = [−3, 2.5]` domain. Press
-  freezes (`beginScrub` remembers the pre-scrub pause state), release
-  resumes (`endScrub`) at the CURRENT slider speed and re-samples the Moon
-  orbit line. OrbitControls' right-drag is inert (`enablePan=false`) and
-  its touch handlers only act on 1–2 pointers — but its `onPointerUp` has
-  no `case 2`, so a 3→2 finger lift leaves the surviving pinch dead; F2
-  re-arms it with a synthetic pointerup+pointerdown bounce
-  (`rearmBounce`-guarded). `#time-scrub` (bottom-centre, during the
-  gesture) and `#hud-mini` (top-right, always) are DOM overlays with
-  `pointer-events: none` (not in screenshots). `#hud-mini` is written by
-  the SAME `fmtDate()`/`fmtSpeed()` as the panel (never a second code
-  path) and is deliberately NOT `aria-live` — the panel stays the
-  accessible source of truth.
+- **Time scrubbing** (`src/render/scrubMath.ts` pure + `src/render/yearEvents.ts`
+  per-year cache + `SimClock` `beginScrub`/`endScrub` + `main.ts` pointer
+  wiring): right-drag (mouse) or 3-finger drag (touch) is a 2D gesture.
+  HORIZONTAL travels time SPEED-PROPORTIONAL (plan 023 F1):
+  `Δdays = scrubSpanDays(startSpeed)·f(px/500)` with the zero-center-slope
+  quadratic easing `f(x)=sign(x)·x²/(1+x²)` — slowest at the pressed epoch
+  (a ±few-px wiggle barely moves time), saturating at the span edges;
+  `scrubSpanDays = min(SCRUB_CLAMP_DAYS = 10 000, startSpeed×3600)` (one
+  hour of sim at the gesture's STARTING speed — a simultaneous vertical
+  speed-drag never rescales the time axis mid-gesture). The fixed
+  `SCRUB_DAYS_PER_PX = 0.002` rate is GONE (plan 022, superseded).
+  VERTICAL moves the speed slider at `SCRUB_SPEED_LOG_PER_PY = 0.01`
+  log10(d/s)/px (up = faster) within the slider's
+  `[SPEED_LOG_MIN, SPEED_LOG_MAX] = [−3, 2.5]` domain. Press freezes
+  (`beginScrub` remembers the pre-scrub pause state), release resumes
+  (`endScrub`) at the CURRENT slider speed and re-samples the Moon orbit
+  line. A `<6 px` X / `<4 px` Y move is a no-op (dead zone) — the strip
+  never lights up and a scrub release is never a pick. OrbitControls'
+  right-drag is inert (`enablePan=false`) and its touch handlers only act
+  on 1–2 pointers — but its `onPointerUp` has no `case 2`, so a 3→2 finger
+  lift leaves the surviving pinch dead; the re-arm uses a synthetic
+  pointerup+pointerdown bounce (`rearmBounce`-guarded). HUD (plan 023 F2):
+  the bottom `#time-scrub` banner is DELETED — `#hud-mini` (top-right,
+  always) carries the scrub feedback: a pulsing `.scrubbing` class (added
+  only past the dead zone, removed via `clearScrubHud()` on every release
+  path — mouse up, mouse pointercancel, 3-finger lift, 3-finger
+  pointercancel), the travel sub-line (`+2.6 yrs · 1.0 d/s`), and a
+  directional gauge (knob at `50% + (Δdays/span)·50%`, center notch = the
+  press epoch; the fill spans center→knob). F3: while scrubbing,
+  `#hud-timeline` (under the gauge, hidden otherwise) shows the CURRENT
+  calendar year: 13 month ticks, the year label, that year's events as
+  emoji at their day-of-year fraction (`timelineLayout` in scrubMath.ts;
+  data from `yearEvents()` — a per-year `findEvents` sweep, ~0.1–0.3 s,
+  computed lazily on first entry and cached, deferred to a rAF so the
+  gesture's own frame paints first), and a "you are here" caret
+  (`tlFrame()` keeps it glued to `clock.t` every frame). `#hud-mini` is
+  written by the SAME `fmtDate()`/`fmtSpeed()` as the panel (never a
+  second code path) and is deliberately NOT `aria-live` — the panel stays
+  the accessible source of truth. All of these are `pointer-events: none`
+  overlays (not in screenshots).
 
 ## Code style
 

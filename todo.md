@@ -136,7 +136,7 @@ loader, constellation tour, tooltips, screenshot button).
 
 ## User queue — 2026-08-30 — plan 022 (time scrubbing: right-drag / 3-finger, live HUD, mini strip)
 
-`plans/022-time-scrub-right-drag-3finger-hud.md` — right-drag (mouse) and 3-finger drag (touch) are a 2D gesture: horizontal travels time (fixed rate, ±27 yrs clamp), vertical moves the speed slider (log scale); press freezes, release resumes at the current slider speed.
+`plans/022-time-scrub-right-drag-3finger-hud.md` — right-drag (mouse) and 3-finger drag (touch) are a 2D gesture: horizontal travels time, vertical moves the speed slider (log scale); press freezes, release resumes at the current slider speed. **SUPERSEDED by plan 023** (the fixed 0.002 d/px travel rate is gone — plan 023 F1 replaced it with speed-proportional eased travel).
 
 - [x] F1 feat(time): right-drag scrubs time (X) and speed (Y); press freezes, release resumes at current speed — `9709e6c` (live CDP 9/9: travel frozen-mid-hold exact, speed/camera untouched, URL t/sp, resume-speed exact state, sub-threshold no-op, paused/reversed restore, contextmenu prevented via real input path)
 - [x] F2 feat(time): 3-finger drag = same 2D scrub on touch — `1e9c107` (live CDP 7/7 incl. the 3→2 re-arm bounce: surviving pinch verified dollied 23.3→9.99 after lift; OrbitControls r168 `case 2` gap documented in the plan)
@@ -144,11 +144,12 @@ loader, constellation tour, tooltips, screenshot button).
 
 ## User queue — 2026-08-30 (b) — plan 023 (scrub v2: speed-proportional travel, HUD emphasis + gauge, year event timeline)
 
-`plans/023-scrub-v2-speed-proportional-gauge-timeline.md` — lateral drag now travels `spanDays·tanh(px/500)` (span = min(±10 000 d, speed×1 h), slowest at the pressed epoch, max at edges); the bottom `#time-scrub` banner is deleted — the top-right `#hud-mini` strip gets a pulsing `scrubbing` emphasis + a directional gauge (released on lift); bonus: a per-year event timeline (eclipse/transit/opposition/conjunction emoji) with a moving "you" caret while scrubbing, data cached per year from `findEvents`.
+`plans/023-scrub-v2-speed-proportional-gauge-timeline.md` — lateral drag now travels `spanDays·f(px/500)` with the zero-center-slope quadratic easing `f(x)=sign(x)·x²/(1+x²)` (span = min(±10 000 d, speed×1 h), slowest at the pressed epoch, saturates at the edges); the bottom `#time-scrub` banner is deleted — the top-right `#hud-mini` strip gets a pulsing `scrubbing` emphasis + a directional gauge (released on lift); bonus: a per-year event timeline (eclipse/transit/opposition/conjunction emoji) with a moving "you" caret while scrubbing, data cached per year from `findEvents`.
 
-- [ ] F1 feat(scrub): speed-proportional lateral travel with center easing (replaces the fixed 0.002 d/px rate)
-- [ ] F2 feat(hud): scrub emphasis on the mini strip + directional gauge; delete bottom banner
-- [ ] F3 feat(hud): per-year event timeline (emoji markers + moving caret) under the gauge
+- [x] F1 feat(scrub): speed-proportional lateral travel with center easing (replaces the fixed 0.002 d/px rate) — `925a358` (live CDP 10/10: 300 px @1 d/s = +952.94 d knob 63%, ±300 px symmetric, 100 px near-center = +138.5 d, up-only = no travel, release resumes at scrub-set speed, sub-threshold no-op, paused/reversed restore, URL t/sp mid-hold, 3-finger same model)
+- [x] F2 feat(hud): scrub emphasis on the mini strip + directional gauge; delete bottom banner — `fc1d079` (live CDP 10/10: `.scrubbing` only past the 6 px dead zone, sub-line "+2.6 yrs · 1.0 d/s", knob 50%+frac·50% (center notch = press epoch), `#time-scrub` element gone, `clearScrubHud()` on all 4 release paths, 3-finger same HUD contract)
+- [x] F3 feat(hud): per-year event timeline (emoji markers + moving caret) under the gauge — `0bbdb77` (live CDP 7/7: strip hidden idle/released, 13 month ticks + year label while scrubbing, real markers land after the deferred per-year `findEvents` sweep (2029: 🌑 eclipse, ♂ Mars opposition, ☿♀ conjunction; 2033 big-jump 15 markers; 2027 3-finger 18 markers), caret = day-of-year tracks `clock.t` to ~1e-4, multi-year jump reloads the strip, 3-finger same strip, sub-threshold never shows it; +14 unit tests: timelineLayout/eventEmoji pure + yearEvents cache vs the real engine)
+- [x] docs: record F1–F3 hashes in todo/AGENTS.md + note plan 022's fixed-rate model superseded — this commit (all three features live-verified on the headless build before their commits; F1 10/10, F2 10/10, F3 7/7 CDP + F1/F2 regression suites re-passed after F3)
 
 ## Declined (user decision 2026-08-18)
 
