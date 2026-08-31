@@ -1496,10 +1496,13 @@ canvas.addEventListener('pointerup', (ev) => {
   }
 });
 
-// --- Time scrubbing (plan 022 F1): right-drag = 2D time/speed pad --------
+// --- Time scrubbing (plan 022 F1 / plan 023 F1): right-drag = 2D pad -----
 // Desktop: hold the RIGHT mouse button and drag. Horizontal travel moves
-// through time (right = future, left = past) at a FIXED rate independent of
-// the speed slider; vertical travel moves the speed slider (up = faster,
+// through time (right = future, left = past) proportionally to the CURRENT
+// speed (plan 023: span = 1 h of sim at the press speed, capped ±10 000 d,
+// Quadratic-saturation eased (zero slope at the press point) so it's
+// slowest at the press point and maxes out at the gesture's starting speed
+// gesture edges); vertical travel moves the speed slider (up = faster,
 // down = slower, log scale). While held, the clock is frozen at the scrubbed
 // value and the #time-scrub readout shows the live date, travel distance and
 // speed; on release time resumes at the CURRENT slider speed.
@@ -1557,7 +1560,15 @@ function applyScrubMove(s: ScrubState, dx: number, dy: number): boolean {
   // 4 px jitter must never flash the overlay (and never read back as one).
   if (firstX || firstY) scrubEl.hidden = false;
   if (s.movedX) {
-    clock.setDate(new Date(J2000_UTC + (s.startDays + scrubDeltaDays(dx)) * 86_400_000));
+    // Plan 023 F1: travel is proportional to the gesture's STARTING speed
+    // (a simultaneous vertical speed-drag never rescales the time axis
+    // mid-gesture), quadratic-saturation eased so it's slowest at the press point and
+    // saturates at ±scrubSpanDays(startSpeed) — one hour of sim time at
+    // that speed, capped at ±10 000 d.
+    const startSpeed = 10 ** s.startLog; // days/second at the press point
+    clock.setDate(
+      new Date(J2000_UTC + (s.startDays + scrubDeltaDays(startSpeed, dx)) * 86_400_000),
+    );
     committed = true;
   }
   if (s.movedY) {

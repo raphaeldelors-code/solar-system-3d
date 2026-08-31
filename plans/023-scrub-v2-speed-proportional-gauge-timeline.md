@@ -22,20 +22,24 @@ then the live CDP check, then commit + push; hashes recorded in the closing
 
 ## Design decisions (and pushback)
 
-- **B model.** `Δdays = spanDays · tanh(px / SCRUB_SPAN_PX)`,
-  `SCRUB_SPAN_PX = 500` (drag px to approach max),
-  `spanDays = min(SCRUB_CLAMP_DAYS, maxSpeed × 3600)` (one hour of sim time at
-  the gesture's starting speed, capped ±10 000 d ≈ 27.4 yrs). At 1 d/s →
-  ±3 600 d (≈10 yrs) full span; at 100 d/s → clamp; at 0.001 d/s → ±3.6 d.
-  Center-easing comes from tanh: travel is slowest right at the pressed epoch
-  (the oscillation-killer) and saturates to the full span (max speed × 1 h)
-  at the drag edges.
+- **B model.** `Δdays = spanDays · f(px/SCRUB_SPAN_PX)` with
+  `SCRUB_SPAN_PX = 500` and the saturating easing
+  `f(x) = sign(x) · x²/(1+x²)`. This shape has **zero slope at the center**
+  (the user's explicit correction: "move slower the more we are close to the
+  center" — a tanh would be fastest at the center and is rejected): wiggling
+  around the pressed epoch moves almost no time (kills the oscillation),
+  travel ramps up with distance, and saturates to the full span at the drag
+  edges. `spanDays = min(SCRUB_CLAMP_DAYS, maxSpeed × 3600)` — one hour of sim
+  time at the gesture's starting speed, capped ±10 000 d (≈ 27.4 yrs): the
+  "up to the max speed" saturation. At 1 d/s → ±3 600 d full span (500 px
+  drag = 1 800 d); at 100 d/s → 10 000 d clamp (500 px = 5 000 d); at
+  0.001 d/s → ±3.6 d.
 - **Speed reference.** `ScrubState.startLog` (gesture start) is the reference,
   so a simultaneous vertical speed-drag never rescales the time axis mid-gesture
   (that would be the "crazy shift"). Vertical still sets the resume speed.
 - **C gauge.** Under `#hud-mini`'s date/speed row: a 280×4 px track, center
   notch (the pressed epoch), fill from center → knob at
-  `x = center + (px/500)·tanh... ` = `(Δdays/span)·(track/2)`. Green fill toward
+  `x = center + (Δdays/span)·(track/2)`. Green fill toward
   the travel direction. No % text (the travel readout already says "+128 d");
   the gauge is the _visual_ meter the user asked for.
 - **A emphasis.** `.scrubbing` on `#hud-mini`: CSS keyframes (box-shadow pulse
@@ -61,15 +65,18 @@ then the live CDP check, then commit + push; hashes recorded in the closing
 
 1. **F1 `feat(scrub): speed-proportional lateral travel with center easing`**
    - `scrubMath.ts`: replace fixed `scrubDeltaDays` with
-     `scrubDeltaDaysSpeed(maxSpeedDaysPerSec, deltaPx)` implementing the tanh
-     formula above + `SCRUB_SPAN_PX=500`, keep `SCRUB_CLAMP_DAYS=10_000`, keep
-     `scrubSpeedLog`/`formatScrubDelta`. New export `scrubXToT(px, spanDays)`
-     → −1..1 fraction (pure, for the gauge).
+     `scrubDeltaDays(speedDaysPerSec, deltaPx)` implementing the quadratic
+     saturation easing (zero slope at the press point, saturates to the
+     span at the drag edges) + `SCRUB_SPAN_PX=500`, keep
+     `SCRUB_CLAMP_DAYS=10_000`, keep `scrubSpeedLog`/`formatScrubDelta`.
+     New exports `scrubXToT(deltaPx)` → −1..1 fraction (pure, for the gauge)
+     and `scrubSpanDays(speed)`.
    - `ScrubState` gains nothing (startLog exists); `applyScrubMove` computes
      `spanDays = min(SCRUB_CLAMP_DAYS, 10**s.startLog * 3600)` once and uses it.
    - `tests/scrubMath.test.ts`: rewrite the fixed-rate cases (center≈0,
      monotonic, ±clamps, speed scaling 1 vs 100 d/s, gauge fraction).
-   - Live check `p023_f1_live_check.py`: drag right at 1 d/s → Δ ≈ span·tanh;
+   - Live check `p023_f1_live_check.py`: drag right at 1 d/s →
+     Δ ≈ span · f(px/500) (300 px → 952.9 d ≈ +2.6 yrs); 100 px → 138.5 d
      near-center drag (±30 px) small Δ; 100 d/s drag 500 px → ≈ clamp; release
      resumes at current slider speed. Atomic snapshots.
    - Updates: `plans/022` F1 note (superseded), AGENTS.md scrub bullet.
