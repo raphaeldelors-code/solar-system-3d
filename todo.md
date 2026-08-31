@@ -151,6 +151,15 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] F3 feat(hud): per-year event timeline (emoji markers + moving caret) under the gauge — `0bbdb77` (live CDP 7/7: strip hidden idle/released, 13 month ticks + year label while scrubbing, real markers land after the deferred per-year `findEvents` sweep (2029: 🌑 eclipse, ♂ Mars opposition, ☿♀ conjunction; 2033 big-jump 15 markers; 2027 3-finger 18 markers), caret = day-of-year tracks `clock.t` to ~1e-4, multi-year jump reloads the strip, 3-finger same strip, sub-threshold never shows it; +14 unit tests: timelineLayout/eventEmoji pure + yearEvents cache vs the real engine)
 - [x] docs: record F1–F3 hashes in todo/AGENTS.md + note plan 022's fixed-rate model superseded — this commit (all three features live-verified on the headless build before their commits; F1 10/10, F2 10/10, F3 7/7 CDP + F1/F2 regression suites re-passed after F3)
 
+## User queue — 2026-08-31 — plan 024 (scrub v3: full-year linear scrub, bottom event bar, year-jump buttons)
+
+`plans/024-scrub-v3-full-year-linear-event-bar-year-jump.md` — left/right scrub decoupled from playback speed: 1 px = 1 day, LINEAR (no easing), clamped to the PRESS year (bounds = Jan 1 → Dec 31, not the press epoch); gauge becomes a year-position gauge (press-epoch notch deleted); the event timeline leaves the 180 px mini strip for a full-width BOTTOM bar (YouTube progress-bar style, appear/disappear while scrubbing, emojis for bodies instead of Greek symbols); ±1/±5 year jump buttons next to the mini strip for fast year hopping.
+
+- [ ] F1 feat(scrub): linear full-year scrub clamped to the current year (1 px = 1 d, speed-independent; gauge = year position)
+- [ ] F2 feat(hud): full-width bottom event bar with body emojis (video-chapter style)
+- [ ] F3 feat(hud): ±1/±5 year jump buttons next to the mini strip
+- [ ] docs: record F1–F3 hashes, refresh AGENTS.md scrub model (023 F1 model superseded)
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined

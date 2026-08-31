@@ -63,12 +63,11 @@ import { parseAppState, encodeAppState, type ViewState } from './state/urlState'
 import { findEvents, type Event as SimEvent } from './sim/events';
 import { J2000_UTC } from './sim/types';
 import {
-  scrubDeltaDays,
+  scrubClampToYear,
   scrubSpeedLog,
   formatScrubDelta,
   timelineLayout,
-  SCRUB_CLAMP_DAYS,
-  SCRUB_SPAN_SIM_SECONDS,
+  yearSpanDays,
 } from './render/scrubMath';
 import { yearEvents, yearSpan, hasYearEvents } from './render/yearEvents';
 
@@ -1535,16 +1534,24 @@ type ScrubState = {
   startLog: number;
   movedX: boolean;
   movedY: boolean;
+  /** Plan 024 F1: the PRESS year the gesture is clamped to — Jan 1 00:00 in
+   *  days since J2000 + its length in days. "Zero" of the gesture is Jan 1
+   *  of that year; it can never scrub out of it. */
+  span0Days: number;
+  spanLenDays: number;
 };
 let scrub: null | ScrubState = null;
 let suppressPickAfterScrub = false;
 
 /**
- * Write the live scrub feedback into the top-right mini strip (plan 023 F2):
- * the .scrubbing emphasis class, the travel/speed sub-line, and the gauge
- * (knob + fill at ±(Δdays/span)·(track/2) from the center notch, which marks
- * the epoch where the gesture started). Shared by the mouse path (F1) and
- * the 3-finger path (F2) so the two gestures can never render differently.
+ * Write the live scrub feedback into the top-right mini strip (plan 023 F2,
+ * gauge re-modelled plan 024 F1): the .scrubbing emphasis class, the
+ * travel/speed sub-line, and the gauge. The gauge is now a YEAR-POSITION
+ * gauge: its track is Jan 1 → Dec 31 of the gesture's PRESS year (the old
+ * center notch — the press epoch — is gone), the knob sits at the current
+ * day-of-year and the fill runs Jan 1 → knob. Shared by the mouse path (F1)
+ * and the 3-finger path (F2) so the two gestures can never render
+ * differently.
  */
 function writeScrubHud(s: ScrubState): void {
   const dxDays = clock.t - s.startDays;
@@ -1552,16 +1559,12 @@ function writeScrubHud(s: ScrubState): void {
   if (s.movedX) parts.push(formatScrubDelta(dxDays));
   parts.push(speedValueStr());
   hudSubEl.textContent = parts.join('  ·  ');
-  // Gauge: fraction of the full span traveled (−1..1), clamped.
-  const spanDays = Math.min(SCRUB_CLAMP_DAYS, 10 ** s.startLog * SCRUB_SPAN_SIM_SECONDS);
-  const frac = Math.max(-1, Math.min(1, dxDays / spanDays));
-  const halfPct = 50; // percent of track from the center notch to an edge
-  const knobPct = halfPct + frac * halfPct;
+  // Gauge: current day-of-year within the press year (0..1), clamped.
+  const frac = Math.max(0, Math.min(1, (clock.t - s.span0Days) / s.spanLenDays));
+  const knobPct = frac * 100;
   hudGaugeKnobEl.style.left = `calc(${knobPct}% - 2px)`;
-  const fillLeft = Math.min(50, knobPct);
-  const fillWidth = Math.abs(knobPct - 50);
-  hudGaugeFillEl.style.left = `${fillLeft}%`;
-  hudGaugeFillEl.style.width = `${fillWidth}%`;
+  hudGaugeFillEl.style.left = '0%';
+  hudGaugeFillEl.style.width = `${knobPct}%`;
 }
 
 /** Write the live scrub feedback for the mouse gesture (F1). */
@@ -1578,8 +1581,8 @@ function updateScrubHud(): void {
 function clearScrubHud(): void {
   hudMiniEl.classList.remove('scrubbing');
   hudSubEl.textContent = '';
-  hudGaugeKnobEl.style.left = 'calc(50% - 2px)';
-  hudGaugeFillEl.style.left = '50%';
+  hudGaugeKnobEl.style.left = '0%';
+  hudGaugeFillEl.style.left = '0%';
   hudGaugeFillEl.style.width = '0%';
   // Plan 023 F3: drop the timeline (it is a scrub-only affordance, like the
   // sub-line and gauge) so no stale strip lingers after the gesture ends.
@@ -1692,14 +1695,13 @@ function applyScrubMove(s: ScrubState, dx: number, dy: number): boolean {
   // 4 px jitter must never light the strip up (and never read back as one).
   if (firstX || firstY) hudMiniEl.classList.add('scrubbing');
   if (s.movedX) {
-    // Plan 023 F1: travel is proportional to the gesture's STARTING speed
-    // (a simultaneous vertical speed-drag never rescales the time axis
-    // mid-gesture), quadratic-saturation eased so it's slowest at the press point and
-    // saturates at ±scrubSpanDays(startSpeed) — one hour of sim time at
-    // that speed, capped at ±10 000 d.
-    const startSpeed = 10 ** s.startLog; // days/second at the press point
+    // Plan 024 F1: LINEAR and speed-independent — 1 px = 1 sim day — clamped
+    // to the PRESS year (Jan 1 → Dec 31). A ~365 px drag sweeps a full year;
+    // the gesture can never leave it (year hopping = the ±1/±5 buttons).
     clock.setDate(
-      new Date(J2000_UTC + (s.startDays + scrubDeltaDays(startSpeed, dx)) * 86_400_000),
+      new Date(
+        J2000_UTC + scrubClampToYear(s.startDays, s.span0Days, s.spanLenDays, dx) * 86_400_000,
+      ),
     );
     committed = true;
   }
@@ -1717,6 +1719,11 @@ canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 canvas.addEventListener('pointerdown', (ev) => {
   suppressPickAfterScrub = false; // a new press clears any leftover suppression
   if (ev.pointerType !== 'mouse' || ev.button !== 2) return;
+  // Plan 024 F1: capture the PRESS year — the gesture is clamped to Jan 1 →
+  // Dec 31 of it ("zero" is Jan 1 of the current year, never the press
+  // epoch; a scrub can never leave that year).
+  const pressYear = new Date(J2000_UTC + clock.t * 86_400_000).getUTCFullYear();
+  const span = yearSpanDays(pressYear);
   scrub = {
     startX: ev.clientX,
     startY: ev.clientY,
@@ -1724,6 +1731,8 @@ canvas.addEventListener('pointerdown', (ev) => {
     startLog: clock.getLogSpeed(),
     movedX: false,
     movedY: false,
+    span0Days: span.span0Days,
+    spanLenDays: span.spanLenDays,
   };
   clock.beginScrub();
   // The overlay stays hidden until a move crosses the dead zone.
@@ -1821,6 +1830,9 @@ canvas.addEventListener('pointerdown', (ev) => {
   const pts = [...touchPointers.values()];
   const avgX = (pts[0].x + pts[1].x + pts[2].x) / 3;
   const avgY = (pts[0].y + pts[1].y + pts[2].y) / 3;
+  // Plan 024 F1: the 3-finger gesture is clamped to the PRESS year, too.
+  const pressYear = new Date(J2000_UTC + clock.t * 86_400_000).getUTCFullYear();
+  const span = yearSpanDays(pressYear);
   threeFinger = {
     startX: avgX,
     startY: avgY,
@@ -1830,6 +1842,8 @@ canvas.addEventListener('pointerdown', (ev) => {
     movedY: false,
     live: false,
     ended: false,
+    span0Days: span.span0Days,
+    spanLenDays: span.spanLenDays,
   };
   clock.beginScrub();
 });

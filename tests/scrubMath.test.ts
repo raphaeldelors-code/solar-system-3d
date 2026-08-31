@@ -1,109 +1,94 @@
 import { describe, it, expect } from 'vitest';
 import {
-  scrubDeltaDays,
+  scrubClampToYear,
   scrubSpeedLog,
-  scrubXToT,
-  scrubSpanDays,
+  yearSpanDays,
   formatScrubDelta,
-  SCRUB_CLAMP_DAYS,
-  SCRUB_SPAN_PX,
-  SCRUB_SPAN_SIM_SECONDS,
+  SCRUB_DAYS_PER_PX,
   SCRUB_SPEED_LOG_PER_PY,
   SPEED_LOG_MIN,
   SPEED_LOG_MAX,
 } from '../src/render/scrubMath';
 
-describe('scrubSpanDays (speed-proportional full span)', () => {
-  it('constants: ±10 000 d clamp, 500 px shape, 1 h span reference', () => {
-    expect(SCRUB_CLAMP_DAYS).toBe(10_000);
-    expect(SCRUB_SPAN_PX).toBe(500);
-    expect(SCRUB_SPAN_SIM_SECONDS).toBe(3600);
+describe('yearSpanDays (pure calendar math, days since J2000)', () => {
+  it('anchor: J2000 is 2000-01-01 12:00 UTC, so Jan 1 2000 is −0.5 d', () => {
+    expect(yearSpanDays(2000).span0Days).toBe(-0.5);
+    expect(yearSpanDays(2000).spanLenDays).toBe(366); // 2000 is a leap year
   });
 
-  it('span = min(±10 000 d, speed × 3600 s)', () => {
-    expect(scrubSpanDays(1)).toBe(3600); // 1 d/s → ±3 600 d (≈ 9.9 yrs)
-    expect(scrubSpanDays(0.001)).toBeCloseTo(3.6, 10); // 0.001 d/s → ±3.6 d
-    expect(scrubSpanDays(2)).toBe(7200); // below the clamp: pure ×3600
-    expect(scrubSpanDays(3.1623)).toBe(SCRUB_CLAMP_DAYS); // 11 384 d → capped
-    expect(scrubSpanDays(100)).toBe(SCRUB_CLAMP_DAYS); // capped at 10 000 d
-    expect(scrubSpanDays(1e9)).toBe(SCRUB_CLAMP_DAYS); // extreme speed caps too
-  });
-});
-
-describe('scrubXToT (quadratic saturation, −1..1)', () => {
-  it('is 0 at the press point, odd, and bounded', () => {
-    expect(scrubXToT(0)).toBe(0);
-    expect(scrubXToT(123.4)).toBeCloseTo(-scrubXToT(-123.4), 15);
-    expect(Math.abs(scrubXToT(1e7))).toBeLessThan(1);
+  it('measured values (computed from real UTC date math)', () => {
+    expect(yearSpanDays(1999)).toEqual({ span0Days: -365.5, spanLenDays: 365 });
+    expect(yearSpanDays(2023)).toEqual({ span0Days: 8400.5, spanLenDays: 365 });
+    expect(yearSpanDays(2024)).toEqual({ span0Days: 8765.5, spanLenDays: 366 });
+    expect(yearSpanDays(2026)).toEqual({ span0Days: 9496.5, spanLenDays: 365 });
+    expect(yearSpanDays(2033)).toEqual({ span0Days: 12053.5, spanLenDays: 365 });
   });
 
-  it('has ZERO slope at the center: "slower the more we are close to the center"', () => {
-    // f(x) ≈ x² near x = 0 — a 10 px twitch moves only 0.0004 of the span
-    // (tanh would move 0.02 at its FULL slope — rejected as too twitchy).
-    expect(scrubXToT(10)).toBeCloseTo(0.0004, 5);
-    expect(scrubXToT(100)).toBeCloseTo(0.0385, 3);
-    // Monotone away from the center.
-    expect(scrubXToT(30)).toBeGreaterThan(scrubXToT(10));
-    expect(scrubXToT(-30)).toBeLessThan(scrubXToT(-10));
-  });
-
-  it('reaches 0.5 of the span at 500 px and 0.95 at ~2180 px', () => {
-    expect(scrubXToT(500)).toBeCloseTo(0.5, 12);
-    expect(scrubXToT(916)).toBeCloseTo(0.77, 2);
-    expect(scrubXToT(2180)).toBeGreaterThan(0.95);
-    expect(scrubXToT(5000)).toBeCloseTo(0.99, 2);
-    expect(scrubXToT(50_000)).toBeCloseTo(1, 3);
-    expect(scrubXToT(-50_000)).toBeCloseTo(-1, 3);
+  it('years tile the timeline: Jan 1 of N+1 = Jan 1 of N + length', () => {
+    for (let y = 1990; y <= 2040; y++) {
+      const a = yearSpanDays(y);
+      const b = yearSpanDays(y + 1);
+      expect(b.span0Days).toBeCloseTo(a.span0Days + a.spanLenDays, 10);
+      expect(a.spanLenDays).toBeGreaterThanOrEqual(365);
+      expect(a.spanLenDays).toBeLessThanOrEqual(366);
+    }
   });
 });
 
-describe('scrubDeltaDays (speed-proportional lateral travel)', () => {
-  it('is 0 at the press point', () => {
-    expect(scrubDeltaDays(1, 0)).toBe(0);
+describe('scrubClampToYear (plan 024 F1: linear, speed-independent, year-clamped)', () => {
+  // Press at 2026-06-01 00:00 UTC: 31+28+31+30+31 = 151 days after Jan 1.
+  const press = 9496.5 + 151; // = 9647.5 (2026-06-01 00:00 UTC)
+  const span = yearSpanDays(2026);
+
+  it('constant: 1 px = 1 sim day', () => {
+    expect(SCRUB_DAYS_PER_PX).toBe(1);
   });
 
-  it('right drag (positive px) = future, left = past', () => {
-    expect(scrubDeltaDays(1, 100)).toBeGreaterThan(0);
-    expect(scrubDeltaDays(1, -100)).toBeLessThan(0);
-  });
-
-  it('scales linearly with speed while below the clamp (200 px, 1 vs 2 d/s)', () => {
-    // Both spans (3 600 d / 7 200 d) are below the ±10 000 d cap, so the
-    // faster setting yields exactly 2× the travel for the same drag.
-    expect(scrubDeltaDays(2, 200)).toBeCloseTo(scrubDeltaDays(1, 200) * 2, 9);
-  });
-
-  it('is NOT 100× at 100 d/s — the ±10 000 d clamp flattens it', () => {
-    // spanDays(100) = min(10 000, 360 000) = 10 000, so the ratio to the
-    // 1 d/s span (3 600) is 10 000/3 600 ≈ 2.78×, not 100×.
-    const ratio = scrubDeltaDays(100, 200) / scrubDeltaDays(1, 200);
-    expect(ratio).toBeCloseTo(10_000 / 3600, 6);
-    expect(ratio).toBeLessThan(100);
-  });
-
-  it('equals spanDays × f(px / 500)', () => {
-    for (const speed of [0.001, 0.1, 1, 10, 100]) {
-      for (const px of [-2000, -300, -10, 0, 7, 120, 500, 1200, 4000]) {
-        expect(scrubDeltaDays(speed, px)).toBeCloseTo(scrubSpanDays(speed) * scrubXToT(px), 9);
-      }
+  it('is 0 px = the press epoch, and LINEAR: Δdays = Δpx exactly', () => {
+    expect(scrubClampToYear(press, span.span0Days, span.spanLenDays, 0)).toBeCloseTo(press, 10);
+    // Values that stay inside the year from the mid-June press (no clamping).
+    for (const px of [1, 7, 50, 120, 200]) {
+      const t = scrubClampToYear(press, span.span0Days, span.spanLenDays, px);
+      expect(t - press).toBeCloseTo(px * SCRUB_DAYS_PER_PX, 9); // right = future
+    }
+    for (const px of [1, 7, 50, 120, 150]) {
+      const t = scrubClampToYear(press, span.span0Days, span.spanLenDays, -px);
+      expect(press - t).toBeCloseTo(px * SCRUB_DAYS_PER_PX, 9); // left = past
     }
   });
 
-  it('at 1 d/s a 300 px drag travels ≈ 953 d (old model: 0.6 d)', () => {
-    // 3600 · f(300/500) = 3600 · 0.2647 ≈ 953 d — ~1 590× the old
-    // fixed-rate 0.6 d for the same gesture (and 30 px → only 12.9 d:
-    // the center is deliberately slow).
-    expect(scrubDeltaDays(1, 300)).toBeCloseTo(3600 * scrubXToT(300), 9);
-    expect(scrubDeltaDays(1, 300)).toBeCloseTo(952.94, 1);
-    expect(scrubDeltaDays(1, 30)).toBeCloseTo(12.91, 1);
+  it('is SPEED-INDEPENDENT: identical result for any playback speed', () => {
+    // The function takes no speed argument at all — the user's literal ask.
+    // (Asserted structurally by the signature; behaviourally: a full-year
+    // drag travels ~365 d at every speed, unlike plan 023 F1 where the
+    // span scaled with the speed slider.)
+    const t = scrubClampToYear(press, span.span0Days, span.spanLenDays, 200);
+    expect(t).toBeCloseTo(press + 200, 9);
   });
 
-  it('at high speed the clamp still wins: 100 d/s, 2000 px → ±10 000 d bound', () => {
-    expect(Math.abs(scrubDeltaDays(100, 2000))).toBeLessThanOrEqual(SCRUB_CLAMP_DAYS);
-    // The quadratic saturation never exactly reaches ±1, so a very long drag
-    // lands infinitesimally short of the clamp — still within 0.1 d of it.
-    expect(Math.abs(scrubDeltaDays(100, 5_000_000))).toBeCloseTo(SCRUB_CLAMP_DAYS, 1);
-    expect(scrubDeltaDays(100, -5_000_000)).toBeCloseTo(-SCRUB_CLAMP_DAYS, 1);
+  it('clamps to the PRESS year — "zero" is Jan 1, the far bound is Dec 31', () => {
+    // Left edge: drag left from mid-year far past Jan 1 → pinned at Jan 1.
+    const toLeft = scrubClampToYear(press, span.span0Days, span.spanLenDays, -10_000);
+    expect(toLeft).toBeCloseTo(span.span0Days, 6);
+    // Right edge: drag right far past Dec 31 → pinned at Dec 31 (just shy).
+    const toRight = scrubClampToYear(press, span.span0Days, span.spanLenDays, 10_000);
+    expect(toRight).toBeLessThan(span.span0Days + span.spanLenDays);
+    expect(span.span0Days + span.spanLenDays - toRight).toBeLessThan(1e-4);
+    // A full-year drag (365 px) from mid-June overruns Dec 31 (only ~214 d
+    // left in the year) and must clamp AT the year end — never crossing into
+    // 2027. (A mid-June press reaches the FAR edge in ~214 px.)
+    const fullYear = scrubClampToYear(press, span.span0Days, span.spanLenDays, 365);
+    expect(fullYear).toBeCloseTo(span.span0Days + span.spanLenDays - 1e-6, 3);
+    expect(fullYear).toBeLessThan(span.span0Days + span.spanLenDays);
+    expect(fullYear).toBeLessThan(yearSpanDays(2027).span0Days);
+  });
+
+  it('a press near a year boundary clamps to THAT year, not the next', () => {
+    // Press Dec 30 2026 (day 363.5): 100 px right → Dec 31 2026, NOT 2027.
+    const dec30 = span.span0Days + 363.5;
+    const t = scrubClampToYear(dec30, span.span0Days, span.spanLenDays, 100);
+    expect(t).toBeLessThan(span.span0Days + span.spanLenDays);
+    expect(t).toBeLessThan(yearSpanDays(2027).span0Days);
   });
 });
 

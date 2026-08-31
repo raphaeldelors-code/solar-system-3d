@@ -249,9 +249,10 @@
       #hud-mini:not(.scrubbing) #hud-sub {
         display: none;
       }
-      /* Speed gauge: the center notch is the epoch where the gesture
-         started; the fill runs from the notch toward the travel direction
-         and the knob sits at ±(Δdays/span)·(track/2). */
+      /* Year-position gauge (plan 024 F1): the track IS the gesture's press
+         year (Jan 1 → Dec 31), the knob sits at the current day-of-year and
+         the fill runs Jan 1 → knob. (The old center notch = press epoch is
+         gone — "zero" is always Jan 1 of the year.) */
       #hud-gauge {
         position: relative;
         width: 180px;
@@ -261,14 +262,6 @@
       }
       #hud-mini:not(.scrubbing) #hud-gauge {
         opacity: 0.4;
-      }
-      #hud-gauge-notch {
-        position: absolute;
-        left: 50%;
-        top: -2px;
-        width: 1px;
-        height: 8px;
-        background: rgba(120, 150, 200, 0.7);
       }
       #hud-gauge-fill {
         position: absolute;
@@ -684,7 +677,6 @@
       <div id="hud-sub"></div>
       <div id="hud-gauge">
         <div id="hud-gauge-fill"></div>
-        <div id="hud-gauge-notch"></div>
         <div id="hud-gauge-knob"></div>
       </div>
       <div id="hud-timeline">
