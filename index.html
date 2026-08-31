@@ -285,6 +285,10 @@
         display: flex;
         gap: 4px;
         margin-top: 4px;
+        /* Plan 025 F1: re-enable pointer events — the parent #hud-mini is
+           pointer-events:none, and `none` cannot be re-inherited: without
+           this the buttons were dead (clicks fell through to the canvas). */
+        pointer-events: auto;
       }
       #hud-yearjump button {
         font:
