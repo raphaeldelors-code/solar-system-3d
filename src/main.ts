@@ -62,7 +62,13 @@ import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
 import { findEvents, type Event as SimEvent } from './sim/events';
 import { J2000_UTC } from './sim/types';
-import { scrubDeltaDays, scrubSpeedLog, formatScrubDelta } from './render/scrubMath';
+import {
+  scrubDeltaDays,
+  scrubSpeedLog,
+  formatScrubDelta,
+  SCRUB_CLAMP_DAYS,
+  SCRUB_SPAN_SIM_SECONDS,
+} from './render/scrubMath';
 
 // PWA: register the offline service worker in production builds only
 // (vite preview / dev use a live server; a cached shell would be confusing).
@@ -256,17 +262,19 @@ const tooltipEl = document.getElementById('tooltip') as HTMLDivElement;
 const infoEl = document.getElementById('info') as HTMLDivElement;
 const glLostEl = document.getElementById('gl-lost') as HTMLDivElement;
 const glReloadBtn = document.getElementById('gl-reload') as HTMLButtonElement;
-// Plan 022 — time-scrub live readout (bottom-centre, visible while the
-// right-drag / 3-finger gesture is held; pointer-events: none in the CSS).
-const scrubEl = document.getElementById('time-scrub') as HTMLDivElement;
-const scrubDateEl = document.getElementById('time-scrub-date') as HTMLDivElement;
-const scrubSubEl = document.getElementById('time-scrub-sub') as HTMLDivElement;
-// Plan 022 F3: always-visible mini date/speed strip (top-right). Written by
-// the same fmtDate()/fmtSpeed() as the panel, so the strip can never
-// diverge from the control panel. Day-only vs full date is chosen in
-// hudDateDayOnly (re-checked on resize).
+// Plan 022 F3 / plan 023 F2: always-visible mini date/speed strip (top-right).
+// Written by the same fmtDate()/fmtSpeed() as the panel, so the strip can
+// never diverge from the control panel. Day-only vs full date is chosen in
+// hudDateDayOnly (re-checked on resize). While a scrub is active the strip
+// carries the .scrubbing emphasis class + the travel sub-line + the gauge —
+// it is the SOLE scrub feedback (the old bottom #time-scrub banner was
+// deleted in plan 023 F2).
+const hudMiniEl = document.getElementById('hud-mini') as HTMLDivElement;
 const hudDateEl = document.getElementById('hud-date') as HTMLSpanElement;
 const hudSpeedEl = document.getElementById('hud-speed') as HTMLSpanElement;
+const hudSubEl = document.getElementById('hud-sub') as HTMLDivElement;
+const hudGaugeFillEl = document.getElementById('hud-gauge-fill') as HTMLDivElement;
+const hudGaugeKnobEl = document.getElementById('hud-gauge-knob') as HTMLDivElement;
 // F3: day-only vs full date for the mini strip. Matches the phone breakpoint
 // the panel collapses under (560 px) — re-checked on resize below.
 let hudDateDayOnly = window.innerWidth < 560;
@@ -706,7 +714,7 @@ function applyToggles(): void {
 /**
  * Format the current speed as the panel readout (and the scrub overlay's)
  * string: magnitude + unit + an explicit reverse arrow. Kept separate from
- * fmtSpeed so the time-scrub readout (plan 022) shares the exact same
+ * fmtSpeed so the scrub feedback in the mini strip (plan 022) shares the exact same
  * formatting — one code path, no drift.
  */
 function speedValueStr(): string {
@@ -1499,13 +1507,13 @@ canvas.addEventListener('pointerup', (ev) => {
 // --- Time scrubbing (plan 022 F1 / plan 023 F1): right-drag = 2D pad -----
 // Desktop: hold the RIGHT mouse button and drag. Horizontal travel moves
 // through time (right = future, left = past) proportionally to the CURRENT
-// speed (plan 023: span = 1 h of sim at the press speed, capped ±10 000 d,
-// Quadratic-saturation eased (zero slope at the press point) so it's
+// speed (plan 023: span = 1 h of sim at the press speed, capped ±10 000 d),
+// quadratic-saturation eased (zero slope at the press point) so it's
 // slowest at the press point and maxes out at the gesture's starting speed
-// gesture edges); vertical travel moves the speed slider (up = faster,
+// at the drag edges; vertical travel moves the speed slider (up = faster,
 // down = slower, log scale). While held, the clock is frozen at the scrubbed
-// value and the #time-scrub readout shows the live date, travel distance and
-// speed; on release time resumes at the CURRENT slider speed.
+// value and the #hud-mini sub-line + gauge show the live date, travel
+// distance and speed; on release time resumes at the CURRENT slider speed.
 //
 // Both gesture slots are genuinely free (plan 021): OrbitControls maps the
 // right button to PAN, which is gated off by enablePan=false, and its touch
@@ -1524,31 +1532,54 @@ let scrub: null | ScrubState = null;
 let suppressPickAfterScrub = false;
 
 /**
- * Write the live scrub readout (date line + travel/speed sub line) for a
- * scrub that started at `startDays`; the travel chip shows only once the
- * horizontal axis has moved. Shared by the mouse path (F1) and the 3-finger
- * path (F2) so the two gestures can never render differently.
+ * Write the live scrub feedback into the top-right mini strip (plan 023 F2):
+ * the .scrubbing emphasis class, the travel/speed sub-line, and the gauge
+ * (knob + fill at ±(Δdays/span)·(track/2) from the center notch, which marks
+ * the epoch where the gesture started). Shared by the mouse path (F1) and
+ * the 3-finger path (F2) so the two gestures can never render differently.
  */
-function writeScrubOverlay(startDays: number, xMoved: boolean): void {
-  scrubDateEl.textContent = dateEl.textContent;
-  const dxDays = clock.t - startDays;
+function writeScrubHud(s: ScrubState): void {
+  const dxDays = clock.t - s.startDays;
   const parts: string[] = [];
-  if (xMoved) parts.push(formatScrubDelta(dxDays));
+  if (s.movedX) parts.push(formatScrubDelta(dxDays));
   parts.push(speedValueStr());
-  scrubSubEl.textContent = parts.join('  ·  ');
+  hudSubEl.textContent = parts.join('  ·  ');
+  // Gauge: fraction of the full span traveled (−1..1), clamped.
+  const spanDays = Math.min(SCRUB_CLAMP_DAYS, 10 ** s.startLog * SCRUB_SPAN_SIM_SECONDS);
+  const frac = Math.max(-1, Math.min(1, dxDays / spanDays));
+  const halfPct = 50; // percent of track from the center notch to an edge
+  const knobPct = halfPct + frac * halfPct;
+  hudGaugeKnobEl.style.left = `calc(${knobPct}% - 2px)`;
+  const fillLeft = Math.min(50, knobPct);
+  const fillWidth = Math.abs(knobPct - 50);
+  hudGaugeFillEl.style.left = `${fillLeft}%`;
+  hudGaugeFillEl.style.width = `${fillWidth}%`;
 }
 
-/** Write the live scrub readout for the mouse gesture (F1). */
-function updateScrubOverlay(): void {
+/** Write the live scrub feedback for the mouse gesture (F1). */
+function updateScrubHud(): void {
   if (!scrub) return;
-  writeScrubOverlay(scrub.startDays, scrub.movedX);
+  writeScrubHud(scrub);
+}
+
+/**
+ * Clear the scrub feedback on release (plan 023 F2): drop the emphasis
+ * class and blank the sub-line + recenter the knob, so a stale "+2.6 yrs"
+ * never lingers under the strip after the gesture ends.
+ */
+function clearScrubHud(): void {
+  hudMiniEl.classList.remove('scrubbing');
+  hudSubEl.textContent = '';
+  hudGaugeKnobEl.style.left = 'calc(50% - 2px)';
+  hudGaugeFillEl.style.left = '50%';
+  hudGaugeFillEl.style.width = '0%';
 }
 
 /**
  * Apply a scrub move (px deltas from the press point) to clock + slider.
  * Shared by the mouse path (F1) and the 3-finger path (F2). Commits an axis
  * only past its dead zone (6 px X / 4 px Y) so jitter never nudges time or
- * speed. Returns true when the move was committed (URL/moon/overlay work).
+ * speed. Returns true when the move was committed (URL/moon/HUD work).
  */
 function applyScrubMove(s: ScrubState, dx: number, dy: number): boolean {
   let committed = false;
@@ -1556,9 +1587,9 @@ function applyScrubMove(s: ScrubState, dx: number, dy: number): boolean {
   const firstY = !s.movedY && Math.abs(dy) > 4;
   if (firstX) s.movedX = true;
   if (firstY) s.movedY = true;
-  // The readout appears only once a real move crosses a dead zone — a
-  // 4 px jitter must never flash the overlay (and never read back as one).
-  if (firstX || firstY) scrubEl.hidden = false;
+  // The emphasis appears only once a real move crosses a dead zone — a
+  // 4 px jitter must never light the strip up (and never read back as one).
+  if (firstX || firstY) hudMiniEl.classList.add('scrubbing');
   if (s.movedX) {
     // Plan 023 F1: travel is proportional to the gesture's STARTING speed
     // (a simultaneous vertical speed-drag never rescales the time axis
@@ -1609,7 +1640,7 @@ window.addEventListener('pointermove', (ev) => {
     lastMoonResampleMs = performance.now(); // moon line follows the scrub live
     syncUrl();
   }
-  if (scrub.movedX || scrub.movedY) updateScrubOverlay();
+  if (scrub.movedX || scrub.movedY) updateScrubHud();
 });
 
 window.addEventListener('pointerup', (ev) => {
@@ -1620,19 +1651,10 @@ window.addEventListener('pointerup', (ev) => {
   if (s.movedX || s.movedY) {
     resampleMoonNow(); // settle the moon line at the final epoch
     suppressPickAfterScrub = true;
-    scrubDateEl.classList.remove('flash');
-    void scrubDateEl.offsetWidth; // restart the animation
-    scrubDateEl.classList.add('flash');
-    setTimeout(() => {
-      if (scrub === null && threeFinger === null) {
-        scrubEl.hidden = true;
-        scrubDateEl.classList.remove('flash');
-      }
-    }, 1200); // the time-flash keyframes' duration
-  } else {
-    // Plain right-click (no travel): hide immediately.
-    scrubEl.hidden = true;
   }
+  // Release the emphasis: the strip returns to its calm state the moment
+  // the gesture ends (the user's ask: animation "released" on release).
+  clearScrubHud();
 });
 
 // A cancelled gesture must restore the clock exactly as it was before the
@@ -1641,7 +1663,7 @@ window.addEventListener('pointercancel', (ev) => {
   if (!scrub || ev.pointerType !== 'mouse') return;
   scrub = null;
   clock.endScrub();
-  scrubEl.hidden = true;
+  clearScrubHud();
 });
 
 // --- Time scrubbing (plan 022 F2): 3-finger drag = the same 2D pad --------
@@ -1680,18 +1702,9 @@ function endThreeFingerScrub(active: boolean): void {
   if (active) {
     resampleMoonNow(); // settle the moon line at the final epoch
     suppressPickAfterScrub = true; // a scrub release is never a pick
-    scrubDateEl.classList.remove('flash');
-    void scrubDateEl.offsetWidth; // restart the animation
-    scrubDateEl.classList.add('flash');
-    setTimeout(() => {
-      if (scrub === null && threeFinger === null) {
-        scrubEl.hidden = true;
-        scrubDateEl.classList.remove('flash');
-      }
-    }, 1200); // the time-flash keyframes' duration
-  } else {
-    scrubEl.hidden = true;
   }
+  // Release the emphasis on the mini strip (same as the mouse path).
+  clearScrubHud();
 }
 
 canvas.addEventListener('pointerdown', (ev) => {
@@ -1730,7 +1743,7 @@ canvas.addEventListener('pointermove', (ev) => {
     lastMoonResampleMs = performance.now(); // moon line follows the scrub live
     syncUrl();
   }
-  if (s.movedX || s.movedY) writeScrubOverlay(s.startDays, s.movedX);
+  if (s.movedX || s.movedY) writeScrubHud(s);
 });
 
 // On WINDOW so a lift / cancel outside the canvas still ends the gesture and

@@ -201,45 +201,14 @@
           text-shadow: none;
         }
       }
-      /* ---- Time-scrub live readout (plan 022) ----
-         Bottom-centre pill shown while the right-drag / 3-finger gesture is
-         held. pointer-events: none — it never blocks the canvas or the
-         control panel. */
-      #time-scrub {
-        position: fixed;
-        left: 50%;
-        transform: translateX(-50%);
-        bottom: 64px;
-        z-index: 30;
-        pointer-events: none;
-        background: rgba(10, 16, 28, 0.82);
-        border: 1px solid #2b4a7a;
-        border-radius: 10px;
-        padding: 10px 18px;
-        text-align: center;
-        color: #dce8f7;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
-      }
-      #time-scrub-date {
-        font-size: 22px;
-        font-variant-numeric: tabular-nums;
-        color: #9fd6a8;
-        line-height: 1.25;
-      }
-      #time-scrub-date.flash {
-        animation: time-flash 1.2s ease-out;
-      }
-      #time-scrub-sub {
-        margin-top: 3px;
-        font-size: 12px;
-        color: #8fa3bf;
-        font-variant-numeric: tabular-nums;
-      }
       /* ---- Always-visible mini date/speed strip (plan 022 F3) ----
          Top-right, pointer-events: none so it never blocks the canvas or
          the panel. On phones (<560 px) the panel is full-width and its
          collapsed toggle bar sits at the top — so the strip drops down
-         clear of it (measured in the live check). */
+         clear of it (measured in the F3 live check). While a scrub is
+         active (plan 023 F2) it carries a pulsing .scrubbing emphasis, a
+         travel sub-line and a speed gauge — the sole scrub feedback (the
+         old bottom #time-scrub banner is gone). */
       #hud-mini {
         position: fixed;
         top: calc(10px + env(safe-area-inset-top));
@@ -247,8 +216,8 @@
         z-index: 20;
         pointer-events: none;
         display: flex;
-        gap: 10px;
-        align-items: baseline;
+        flex-direction: column;
+        gap: 3px;
         background: rgba(10, 16, 28, 0.6);
         border: 1px solid rgba(120, 150, 200, 0.2);
         border-radius: 8px;
@@ -260,11 +229,78 @@
         color: #9fd6a8;
         user-select: none;
       }
+      #hud-mini-row1 {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+      }
       #hud-mini #hud-date {
         color: #9fd6a8;
       }
       #hud-mini #hud-speed {
         color: #8fa3bf;
+      }
+      /* Travel + speed sub-line: visible only while scrubbing (plan 023 F2). */
+      #hud-sub {
+        font-size: 11px;
+        color: #8fa3bf;
+        font-variant-numeric: tabular-nums;
+      }
+      #hud-mini:not(.scrubbing) #hud-sub {
+        display: none;
+      }
+      /* Speed gauge: the center notch is the epoch where the gesture
+         started; the fill runs from the notch toward the travel direction
+         and the knob sits at ±(Δdays/span)·(track/2). */
+      #hud-gauge {
+        position: relative;
+        width: 180px;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(120, 150, 200, 0.25);
+      }
+      #hud-mini:not(.scrubbing) #hud-gauge {
+        opacity: 0.4;
+      }
+      #hud-gauge-notch {
+        position: absolute;
+        left: 50%;
+        top: -2px;
+        width: 1px;
+        height: 8px;
+        background: rgba(120, 150, 200, 0.7);
+      }
+      #hud-gauge-fill {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        border-radius: 2px;
+        background: #57c785;
+      }
+      #hud-gauge-knob {
+        position: absolute;
+        top: -3px;
+        width: 4px;
+        height: 10px;
+        border-radius: 2px;
+        background: #57c785;
+      }
+      /* Plan 023 F2 emphasis: pulses while a scrub is active, released on
+         release (mouse right-button up / 3-finger lift / cancel). */
+      #hud-mini.scrubbing {
+        animation: hud-scrub-pulse 0.9s ease-in-out infinite;
+        border-color: rgba(87, 199, 133, 0.55);
+      }
+      @keyframes hud-scrub-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(87, 199, 133, 0.35);
+          transform: scale(1);
+        }
+        50% {
+          box-shadow: 0 0 14px 2px rgba(87, 199, 133, 0.45);
+          transform: scale(1.03);
+        }
       }
       @media (max-width: 560px) {
         #hud-mini {
@@ -272,6 +308,9 @@
              bottom is 57.5 px (12 top + 14px coarse font + 2×12 padding),
              so 68 px leaves an 11 px gap (verified by the F3 live check). */
           top: calc(68px + env(safe-area-inset-top));
+        }
+        #hud-gauge {
+          width: 140px;
         }
       }
       /* ---- Body search combobox (B2) ---- */
@@ -575,12 +614,16 @@
          readers; the panel's Date/Speed rows are the accessible source
          of truth. -->
     <div id="hud-mini" aria-hidden="true">
-      <span id="hud-date">—</span>
-      <span id="hud-speed">1.0 d/s</span>
-    </div>
-    <div id="time-scrub" aria-hidden="true" hidden>
-      <div id="time-scrub-date">—</div>
-      <div id="time-scrub-sub"></div>
+      <div id="hud-mini-row1">
+        <span id="hud-date">—</span>
+        <span id="hud-speed">1.0 d/s</span>
+      </div>
+      <div id="hud-sub"></div>
+      <div id="hud-gauge">
+        <div id="hud-gauge-fill"></div>
+        <div id="hud-gauge-notch"></div>
+        <div id="hud-gauge-knob"></div>
+      </div>
     </div>
     <div id="panel">
       <h1 id="panel-toggle">Solar System</h1>
