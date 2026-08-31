@@ -278,65 +278,103 @@
         border-radius: 2px;
         background: #57c785;
       }
-      /* Plan 023 F3 timeline: the CURRENT calendar year as a Jan→Dec strip —
-         month ticks, the year's events as small emoji at their day-of-year
-         position, and a "you are here" caret at the current sim day. Visible
-         only while scrubbing (mirrors #hud-sub / #hud-gauge). */
+      /* Plan 024 F2: the event timeline is a FULL-WIDTH BOTTOM bar — the
+         old 180 px mini-strip clogged the events together. YouTube
+         video-progress-bar inspiration: the year's events sit ON the track
+         like chapters (emoji above the line), a green fill runs Jan 1 →
+         caret, the caret + year label follow the current date. Visible only
+         while a scrub is live (.visible) — mirrors #hud-sub / #hud-gauge.
+         pointer-events: none: it never blocks the canvas. */
       #hud-timeline {
-        position: relative;
-        width: 180px;
-        height: 14px;
-        margin-top: 2px;
-        border-top: 1px solid rgba(120, 150, 200, 0.3);
-      }
-      #hud-mini:not(.scrubbing) #hud-timeline {
-        display: none;
-      }
-      #hud-timeline .tl-tick {
-        position: absolute;
-        top: 0;
-        width: 1px;
-        height: 4px;
-        background: rgba(120, 150, 200, 0.45);
-      }
-      #hud-timeline .tl-tick.tl-year-start,
-      #hud-timeline .tl-tick.tl-year-end {
-        height: 8px;
-        background: rgba(120, 150, 200, 0.75);
-      }
-      #hud-timeline .tl-event {
-        position: absolute;
-        bottom: 1px;
-        font-size: 11px;
-        line-height: 1;
-        transform: translateX(-50%);
-        pointer-events: none;
-      }
-      #hud-timeline .tl-overflow {
-        position: absolute;
+        position: fixed;
+        left: 0;
         right: 0;
-        top: -1px;
-        font-size: 9px;
-        color: #8fa3bf;
+        bottom: calc(10px + env(safe-area-inset-bottom));
+        z-index: 15;
+        pointer-events: none;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        font:
+          12px/1.4 system-ui,
+          sans-serif;
+        font-variant-numeric: tabular-nums;
+        user-select: none;
       }
-      #hud-timeline .tl-caret {
-        position: absolute;
-        top: -3px;
-        width: 2px;
-        height: 18px;
-        background: #57c785;
-        border-radius: 1px;
-        box-shadow: 0 0 6px 1px rgba(87, 199, 133, 0.7);
-        transform: translateX(-50%);
+      #hud-timeline.visible {
+        display: flex;
       }
       #hud-timeline .tl-year {
+        font-size: 12px;
+        letter-spacing: 0.05em;
+        color: #9fd6a8;
+      }
+      #hud-timeline-track {
+        position: relative;
+        width: calc(100% - 48px);
+        height: 24px;
+      }
+      /* The 5 px progress line (like the video bar itself). */
+      #hud-timeline-bar {
         position: absolute;
-        left: 4px;
-        bottom: 1px;
-        font-size: 9px;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 5px;
+        transform: translateY(-50%);
+        border-radius: 3px;
+        background: rgba(120, 150, 200, 0.28);
+      }
+      /* Month ticks: 13 (Jan..Dec boundaries), the year edges taller. */
+      #hud-timeline-bar .tl-tick {
+        position: absolute;
+        top: 50%;
+        width: 1px;
+        height: 9px;
+        transform: translateY(-50%);
+        background: rgba(120, 150, 200, 0.45);
+      }
+      #hud-timeline-bar .tl-tick.tl-year-start,
+      #hud-timeline-bar .tl-tick.tl-year-end {
+        height: 15px;
+        background: rgba(120, 150, 200, 0.75);
+      }
+      /* Chapter markers: the body emoji floating ABOVE the track. */
+      #hud-timeline-bar .tl-event {
+        position: absolute;
+        top: -14px;
+        font-size: 13px;
         line-height: 1;
-        color: #8fa3bf;
+        transform: translateX(-50%);
         pointer-events: none;
+      }
+      #hud-timeline-bar .tl-overflow {
+        position: absolute;
+        right: 2px;
+        top: -14px;
+        font-size: 10px;
+        color: #8fa3bf;
+      }
+      /* Green progress fill: Jan 1 → caret. */
+      #hud-timeline-bar .tl-fill {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        width: 0%;
+        border-radius: 3px;
+        background: #57c785;
+      }
+      /* "You are here" caret. */
+      #hud-timeline-bar .tl-caret {
+        position: absolute;
+        top: -5px;
+        width: 3px;
+        height: 15px;
+        background: #57c785;
+        border-radius: 2px;
+        box-shadow: 0 0 6px 1px rgba(87, 199, 133, 0.7);
+        transform: translateX(-50%);
       }
       /* Plan 023 F2 emphasis: pulses while a scrub is active, released on
          release (mouse right-button up / 3-finger lift / cancel). */
@@ -363,9 +401,6 @@
           top: calc(68px + env(safe-area-inset-top));
         }
         #hud-gauge {
-          width: 140px;
-        }
-        #hud-timeline {
           width: 140px;
         }
       }
@@ -649,7 +684,7 @@
         border-color: #6ea8ff;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-CjCXn_S1.js"></script>
+    <script type="module" crossorigin src="./assets/index-CUBWLKgw.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -680,9 +715,21 @@
         <div id="hud-gauge-fill"></div>
         <div id="hud-gauge-knob"></div>
       </div>
-      <div id="hud-timeline">
-        <div id="hud-timeline-caret" class="tl-caret"></div>
-        <span id="hud-timeline-year" class="tl-year"></span>
+    </div>
+    <!-- Plan 024 F2: the event timeline moved OUT of the mini strip (the
+         events were clogged into 180 px) into a full-width, bottom-positioned
+         bar — a YouTube video-progress-bar: the year's events sit on the
+         track like chapters, the caret + fill follow the current date.
+         Appears only while a scrub is live (.visible), never blocks the
+         canvas (pointer-events: none). -->
+    <div id="hud-timeline" aria-hidden="true">
+      <span id="hud-timeline-year" class="tl-year"></span>
+      <div id="hud-timeline-track">
+        <div id="hud-timeline-bar">
+          <div id="hud-timeline-dynamic"></div>
+          <div id="hud-timeline-fill" class="tl-fill"></div>
+          <div id="hud-timeline-caret" class="tl-caret"></div>
+        </div>
       </div>
     </div>
     <div id="panel">
