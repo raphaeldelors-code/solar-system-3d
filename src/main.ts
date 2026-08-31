@@ -62,14 +62,7 @@ import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
 import { findEvents, type Event as SimEvent } from './sim/events';
 import { J2000_UTC } from './sim/types';
-import {
-  scrubClampToYear,
-  scrubSpeedLog,
-  formatScrubDelta,
-  timelineLayout,
-  yearSpanDays,
-  addYearsUtc,
-} from './render/scrubMath';
+import { scrubClampToYear, scrubSpeedLog, timelineLayout, yearSpanDays } from './render/scrubMath';
 import { yearEvents, yearSpan, hasYearEvents } from './render/yearEvents';
 
 // PWA: register the offline service worker in production builds only
@@ -264,25 +257,17 @@ const tooltipEl = document.getElementById('tooltip') as HTMLDivElement;
 const infoEl = document.getElementById('info') as HTMLDivElement;
 const glLostEl = document.getElementById('gl-lost') as HTMLDivElement;
 const glReloadBtn = document.getElementById('gl-reload') as HTMLButtonElement;
-// Plan 022 F3 / plan 023 F2: always-visible mini date/speed strip (top-right).
-// Written by the same fmtDate()/fmtSpeed() as the panel, so the strip can
-// never diverge from the control panel. Day-only vs full date is chosen in
-// hudDateDayOnly (re-checked on resize). While a scrub is active the strip
-// carries the .scrubbing emphasis class + the travel sub-line + the gauge —
-// it is the SOLE scrub feedback (the old bottom #time-scrub banner was
-// deleted in plan 023 F2).
+// Plan 022 F3: always-visible mini date/speed strip (top-right). Written by
+// the same fmtDate()/fmtSpeed() as the panel, so the strip can never
+// diverge from the control panel. Day-only vs full date is chosen in
+// hudDateDayOnly (re-checked on resize). Plan 025 F2: the strip is the
+// MINIMAL date + speed + year-jump buttons — the scrub travel sub-line and
+// the year-position gauge are gone ("makes no sense" — the full-width
+// event bar at the top is the scrub feedback now). The .scrubbing emphasis
+// class still pulses the pane while a gesture is live.
 const hudMiniEl = document.getElementById('hud-mini') as HTMLDivElement;
 const hudDateEl = document.getElementById('hud-date') as HTMLSpanElement;
 const hudSpeedEl = document.getElementById('hud-speed') as HTMLSpanElement;
-const hudSubEl = document.getElementById('hud-sub') as HTMLDivElement;
-const hudGaugeFillEl = document.getElementById('hud-gauge-fill') as HTMLDivElement;
-const hudGaugeKnobEl = document.getElementById('hud-gauge-knob') as HTMLDivElement;
-// Plan 024 F3: the ±1/±5 year-jump buttons in the mini pane (fast-travel
-// across year boundaries, which the within-year scrub drag cannot cross).
-const yjMinus5El = document.getElementById('yj-minus5') as HTMLButtonElement;
-const yjMinus1El = document.getElementById('yj-minus1') as HTMLButtonElement;
-const yjPlus1El = document.getElementById('yj-plus1') as HTMLButtonElement;
-const yjPlus5El = document.getElementById('yj-plus5') as HTMLButtonElement;
 // Plan 024 F2: full-width bottom event bar (visible only while scrubbing).
 // The #hud-timeline-dynamic container is rebuilt on year change and when a
 // deferred event sweep lands; fill + caret are persistent children.
@@ -808,30 +793,6 @@ function applyDatePick(): void {
   if (eventsVisible()) refreshEvents();
   syncUrl();
 }
-
-/**
- * Plan 024 F3: jump the clock N whole CALENDAR years ahead/behind, keeping
- * month, day, and time of day. This is the fast-travel complement of the
- * within-year scrub (whose drag is clamped to the press year): the drag does
- * the precise in-year work, these buttons cross year boundaries in one click.
- * Feb 29 clamps to Feb 28 in non-leap target years (addYearsUtc). Same
- * side effects as every other date jump: moon-orbit resample, events
- * refresh, URL persist, HUD date flash.
- */
-function applyYearJump(years: number): void {
-  clock.setDate(addYearsUtc(clock.toDate(), years));
-  resampleMoonNow(); // Moon orbit line jumps with the epoch
-  dateEl.classList.remove('flash');
-  void dateEl.offsetWidth;
-  dateEl.classList.add('flash');
-  if (eventsVisible()) refreshEvents();
-  syncUrl();
-}
-
-yjMinus5El.addEventListener('click', () => applyYearJump(-5));
-yjMinus1El.addEventListener('click', () => applyYearJump(-1));
-yjPlus1El.addEventListener('click', () => applyYearJump(1));
-yjPlus5El.addEventListener('click', () => applyYearJump(5));
 
 /**
  * Panel info card. Shows the followed body's orbital readout, or — when a
@@ -1577,46 +1538,16 @@ let scrub: null | ScrubState = null;
 let suppressPickAfterScrub = false;
 
 /**
- * Write the live scrub feedback into the top-right mini strip (plan 023 F2,
- * gauge re-modelled plan 024 F1): the .scrubbing emphasis class, the
- * travel/speed sub-line, and the gauge. The gauge is now a YEAR-POSITION
- * gauge: its track is Jan 1 → Dec 31 of the gesture's PRESS year (the old
- * center notch — the press epoch — is gone), the knob sits at the current
- * day-of-year and the fill runs Jan 1 → knob. Shared by the mouse path (F1)
- * and the 3-finger path (F2) so the two gestures can never render
- * differently.
- */
-function writeScrubHud(s: ScrubState): void {
-  const dxDays = clock.t - s.startDays;
-  const parts: string[] = [];
-  if (s.movedX) parts.push(formatScrubDelta(dxDays));
-  parts.push(speedValueStr());
-  hudSubEl.textContent = parts.join('  ·  ');
-  // Gauge: current day-of-year within the press year (0..1), clamped.
-  const frac = Math.max(0, Math.min(1, (clock.t - s.span0Days) / s.spanLenDays));
-  const knobPct = frac * 100;
-  hudGaugeKnobEl.style.left = `calc(${knobPct}% - 2px)`;
-  hudGaugeFillEl.style.left = '0%';
-  hudGaugeFillEl.style.width = `${knobPct}%`;
-}
-
-/** Write the live scrub feedback for the mouse gesture (F1). */
-function updateScrubHud(): void {
-  if (!scrub) return;
-  writeScrubHud(scrub);
-}
-
-/**
  * Clear the scrub feedback on release (plan 023 F2): drop the emphasis
- * class and blank the sub-line + recenter the knob, so a stale "+2.6 yrs"
- * never lingers under the strip after the gesture ends.
+ * class so the mini pane returns to its resting look. (Plan 025 F2 removed
+ * the sub-line and gauge, so there is nothing else to blank.)
  */
 function clearScrubHud(): void {
   hudMiniEl.classList.remove('scrubbing');
-  hudSubEl.textContent = '';
-  hudGaugeKnobEl.style.left = '0%';
-  hudGaugeFillEl.style.left = '0%';
-  hudGaugeFillEl.style.width = '0%';
+  // Plan 025 F2: drop the per-value magnify emphasis too (date and/or
+  // speed were .hot while the scrub was live).
+  hudDateEl.classList.remove('hot');
+  hudSpeedEl.classList.remove('hot');
   // Plan 024 F2: hide the full-width event bar (it is a scrub-only
   // affordance, like the sub-line and gauge) so no stale bar lingers after
   // the gesture ends.
@@ -1738,11 +1669,16 @@ function applyScrubMove(s: ScrubState, dx: number, dy: number): boolean {
   if (firstY) s.movedY = true;
   // The emphasis appears only once a real move crosses a dead zone — a
   // 4 px jitter must never light the strip up (and never read back as one).
+  // Plan 025 F2: the PANES-level pulse stays, and the per-value magnify
+  // (.hot) follows the axis actually moving: horizontal → the date number,
+  // vertical → the speed number; a diagonal drag lights both.
   if (firstX || firstY) hudMiniEl.classList.add('scrubbing');
   if (s.movedX) {
+    hudDateEl.classList.add('hot');
     // Plan 024 F1: LINEAR and speed-independent — 1 px = 1 sim day — clamped
     // to the PRESS year (Jan 1 → Dec 31). A ~365 px drag sweeps a full year;
-    // the gesture can never leave it (year hopping = the ±1/±5 buttons).
+    // the gesture can never leave it (year hopping is out of scope for the
+    // minimal pane, plan 025 F2).
     clock.setDate(
       new Date(
         J2000_UTC + scrubClampToYear(s.startDays, s.span0Days, s.spanLenDays, dx) * 86_400_000,
@@ -1751,6 +1687,7 @@ function applyScrubMove(s: ScrubState, dx: number, dy: number): boolean {
     committed = true;
   }
   if (s.movedY) {
+    hudSpeedEl.classList.add('hot');
     applySliderSpeed(scrubSpeedLog(s.startLog, dy));
     committed = true;
   }
@@ -1796,8 +1733,7 @@ window.addEventListener('pointermove', (ev) => {
     syncUrl();
   }
   if (scrub.movedX || scrub.movedY) {
-    updateScrubHud();
-    tlShow(); // plan 024 F2: the full-width bottom bar is a scrub-only affordance
+    tlShow(); // plan 024 F2: the full-width bar is a scrub-only affordance
     tlRefresh(); // plan 023 F3: rebuild/paint the per-year timeline
   }
 });
@@ -1907,9 +1843,8 @@ canvas.addEventListener('pointermove', (ev) => {
     lastMoonResampleMs = performance.now(); // moon line follows the scrub live
     syncUrl();
   }
-  if (s.movedX || s.movedY) writeScrubHud(s);
   if (s.movedX || s.movedY) {
-    tlShow(); // plan 024 F2: the full-width bottom bar is a scrub-only affordance
+    tlShow(); // plan 024 F2: the full-width bar is a scrub-only affordance
     tlRefresh(); // plan 023 F3: per-year timeline
   }
 });
