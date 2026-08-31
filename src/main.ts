@@ -68,6 +68,7 @@ import {
   formatScrubDelta,
   timelineLayout,
   yearSpanDays,
+  addYearsUtc,
 } from './render/scrubMath';
 import { yearEvents, yearSpan, hasYearEvents } from './render/yearEvents';
 
@@ -276,6 +277,12 @@ const hudSpeedEl = document.getElementById('hud-speed') as HTMLSpanElement;
 const hudSubEl = document.getElementById('hud-sub') as HTMLDivElement;
 const hudGaugeFillEl = document.getElementById('hud-gauge-fill') as HTMLDivElement;
 const hudGaugeKnobEl = document.getElementById('hud-gauge-knob') as HTMLDivElement;
+// Plan 024 F3: the ±1/±5 year-jump buttons in the mini pane (fast-travel
+// across year boundaries, which the within-year scrub drag cannot cross).
+const yjMinus5El = document.getElementById('yj-minus5') as HTMLButtonElement;
+const yjMinus1El = document.getElementById('yj-minus1') as HTMLButtonElement;
+const yjPlus1El = document.getElementById('yj-plus1') as HTMLButtonElement;
+const yjPlus5El = document.getElementById('yj-plus5') as HTMLButtonElement;
 // Plan 024 F2: full-width bottom event bar (visible only while scrubbing).
 // The #hud-timeline-dynamic container is rebuilt on year change and when a
 // deferred event sweep lands; fill + caret are persistent children.
@@ -801,6 +808,30 @@ function applyDatePick(): void {
   if (eventsVisible()) refreshEvents();
   syncUrl();
 }
+
+/**
+ * Plan 024 F3: jump the clock N whole CALENDAR years ahead/behind, keeping
+ * month, day, and time of day. This is the fast-travel complement of the
+ * within-year scrub (whose drag is clamped to the press year): the drag does
+ * the precise in-year work, these buttons cross year boundaries in one click.
+ * Feb 29 clamps to Feb 28 in non-leap target years (addYearsUtc). Same
+ * side effects as every other date jump: moon-orbit resample, events
+ * refresh, URL persist, HUD date flash.
+ */
+function applyYearJump(years: number): void {
+  clock.setDate(addYearsUtc(clock.toDate(), years));
+  resampleMoonNow(); // Moon orbit line jumps with the epoch
+  dateEl.classList.remove('flash');
+  void dateEl.offsetWidth;
+  dateEl.classList.add('flash');
+  if (eventsVisible()) refreshEvents();
+  syncUrl();
+}
+
+yjMinus5El.addEventListener('click', () => applyYearJump(-5));
+yjMinus1El.addEventListener('click', () => applyYearJump(-1));
+yjPlus1El.addEventListener('click', () => applyYearJump(1));
+yjPlus5El.addEventListener('click', () => applyYearJump(5));
 
 /**
  * Panel info card. Shows the followed body's orbital readout, or — when a

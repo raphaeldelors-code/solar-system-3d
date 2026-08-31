@@ -47,6 +47,32 @@ export function yearSpanDays(year: number): { span0Days: number; spanLenDays: nu
 }
 
 /**
+ * Plan 024 F3: add whole CALENDAR years to a UTC date, preserving month,
+ * day, and time of day (so "June 15, 2026 +1 y" is June 15, 2027 — the
+ * jump lands on the same season of the target year). Feb 29 clamps to
+ * Feb 28 in non-leap years (the calendar date that does not exist).
+ * Pure date math — unit-tested.
+ */
+export function addYearsUtc(date: Date, years: number): Date {
+  const y = date.getUTCFullYear() + years;
+  const m = date.getUTCMonth();
+  let d = date.getUTCDate();
+  const daysInMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  if (d > daysInMonth) d = daysInMonth;
+  return new Date(
+    Date.UTC(
+      y,
+      m,
+      d,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds(),
+    ),
+  );
+}
+
+/**
  * Sim days for a horizontal scrub move: the press epoch plus a LINEAR
  * `deltaPx · SCRUB_DAYS_PER_PX`, clamped to the press year
  * `[span0Days, span0Days + spanLenDays)`. Right = future. Independent of

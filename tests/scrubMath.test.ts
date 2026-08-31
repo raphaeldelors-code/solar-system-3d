@@ -4,6 +4,7 @@ import {
   scrubSpeedLog,
   yearSpanDays,
   formatScrubDelta,
+  addYearsUtc,
   SCRUB_DAYS_PER_PX,
   SCRUB_SPEED_LOG_PER_PY,
   SPEED_LOG_MIN,
@@ -127,5 +128,28 @@ describe('formatScrubDelta', () => {
     expect(formatScrubDelta(1461)).toBe('+4.0 yrs');
     expect(formatScrubDelta(-730.5)).toBe('−2.0 yrs');
     expect(formatScrubDelta(3650)).toBe('+10.0 yrs');
+  });
+});
+
+describe('addYearsUtc (plan 024 F3)', () => {
+  it('preserves month, day, and time of day for ordinary dates', () => {
+    const d = new Date(Date.UTC(2026, 5, 15, 14, 30, 0, 123));
+    expect(addYearsUtc(d, 1).getTime()).toBe(Date.UTC(2027, 5, 15, 14, 30, 0, 123));
+    expect(addYearsUtc(d, -1).getTime()).toBe(Date.UTC(2025, 5, 15, 14, 30, 0, 123));
+    expect(addYearsUtc(d, 5).getUTCFullYear()).toBe(2031);
+  });
+
+  it('clamps Feb 29 to Feb 28 when the target year is not a leap year', () => {
+    const leap = new Date(Date.UTC(2024, 1, 29, 8, 0));
+    expect(addYearsUtc(leap, 1).getTime()).toBe(Date.UTC(2025, 1, 28, 8, 0));
+    // …and keeps Feb 29 when the target IS a leap year.
+    expect(addYearsUtc(leap, 4).getTime()).toBe(Date.UTC(2028, 1, 29, 8, 0));
+    // Backwards: Feb 15 2025 −1 y lands on Feb 15 2024 (no clamp needed).
+    expect(addYearsUtc(new Date(Date.UTC(2025, 1, 15)), -1).getTime()).toBe(Date.UTC(2024, 1, 15));
+  });
+
+  it('crosses the century cleanly', () => {
+    expect(addYearsUtc(new Date(Date.UTC(2000, 0, 1)), -1).getTime()).toBe(Date.UTC(1999, 0, 1));
+    expect(addYearsUtc(new Date(Date.UTC(1999, 11, 31)), 1).getTime()).toBe(Date.UTC(2000, 11, 31));
   });
 });
