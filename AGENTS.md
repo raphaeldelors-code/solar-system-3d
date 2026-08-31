@@ -190,43 +190,54 @@ deliberately strict-on-real-defects, light-on-taste (Prettier owns taste).
 - **Time scrubbing** (`src/render/scrubMath.ts` pure + `src/render/yearEvents.ts`
   per-year cache + `SimClock` `beginScrub`/`endScrub` + `main.ts` pointer
   wiring): right-drag (mouse) or 3-finger drag (touch) is a 2D gesture.
-  HORIZONTAL travels time SPEED-PROPORTIONAL (plan 023 F1):
-  `Δdays = scrubSpanDays(startSpeed)·f(px/500)` with the zero-center-slope
-  quadratic easing `f(x)=sign(x)·x²/(1+x²)` — slowest at the pressed epoch
-  (a ±few-px wiggle barely moves time), saturating at the span edges;
-  `scrubSpanDays = min(SCRUB_CLAMP_DAYS = 10 000, startSpeed×3600)` (one
-  hour of sim at the gesture's STARTING speed — a simultaneous vertical
-  speed-drag never rescales the time axis mid-gesture). The fixed
-  `SCRUB_DAYS_PER_PX = 0.002` rate is GONE (plan 022, superseded).
-  VERTICAL moves the speed slider at `SCRUB_SPEED_LOG_PER_PY = 0.01`
-  log10(d/s)/px (up = faster) within the slider's
-  `[SPEED_LOG_MIN, SPEED_LOG_MAX] = [−3, 2.5]` domain. Press freezes
-  (`beginScrub` remembers the pre-scrub pause state), release resumes
-  (`endScrub`) at the CURRENT slider speed and re-samples the Moon orbit
-  line. A `<6 px` X / `<4 px` Y move is a no-op (dead zone) — the strip
+  HORIZONTAL travels time LINEAR and SPEED-INDEPENDENT (plan 024 F1, which
+  superseded plan 023's speed-proportional easing): `Δdays = SCRUB_DAYS_PER_PX
+(1) × px` — 1 px = 1 sim day, clamped to the PRESS calendar year
+  (`scrubClampToYear(t0, yearSpanDays(yearOf(t0)))` — bounds are that
+  year's Jan 1 → Dec 31, so the gesture can never cross a year boundary;
+  a ~365 px drag sweeps a full year). The speed slider is NEVER consulted
+  for travel — only the vertical drag changes it. VERTICAL moves the speed
+  slider at `SCRUB_SPEED_LOG_PER_PY = 0.01` log10(d/s)/px (up = faster)
+  within the slider's `[SPEED_LOG_MIN, SPEED_LOG_MAX] = [−3, 2.5]` domain.
+  Press freezes (`beginScrub` remembers the pre-scrub pause state), release
+  resumes (`endScrub`) at the CURRENT slider speed and re-samples the Moon
+  orbit line. A `<6 px` X / `<4 px` Y move is a no-op (dead zone) — the HUD
   never lights up and a scrub release is never a pick. OrbitControls'
   right-drag is inert (`enablePan=false`) and its touch handlers only act
   on 1–2 pointers — but its `onPointerUp` has no `case 2`, so a 3→2 finger
   lift leaves the surviving pinch dead; the re-arm uses a synthetic
-  pointerup+pointerdown bounce (`rearmBounce`-guarded). HUD (plan 023 F2):
-  the bottom `#time-scrub` banner is DELETED — `#hud-mini` (top-right,
-  always) carries the scrub feedback: a pulsing `.scrubbing` class (added
-  only past the dead zone, removed via `clearScrubHud()` on every release
-  path — mouse up, mouse pointercancel, 3-finger lift, 3-finger
-  pointercancel), the travel sub-line (`+2.6 yrs · 1.0 d/s`), and a
-  directional gauge (knob at `50% + (Δdays/span)·50%`, center notch = the
-  press epoch; the fill spans center→knob). F3: while scrubbing,
-  `#hud-timeline` (under the gauge, hidden otherwise) shows the CURRENT
+  pointerup+pointerdown bounce (`rearmBounce`-guarded). HUD (plan 023 F2,
+  gauge re-modelled plan 024 F1): the bottom `#time-scrub` banner is
+  DELETED — `#hud-mini` (top-right, always) carries the scrub feedback: a
+  pulsing `.scrubbing` class (added only past the dead zone, removed via
+  `clearScrubHud()` on every release path — mouse up, mouse pointercancel,
+  3-finger lift, 3-finger pointercancel), the travel sub-line
+  (`+2.6 yrs · 1.0 d/s`), and a YEAR-POSITION gauge: the track IS the
+  press year, the knob sits at the current day-of-year
+  (`(t − Jan1)/lenDays`) and the fill runs Jan 1 → knob (the plan 023
+  center-notch/press-epoch model is GONE). Event bar (plan 023 F3,
+  redesigned plan 024 F2): while scrubbing, `#hud-timeline` is a
+  FULL-WIDTH BOTTOM bar (fixed, `calc(100% − 48px)`, 52 px tall, YouTube
+  progress-bar style; hidden otherwise — `tlShow()`/`tlHide()`, and
+  `clearScrubHud()` hides it on every release). It shows the CURRENT
   calendar year: 13 month ticks, the year label, that year's events as
-  emoji at their day-of-year fraction (`timelineLayout` in scrubMath.ts;
-  data from `yearEvents()` — a per-year `findEvents` sweep, ~0.1–0.3 s,
-  computed lazily on first entry and cached, deferred to a rAF so the
-  gesture's own frame paints first), and a "you are here" caret
-  (`tlFrame()` keeps it glued to `clock.t` every frame). `#hud-mini` is
+  BODY EMOJIS (🌍🪐🔴… — `BODY_EMOJI` in scrubMath.ts; the plan 023 Greek
+  astrological symbols were meaningless to most users) at their day-of-year
+  fraction (`timelineLayout`; data from `yearEvents()` — a per-year
+  `findEvents` sweep, ~0.1–0.3 s, computed lazily on first entry and
+  cached, deferred to a rAF so the gesture's own frame paints first), a
+  Jan 1→caret progress fill, and a "you are here" caret (`tlFrame()` keeps
+  both glued to `clock.t` every frame). `#hud-mini` is
   written by the SAME `fmtDate()`/`fmtSpeed()` as the panel (never a
   second code path) and is deliberately NOT `aria-live` — the panel stays
   the accessible source of truth. All of these are `pointer-events: none`
-  overlays (not in screenshots).
+  overlays (not in screenshots). Year jumps (plan 024 F3): because the
+  scrub is year-clamped, `#hud-yearjump` (inside `#hud-mini`, always
+  visible) offers −5 y / −1 y / +1 y / +5 y buttons; `applyYearJump()` does
+  `clock.setDate(addYearsUtc(clock.toDate(), n))` — month/day/time
+  preserved (Feb 29 → Feb 28 in non-leap years), speed and pause untouched —
+  then the same side effects as every other date jump: `resampleMoonNow()`,
+  date-label flash, events refresh, `syncUrl()`.
 
 ## Code style
 
