@@ -276,10 +276,12 @@ const hudSpeedEl = document.getElementById('hud-speed') as HTMLSpanElement;
 const hudSubEl = document.getElementById('hud-sub') as HTMLDivElement;
 const hudGaugeFillEl = document.getElementById('hud-gauge-fill') as HTMLDivElement;
 const hudGaugeKnobEl = document.getElementById('hud-gauge-knob') as HTMLDivElement;
-// Plan 023 F3: per-year event timeline (visible while scrubbing). The caret
-// is the only persistent child; ticks/markers are rebuilt on year change and
-// when a deferred event sweep lands.
+// Plan 024 F2: full-width bottom event bar (visible only while scrubbing).
+// The #hud-timeline-dynamic container is rebuilt on year change and when a
+// deferred event sweep lands; fill + caret are persistent children.
 const hudTimelineEl = document.getElementById('hud-timeline') as HTMLDivElement;
+const hudTimelineDynEl = document.getElementById('hud-timeline-dynamic') as HTMLDivElement;
+const hudTimelineFillEl = document.getElementById('hud-timeline-fill') as HTMLDivElement;
 const hudTimelineCaretEl = document.getElementById('hud-timeline-caret') as HTMLDivElement;
 const hudTimelineYearEl = document.getElementById('hud-timeline-year') as HTMLSpanElement;
 // F3: day-only vs full date for the mini strip. Matches the phone breakpoint
@@ -1584,25 +1586,31 @@ function clearScrubHud(): void {
   hudGaugeKnobEl.style.left = '0%';
   hudGaugeFillEl.style.left = '0%';
   hudGaugeFillEl.style.width = '0%';
-  // Plan 023 F3: drop the timeline (it is a scrub-only affordance, like the
-  // sub-line and gauge) so no stale strip lingers after the gesture ends.
+  // Plan 024 F2: hide the full-width event bar (it is a scrub-only
+  // affordance, like the sub-line and gauge) so no stale bar lingers after
+  // the gesture ends.
   tlActiveYear = null;
   tlSweeping.clear();
   hudTimelineYearEl.textContent = '';
-  hudTimelineEl.replaceChildren(hudTimelineCaretEl, hudTimelineYearEl);
+  hudTimelineDynEl.replaceChildren();
+  hudTimelineFillEl.style.width = '0%';
+  hudTimelineCaretEl.style.left = '0%';
+  hudTimelineEl.classList.remove('visible');
 }
 
-// --- Plan 023 F3: per-year event timeline ----------------------------------
-// While a scrub is active, #hud-timeline shows the CURRENT calendar year
-// (Jan→Dec): month ticks, that year's events as emoji at their day-of-year
-// position (timelineLayout), and the "you are here" caret at clock.t. The
-// event scan is expensive (~0.1–0.3 s per year, measured), so a newly
-// entered year paints its ticks + caret immediately and defers the sweep to
-// a rAF — the markers appear the next frame(s), never blocking a pointermove.
-// Each year is swept once and cached (yearEvents), so re-scrubbing the same
-// span is free.
+// --- Plan 023 F3 (redesigned plan 024 F2): per-year event bar --------------
+// While a scrub is live, the FULL-WIDTH BOTTOM bar (#hud-timeline) shows the
+// CURRENT calendar year (Jan→Dec): month ticks, that year's events as body
+// emoji "chapters" above the track (timelineLayout), a green fill
+// Jan 1→caret, and the "you are here" caret at clock.t. The event scan is
+// expensive (~0.1–0.3 s per year, measured), so a newly entered year paints
+// its ticks + caret immediately and defers the sweep to a rAF — the markers
+// appear the next frame(s), never blocking a pointermove. Each year is swept
+// once and cached (yearEvents), so re-scrubbing the same span is free.
+// The bar is a scrub-only affordance: .visible while scrubbing, hidden on
+// release (like the mini strip's sub-line and gauge).
 
-let tlActiveYear: number | null = null; // year the strip currently shows
+let tlActiveYear: number | null = null; // year the bar currently shows
 const tlSweeping = new Set<number>(); // years with a deferred sweep in flight
 let tlSpan0 = 0; // Jan 1 of tlActiveYear, days since J2000 (cached per year)
 let tlSpanLen = 365; // that year's length in days
@@ -1611,8 +1619,14 @@ function tlCurrentYear(): number {
   return new Date(J2000_UTC + clock.t * 86_400_000).getUTCFullYear();
 }
 
+/** Show the bar (once the first committed move crosses a dead zone). */
+function tlShow(): void {
+  if (!hudTimelineEl.classList.contains('visible')) hudTimelineEl.classList.add('visible');
+}
+
 function tlSetCaret(frac: number): void {
   hudTimelineCaretEl.style.left = `${frac * 100}%`;
+  hudTimelineFillEl.style.width = `${frac * 100}%`;
 }
 
 function tlPaint(year: number): void {
@@ -1621,11 +1635,11 @@ function tlPaint(year: number): void {
   tlSpanLen = spanLenDays;
   const events = hasYearEvents(year) ? yearEvents(year).events : [];
   const { markers, overflow, caretFrac } = timelineLayout(span0Days, spanLenDays, events, clock.t);
-  // The caret + year label are the persistent children; everything else is
+  // The bar is the persistent container; ticks/markers/fill/caret are
   // rebuilt so a year with markers never accumulates stale markers from a
   // prior paint.
   hudTimelineYearEl.textContent = String(year);
-  hudTimelineEl.replaceChildren(hudTimelineCaretEl, hudTimelineYearEl);
+  hudTimelineDynEl.replaceChildren();
   const frag = document.createDocumentFragment();
   for (let m = 0; m <= 12; m++) {
     const tick = document.createElement('div');
@@ -1647,7 +1661,7 @@ function tlPaint(year: number): void {
     chip.textContent = `+${overflow}`;
     frag.appendChild(chip);
   }
-  hudTimelineEl.appendChild(frag);
+  hudTimelineDynEl.appendChild(frag);
   tlSetCaret(caretFrac);
 }
 
@@ -1752,6 +1766,7 @@ window.addEventListener('pointermove', (ev) => {
   }
   if (scrub.movedX || scrub.movedY) {
     updateScrubHud();
+    tlShow(); // plan 024 F2: the full-width bottom bar is a scrub-only affordance
     tlRefresh(); // plan 023 F3: rebuild/paint the per-year timeline
   }
 });
@@ -1862,7 +1877,10 @@ canvas.addEventListener('pointermove', (ev) => {
     syncUrl();
   }
   if (s.movedX || s.movedY) writeScrubHud(s);
-  if (s.movedX || s.movedY) tlRefresh(); // plan 023 F3: per-year timeline
+  if (s.movedX || s.movedY) {
+    tlShow(); // plan 024 F2: the full-width bottom bar is a scrub-only affordance
+    tlRefresh(); // plan 023 F3: per-year timeline
+  }
 });
 
 // On WINDOW so a lift / cancel outside the canvas still ends the gesture and

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   eventEmoji,
   timelineLayout,
-  BODY_SYMBOL,
+  BODY_EMOJI,
   EVENT_EMOJI,
   TIMELINE_MARKER_CAP,
   type TimelineEventLike,
@@ -19,29 +19,32 @@ describe('eventEmoji', () => {
       EVENT_EMOJI['solar-eclipse'],
     );
     expect(eventEmoji({ type: 'lunar-eclipse', tDays: 0, title: '' })).toBe('🌕');
-    expect(eventEmoji({ type: 'saturn-edge-on', tDays: 0, title: '' })).toBe('♄');
+    expect(eventEmoji({ type: 'saturn-edge-on', tDays: 0, title: '' })).toBe('🪐');
   });
 
-  it('transit / opposition use the body astrological symbol', () => {
+  it('transit / opposition use the recognizable body emoji (plan 024 F2)', () => {
     expect(eventEmoji({ type: 'transit', tDays: 0, title: '', bodyId: 'mercury' })).toBe(
-      BODY_SYMBOL.mercury,
-    ); // ☿
-    expect(eventEmoji({ type: 'transit', tDays: 0, title: '', bodyId: 'venus' })).toBe('♀');
-    expect(eventEmoji({ type: 'opposition', tDays: 0, title: '', bodyId: 'jupiter' })).toBe('♃');
+      BODY_EMOJI.mercury,
+    ); // ⚪
+    expect(eventEmoji({ type: 'transit', tDays: 0, title: '', bodyId: 'venus' })).toBe('💛');
+    expect(eventEmoji({ type: 'opposition', tDays: 0, title: '', bodyId: 'jupiter' })).toBe('🟠');
+    // Moon/Sun ids resolve too (they used to fall through to the fallback).
+    expect(eventEmoji({ type: 'transit', tDays: 0, title: '', bodyId: 'moon' })).toBe('🌙');
+    expect(eventEmoji({ type: 'opposition', tDays: 0, title: '', bodyId: 'sun' })).toBe('☀️');
   });
 
-  it('conjunction concatenates both bodies symbols (order = bodyId, bodyId2)', () => {
+  it('conjunction concatenates both bodies emojis (order = bodyId, bodyId2)', () => {
     expect(
       eventEmoji({ type: 'conjunction', tDays: 0, title: '', bodyId: 'mercury', bodyId2: 'venus' }),
-    ).toBe('☿♀');
+    ).toBe('⚪💛');
     expect(
       eventEmoji({ type: 'conjunction', tDays: 0, title: '', bodyId: 'mars', bodyId2: 'jupiter' }),
-    ).toBe('♂♃');
+    ).toBe('🔴🟠');
   });
 
   it('falls back to a neutral glyph when the body id is unknown', () => {
     expect(eventEmoji({ type: 'transit', tDays: 0, title: '' })).toBe('●');
-    expect(eventEmoji({ type: 'opposition', tDays: 0, title: '', bodyId: 'moon' })).toBe('●');
+    expect(eventEmoji({ type: 'opposition', tDays: 0, title: '', bodyId: 'pluto' })).toBe('●');
   });
 });
 

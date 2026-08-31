@@ -95,22 +95,30 @@ export function formatScrubDelta(days: number): string {
 // geometry here is width-agnostic (fractions in 0..1) so the strip can be any
 // pixel width (desktop 180 px, phone 140 px) without re-deriving positions.
 
-/** Astrological body symbols (the "small icons" the user asked for). */
-export const BODY_SYMBOL: Record<string, string> = {
-  mercury: '☿',
-  venus: '♀',
-  earth: '⊕',
-  mars: '♂',
-  jupiter: '♃',
-  saturn: '♄',
-  uranus: '♅',
-  neptune: '♆',
+/**
+ * Recognizable per-body EMOJI (plan 024 F2 — the old astrological
+ * symbols ☿♀♂♄ were meaningless to most users, per the user). The emoji
+ * names the body itself, so a marker reads at a glance: ⚪ Mercury,
+ * 💛 Venus, 🌍 Earth, 🔴 Mars, 🟠 Jupiter, 🪐 Saturn (rings), 🔵
+ * Uranus, 🟣 Neptune.
+ */
+export const BODY_EMOJI: Record<string, string> = {
+  sun: '☀️',
+  moon: '🌙',
+  mercury: '⚪',
+  venus: '💛',
+  earth: '🌍',
+  mars: '🔴',
+  jupiter: '🟠',
+  saturn: '🪐',
+  uranus: '🔵',
+  neptune: '🟣',
 };
 /** Fixed-emoji events that do not depend on a body id. */
 export const EVENT_EMOJI: Partial<Record<EventType, string>> = {
   'solar-eclipse': '🌑',
   'lunar-eclipse': '🌕',
-  'saturn-edge-on': '♄',
+  'saturn-edge-on': '🪐',
 };
 /** Structural shape of the events the timeline consumes (matches SimEvent). */
 export interface TimelineEventLike {
@@ -122,13 +130,13 @@ export interface TimelineEventLike {
 }
 /**
  * Emoji for one event: fixed glyphs for eclipses / Saturn edge-on, the
- * body's astrological symbol for a transit / opposition, and the pair's two
- * symbols for a conjunction (e.g. "☿♀").
+ * body's emoji for a transit / opposition, and the pair's two emojis for a
+ * conjunction (e.g. "⚪💛" Mercury–Venus).
  */
 export function eventEmoji(e: TimelineEventLike): string {
   const fixed = EVENT_EMOJI[e.type];
   if (fixed) return fixed;
-  const sym = (id?: string) => (id && BODY_SYMBOL[id]) || '●';
+  const sym = (id?: string) => (id && BODY_EMOJI[id]) || '●';
   if (e.type === 'transit') return sym(e.bodyId);
   if (e.type === 'conjunction') return sym(e.bodyId) + sym(e.bodyId2);
   if (e.type === 'opposition') return sym(e.bodyId);
