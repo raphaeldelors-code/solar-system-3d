@@ -205,10 +205,9 @@
          Top-right, pointer-events: none so it never blocks the canvas or
          the panel. On phones (<560 px) the panel is full-width and its
          collapsed toggle bar sits at the top — so the strip drops down
-         clear of it (measured in the F3 live check). While a scrub is
-         active (plan 023 F2) it carries a pulsing .scrubbing emphasis, a
-         travel sub-line and a speed gauge — the sole scrub feedback (the
-         old bottom #time-scrub banner is gone). */
+         clear of it (measured in the F3 live check). Plan 025 F2: the
+         strip is the MINIMAL date + speed + year-jump buttons — while a
+         scrub is active it just carries a pulsing .scrubbing emphasis. */
       #hud-mini {
         position: fixed;
         top: calc(10px + env(safe-area-inset-top));
@@ -240,83 +239,55 @@
       #hud-mini #hud-speed {
         color: #8fa3bf;
       }
-      /* Travel + speed sub-line: visible only while scrubbing (plan 023 F2). */
-      #hud-sub {
-        font-size: 11px;
-        color: #8fa3bf;
-        font-variant-numeric: tabular-nums;
+      /* Plan 025 F2: per-value MAGNIFY emphasis — while a scrub is live,
+         the number actually changing grows ~1.6x with a soft glow + gentle
+         pulse. transform: scale only (no layout change → no reflow jitter);
+         transform-origin keeps each value anchored to its side (date grows
+         leftward-in-place, speed grows rightward-in-place). .hot is set per
+         axis by applyScrubMove (X crossed the dead zone → date, Y → speed;
+         a diagonal drag lights both) and cleared on release. */
+      #hud-mini #hud-date,
+      #hud-mini #hud-speed {
+        display: inline-block; /* transform needs a box (flex items are
+                                  blockified anyway — explicit for safety) */
+        will-change: transform;
+        transition:
+          transform 0.16s ease,
+          color 0.16s ease,
+          text-shadow 0.16s ease;
       }
-      #hud-mini:not(.scrubbing) #hud-sub {
-        display: none;
+      #hud-mini #hud-date.hot {
+        transform: scale(1.6);
+        transform-origin: left center;
+        color: #d9ffe8;
+        text-shadow: 0 0 14px rgba(87, 199, 133, 0.85);
+        animation: hud-hot-pulse 1.1s ease-in-out infinite;
+        z-index: 1;
       }
-      /* Year-position gauge (plan 024 F1): the track IS the gesture's press
-         year (Jan 1 → Dec 31), the knob sits at the current day-of-year and
-         the fill runs Jan 1 → knob. (The old center notch = press epoch is
-         gone — "zero" is always Jan 1 of the year.) */
-      #hud-gauge {
-        position: relative;
-        width: 180px;
-        height: 4px;
-        border-radius: 2px;
-        background: rgba(120, 150, 200, 0.25);
+      #hud-mini #hud-speed.hot {
+        transform: scale(1.6);
+        transform-origin: right center;
+        color: #d9f2ff;
+        text-shadow: 0 0 14px rgba(110, 170, 255, 0.85);
+        animation: hud-hot-pulse 1.1s ease-in-out infinite;
+        z-index: 1;
       }
-      #hud-mini:not(.scrubbing) #hud-gauge {
-        opacity: 0.4;
-      }
-      #hud-gauge-fill {
-        position: absolute;
-        top: 0;
-        height: 100%;
-        border-radius: 2px;
-        background: #57c785;
-      }
-      #hud-gauge-knob {
-        position: absolute;
-        top: -3px;
-        width: 4px;
-        height: 10px;
-        border-radius: 2px;
-        background: #57c785;
-      }
-      /* Plan 024 F3: the ±1/±5 year jump buttons — always visible (they are
-         the fast-travel complement of the within-year scrub, not scrub-only
-         feedback), same small-button look as the rest of the mini pane. */
-      #hud-yearjump {
-        display: flex;
-        gap: 4px;
-        margin-top: 4px;
-        /* Plan 025 F1: re-enable pointer events — the parent #hud-mini is
-           pointer-events:none, and `none` cannot be re-inherited: without
-           this the buttons were dead (clicks fell through to the canvas). */
-        pointer-events: auto;
-      }
-      #hud-yearjump button {
-        font:
-          600 10px/1.4 'SF Mono',
-          ui-monospace,
-          Menlo,
-          monospace;
-        color: #c9d4cf;
-        background: rgba(14, 22, 19, 0.75);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 4px;
-        padding: 1px 6px;
-        cursor: pointer;
-      }
-      #hud-yearjump button:hover {
-        background: rgba(87, 199, 133, 0.22);
-        border-color: rgba(87, 199, 133, 0.6);
-      }
-      #hud-yearjump button:active {
-        background: rgba(87, 199, 133, 0.4);
+      @keyframes hud-hot-pulse {
+        0%,
+        100% {
+          transform: scale(1.6);
+        }
+        50% {
+          transform: scale(1.72);
+        }
       }
       /* Plan 024 F2: the event timeline is a FULL-WIDTH BOTTOM bar — the
          old 180 px mini-strip clogged the events together. YouTube
          video-progress-bar inspiration: the year's events sit ON the track
          like chapters (emoji above the line), a green fill runs Jan 1 →
          caret, the caret + year label follow the current date. Visible only
-         while a scrub is live (.visible) — mirrors #hud-sub / #hud-gauge.
-         pointer-events: none: it never blocks the canvas. */
+         while a scrub is live (.visible). pointer-events: none: it never
+         blocks the canvas. (Plan 025 F3 relocates this to the TOP.) */
       #hud-timeline {
         position: fixed;
         left: 0;
@@ -431,9 +402,6 @@
              bottom is 57.5 px (12 top + 14px coarse font + 2×12 padding),
              so 68 px leaves an 11 px gap (verified by the F3 live check). */
           top: calc(68px + env(safe-area-inset-top));
-        }
-        #hud-gauge {
-          width: 140px;
         }
       }
       /* ---- Body search combobox (B2) ---- */
@@ -716,7 +684,7 @@
         border-color: #6ea8ff;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-W5rIu9pi.js"></script>
+    <script type="module" crossorigin src="./assets/index-Wulp3qtC.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -738,23 +706,13 @@
          readers; the panel's Date/Speed rows are the accessible source
          of truth. -->
     <div id="hud-mini" aria-hidden="true">
+      <!-- Plan 025 F2: the pane is the MINIMAL date + speed — nothing else
+           (no travel/delta line, no gauge, no button rows). While a scrub is
+           live, the value actually changing gets a magnifying emphasis
+           (.hot on #hud-date / #hud-speed). -->
       <div id="hud-mini-row1">
         <span id="hud-date"></span>
         <span id="hud-speed"></span>
-      </div>
-      <div id="hud-sub"></div>
-      <div id="hud-gauge">
-        <div id="hud-gauge-fill"></div>
-        <div id="hud-gauge-knob"></div>
-      </div>
-      <!-- Plan 024 F3: quick whole-year jumps — the within-year left/right
-           drag can't cross a year boundary, so these hop N years ahead/behind
-           (same month/day/time of day) to fast-travel through time. -->
-      <div id="hud-yearjump">
-        <button id="yj-minus5" type="button" title="Jump back 5 years">−5 y</button>
-        <button id="yj-minus1" type="button" title="Jump back 1 year">−1 y</button>
-        <button id="yj-plus1" type="button" title="Jump forward 1 year">+1 y</button>
-        <button id="yj-plus5" type="button" title="Jump forward 5 years">+5 y</button>
       </div>
     </div>
     <!-- Plan 024 F2: the event timeline moved OUT of the mini strip (the
