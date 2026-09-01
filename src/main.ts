@@ -73,6 +73,7 @@ import {
   type BarEvent,
   yearSpanDays,
 } from './render/scrubMath';
+import { monthGrid, fmtMonthYear, isSameDayUtc } from './render/calendar';
 import { yearEvents, yearSpan, hasYearEvents } from './render/yearEvents';
 
 // PWA: register the offline service worker in production builds only
@@ -295,6 +296,23 @@ const hudTlTipEl = document.getElementById('hud-tl-tip') as HTMLDivElement;
 const hudTlLensEl = document.getElementById('hud-tl-lens') as HTMLDivElement;
 const hudTlLensTrackEl = document.getElementById('hud-tl-lens-track') as HTMLDivElement;
 const hudTlLensDateEl = document.getElementById('hud-tl-lens-date') as HTMLDivElement;
+// Plan 026 F1: the clickable-date calendar popover. The popover is a normal
+// interactive layer (pointer-events:auto); #hud-date re-enables pointer-events
+// so it can be clicked without the pane intercepting the canvas.
+const dateCalEl = document.getElementById('date-cal') as HTMLDivElement;
+const dateCalTitleEl = document.getElementById('date-cal-title') as HTMLSpanElement;
+const dateCalPrevEl = document.getElementById('date-cal-prev') as HTMLButtonElement;
+const dateCalNextEl = document.getElementById('date-cal-next') as HTMLButtonElement;
+const dateCalGridEl = document.getElementById('date-cal-grid') as HTMLDivElement;
+const dateCalTodayEl = document.getElementById('date-cal-today') as HTMLButtonElement;
+// The month/year the popover is currently showing (independent of the sim
+// clock — the user can browse other months before committing a day).
+let calYear = 0;
+let calMonth = 0;
+let calOpen = false;
+// Last selected day the popover rendered (for the frame-loop live-tracking
+// guard — only re-render when the viewed month/year or selected day changes).
+let calSelDay = -1;
 // F3: day-only vs full date for the mini strip. Matches the phone breakpoint
 // the panel collapses under (560 px) — re-checked on resize below.
 let hudDateDayOnly = window.innerWidth < 560;
@@ -819,6 +837,132 @@ function applyDatePick(): void {
   if (eventsVisible()) refreshEvents();
   syncUrl();
 }
+
+// --- Plan 026 F1: clickable-date calendar popover -------------------------
+// The mini pane's date (#hud-date) opens a calendar popover. Browsing the
+// month/year is free (calYear/calMonth track the VIEW, not the clock); only
+// clicking a day (or "Today") commits a jump to the sim clock, keeping the
+// current time of day — the same contract as #date-pick.
+
+/** Render the popover's header title + 6×7 day grid for calYear/calMonth. */
+function renderCalendar(): void {
+  dateCalTitleEl.textContent = fmtMonthYear(calYear, calMonth);
+  const { grid } = monthGrid(calYear, calMonth);
+  const sim = clock.toDate();
+  const today = new Date();
+  const frag = document.createDocumentFragment();
+  for (const d of grid) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if (d === 0) {
+      cell.classList.add('blank');
+    } else {
+      cell.textContent = String(d);
+      const dayDate = new Date(Date.UTC(calYear, calMonth, d));
+      if (isSameDayUtc(dayDate, sim)) cell.classList.add('sel');
+      if (
+        isSameDayUtc(dayDate, today) &&
+        calYear === today.getUTCFullYear() &&
+        calMonth === today.getUTCMonth()
+      ) {
+        cell.classList.add('today');
+      }
+      cell.addEventListener('click', () => pickCalendarDay(d));
+    }
+    frag.appendChild(cell);
+  }
+  dateCalGridEl.replaceChildren(frag);
+}
+
+/** Commit a day from the popover: jump the clock, keep time-of-day. */
+function pickCalendarDay(day: number): void {
+  const cur = clock.toDate();
+  const target = new Date(Date.UTC(calYear, calMonth, day, cur.getUTCHours(), cur.getUTCMinutes()));
+  if (Math.abs(target.getTime() - cur.getTime()) < 60_000) return; // same day
+  clock.setDate(target);
+  resampleMoonNow(); // Moon orbit line jumps with the epoch
+  dateEl.classList.remove('flash');
+  void dateEl.offsetWidth;
+  dateEl.classList.add('flash');
+  if (eventsVisible()) refreshEvents();
+  syncUrl();
+  renderCalendar(); // re-mark the selected day
+}
+
+/** Open the popover, seeded to the sim clock's current month. */
+function openCalendar(): void {
+  const d = clock.toDate();
+  calYear = d.getUTCFullYear();
+  calMonth = d.getUTCMonth();
+  calSelDay = d.getUTCDate();
+  calOpen = true;
+  dateCalEl.classList.add('open');
+  dateCalEl.setAttribute('aria-hidden', 'false');
+  renderCalendar();
+}
+
+function closeCalendar(): void {
+  if (!calOpen) return;
+  calOpen = false;
+  dateCalEl.classList.remove('open');
+  dateCalEl.setAttribute('aria-hidden', 'true');
+}
+
+/** Move the popover's view by `delta` months (wraps across years). */
+function calShiftMonths(delta: number): void {
+  const idx = calYear * 12 + calMonth + delta;
+  calYear = Math.floor(idx / 12);
+  calMonth = ((idx % 12) + 12) % 12;
+  renderCalendar();
+}
+
+hudDateEl.addEventListener('click', () => {
+  if (calOpen) closeCalendar();
+  else openCalendar();
+});
+// Keyboard: Enter/Space on the focused date toggles the popover.
+hudDateEl.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' || ev.key === ' ') {
+    ev.preventDefault();
+    if (calOpen) closeCalendar();
+    else openCalendar();
+  }
+});
+dateCalPrevEl.addEventListener('click', () => calShiftMonths(-1));
+dateCalNextEl.addEventListener('click', () => calShiftMonths(1));
+dateCalTodayEl.addEventListener('click', () => {
+  const now = new Date();
+  const cur = clock.toDate();
+  const target = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      cur.getUTCHours(),
+      cur.getUTCMinutes(),
+    ),
+  );
+  clock.setDate(target);
+  resampleMoonNow();
+  dateEl.classList.remove('flash');
+  void dateEl.offsetWidth;
+  dateEl.classList.add('flash');
+  if (eventsVisible()) refreshEvents();
+  syncUrl();
+  calYear = now.getUTCFullYear();
+  calMonth = now.getUTCMonth();
+  renderCalendar();
+});
+// Close on outside click (anywhere that isn't the popover or the date) or Esc.
+document.addEventListener('pointerdown', (ev) => {
+  if (!calOpen) return;
+  const t = ev.target as Element | null;
+  if (t && (t.closest('#date-cal') || t === hudDateEl)) return;
+  closeCalendar();
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') closeCalendar();
+});
 
 /**
  * Panel info card. Shows the followed body's orbital readout, or — when a
@@ -2337,6 +2481,20 @@ function frame(): void {
   // pass after the 3D render, so the names sit crisp above the frame.
   updateConstellationScreenLabelFrame();
   fmtDate();
+  // Plan 026 F1: while the calendar popover is open, keep the selected-day
+  // highlight tracking the running sim clock — but ONLY when the user is
+  // viewing the clock's own month (browsing other months must not snap the
+  // view back). Cheap: re-render only when the viewed day actually changes.
+  if (calOpen) {
+    const d = clock.toDate();
+    if (d.getUTCFullYear() === calYear && d.getUTCMonth() === calMonth) {
+      const day = d.getUTCDate();
+      if (day !== calSelDay) {
+        calSelDay = day;
+        renderCalendar();
+      }
+    }
+  }
   tlFrame(); // plan 023 F3: caret follows the clock while scrubbing
   updateInfo();
 }

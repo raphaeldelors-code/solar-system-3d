@@ -293,6 +293,167 @@
           transform: scale(1.5);
         }
       }
+      /* Plan 026 F1: the date value is CLICKABLE — it opens the calendar
+         popover. Only #hud-date re-enables pointer-events (the pane stays
+         click-through everywhere else). The .hot magnify transform is
+         unaffected (this only adds hover affordance + cursor). */
+      #hud-mini #hud-date {
+        pointer-events: auto;
+        cursor: pointer;
+        border-radius: 3px;
+        padding: 0 2px;
+        margin: 0 -2px;
+      }
+      #hud-mini #hud-date:hover {
+        color: #d9ffe8;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      #hud-mini #hud-date:focus-visible {
+        outline: 2px solid #6ea8ff;
+        outline-offset: 1px;
+      }
+      /* Plan 026 F1: the calendar popover. Anchored just below the mini pane
+         (top:44px + a 6px gap), right-aligned to the pane. A normal
+         interactive layer: pointer-events:auto, z-index 30 (above the pane's
+         20). Hidden until .open (display:none → no hit-testing, no layout). */
+      #date-cal {
+        position: fixed;
+        top: calc(44px + 22px + env(safe-area-inset-top));
+        right: calc(12px + env(safe-area-inset-right));
+        z-index: 30;
+        display: none;
+        width: 264px;
+        background: rgba(10, 16, 28, 0.94);
+        border: 1px solid rgba(120, 150, 200, 0.28);
+        border-radius: 10px;
+        padding: 10px;
+        font:
+          12px/1.4 system-ui,
+          sans-serif;
+        font-variant-numeric: tabular-nums;
+        color: #cfe0f5;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+        user-select: none;
+      }
+      #date-cal.open {
+        display: block;
+      }
+      #date-cal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+      #date-cal-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #eaf2ff;
+        letter-spacing: 0.2px;
+      }
+      #date-cal-head button {
+        width: 26px;
+        height: 26px;
+        border: 1px solid rgba(120, 150, 200, 0.28);
+        border-radius: 6px;
+        background: rgba(120, 150, 200, 0.08);
+        color: #cfe0f5;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+        transition:
+          background 120ms ease,
+          border-color 120ms ease;
+      }
+      #date-cal-head button:hover {
+        background: rgba(120, 150, 200, 0.2);
+        border-color: #6ea8ff;
+      }
+      #date-cal-head button:focus-visible {
+        outline: 2px solid #6ea8ff;
+        outline-offset: -1px;
+      }
+      #date-cal-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        margin-bottom: 2px;
+      }
+      #date-cal-weekdays span {
+        text-align: center;
+        font-size: 10px;
+        color: #7f93b5;
+        text-transform: uppercase;
+      }
+      #date-cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
+      }
+      #date-cal-grid .cal-day {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #cfe0f5;
+        transition:
+          background 100ms ease,
+          color 100ms ease;
+      }
+      #date-cal-grid .cal-day:hover {
+        background: rgba(120, 150, 200, 0.22);
+        color: #eaf2ff;
+      }
+      #date-cal-grid .cal-day.blank {
+        cursor: default;
+        pointer-events: none;
+      }
+      /* The current sim-clock day: green ring + fill. */
+      #date-cal-grid .cal-day.sel {
+        background: rgba(87, 199, 133, 0.28);
+        color: #d9ffe8;
+        box-shadow: inset 0 0 0 1.5px #57c785;
+      }
+      /* The real-world "today": a small dot under the number. */
+      #date-cal-grid .cal-day.today::after {
+        content: '';
+        position: absolute;
+        bottom: 3px;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: #6ea8ff;
+      }
+      #date-cal-grid .cal-day {
+        position: relative;
+      }
+      #date-cal-foot {
+        display: flex;
+        justify-content: center;
+        margin-top: 8px;
+      }
+      #date-cal-today {
+        border: 1px solid rgba(120, 150, 200, 0.28);
+        border-radius: 6px;
+        background: rgba(120, 150, 200, 0.08);
+        color: #cfe0f5;
+        font-size: 12px;
+        padding: 4px 14px;
+        cursor: pointer;
+        transition:
+          background 120ms ease,
+          border-color 120ms ease;
+      }
+      #date-cal-today:hover {
+        background: rgba(120, 150, 200, 0.2);
+        border-color: #6ea8ff;
+      }
+      #date-cal-today:focus-visible {
+        outline: 2px solid #6ea8ff;
+        outline-offset: -1px;
+      }
       /* Plan 025 F3 (v2): a CALM FULL-WIDTH TOP STRIP — always visible.
          The 5px line sits in the middle of a 20px strip, 12 month ticks
          (Jan 1 … Dec 1) carry 45° labels (Jan…Dec), and the year label
@@ -888,8 +1049,33 @@
            live, the value actually changing gets a magnifying emphasis
            (.hot on #hud-date / #hud-speed). -->
       <div id="hud-mini-row1">
-        <span id="hud-date"></span>
+        <span
+          id="hud-date"
+          role="button"
+          tabindex="0"
+          aria-label="Open the date calendar to jump to a specific day"
+        ></span>
         <span id="hud-speed"></span>
+      </div>
+    </div>
+    <!-- Plan 026 F1: calendar popover, opened by clicking #hud-date. A normal
+         interactive layer (pointer-events:auto, z-index 30 > the pane's 20)
+         anchored just below the mini pane. Header = month nav (‹/›); body =
+         a 6×7 day grid (weeks start Sunday); footer = "Today". F2 adds a
+         quick year-nav row (±1/±5 y) to the header. Hidden until .open. -->
+    <div id="date-cal" aria-hidden="true">
+      <div id="date-cal-head">
+        <button id="date-cal-prev" type="button" aria-label="Previous month">‹</button>
+        <span id="date-cal-title">—</span>
+        <button id="date-cal-next" type="button" aria-label="Next month">›</button>
+      </div>
+      <div id="date-cal-weekdays">
+        <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span
+        ><span>Sa</span>
+      </div>
+      <div id="date-cal-grid"></div>
+      <div id="date-cal-foot">
+        <button id="date-cal-today" type="button">Today</button>
       </div>
     </div>
     <!-- Event timeline — plan 025 F3 (v2): a CALM FULL-WIDTH TOP STRIP.

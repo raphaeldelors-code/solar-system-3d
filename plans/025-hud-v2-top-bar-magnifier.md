@@ -54,11 +54,11 @@ User feedback on the shipped plan-024 HUD (2026-08-31, three rounds):
 - **F1** ✅ `1696ba9` — `fix(hud): year-jump buttons dead — pointer-events`
   (live check `/opt/data/audit/p025_f1_live_check.py`, 6/6)
 - **F2** ✅ `a388f35` — `feat(hud): minimal date+speed pane (no sub-line, no
-  gauge, no buttons) + per-value magnify emphasis while scrubbing`
+gauge, no buttons) + per-value magnify emphasis while scrubbing`
   (follow-up fix `7e05c7d`: magnify grows OUTWARD so date + speed never
   overlap)
 - **F3** ✅ `b0c03f4` — `feat(hud): calm top timeline strip with centered
-  year + scrub tooltip`. FINAL shape (user revision 2026-09-01 — an earlier
+year + scrub tooltip`. FINAL shape (user revision 2026-09-01 — an earlier
   v1 with the bar appearing only while scrubbing was rejected): the strip is
   PERMANENT and calm — a 20 px-tall top bar (5 px line, 12 month ticks with
   45° labels, current year centered on the line, updated per-frame from the
@@ -66,7 +66,7 @@ User feedback on the shipped plan-024 HUD (2026-08-31, three rounds):
   SCRUB-ONLY: they appear while scrubbing and die on release. `#panel` /
   `#hud-mini` sit at `top: 44px`, clear of the 45° labels.
 - **F4** ✅ `f2db440` — `feat(hud): rolling magnifier lens over the top strip
-  while scrubbing`. A 220×96 rounded window (`LENS_W`×`LENS_H`) follows the
+while scrubbing`. A 220×96 rounded window (`LENS_W`×`LENS_H`) follows the
   mouse along the strip during a scrub and re-renders the LOCAL events at
   8× zoom (`LENS_ZOOM`) with per-event emoji + labels plus a lens-center date
   chip. Pure `lensMap()` + `LENS_*` constants in `scrubMath.ts` (unit-tested);

@@ -170,6 +170,13 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] F4 feat(hud): rolling magnifier lens over the top strip while scrubbing — `f2db440` (220×96 window `LENS_W`×`LENS_H`, `LENS_ZOOM=8`, pure `lensMap()` + `LENS_*` in scrubMath.ts with unit tests; window is a CHILD OF `#hud-timeline-track` so `left` is track-relative and the lens center sits EXACTLY on the pointer — inside the bar it was off by the bar's 12 px side inset; clamp + event cull use `LENS_W` (a width/height mix-up blanked the right half); date chip = lens-center day UTC `MMM D`; hangs below the strip at top:22px; scrub-only. 296/296 tests + tsc + lint + prettier + build green; live-verified: lens appears on hover during scrub, tracks the pointer, shows events+labels+date, dies with the scrub layer on release)
 - [x] docs: record F1–F4 hashes in todo.md + plan 025 (this commit; AGENTS.md scrub-section refresh PENDING — AGENTS.md is a protected agent-instruction file and the approval timed out, so it needs an explicit user consent)
 
+## User queue — 2026-09-02 — plan 026 (clickable date → calendar popover)
+
+`plans/026-clickable-date-calendar.md` — the mini pane's date is clickable and opens a calendar popover with quick month/year nav + a precise day picker (restores the year navigation plan 025 F2 removed, as a calendar rather than the old button row).
+
+- [ ] F1 feat(ui): clickable date opens a calendar popover (month nav + day grid + today) — pure `calendar.ts` math + tests
+- [ ] F2 feat(ui): quick year nav (±1/±5 y) in the calendar popover (reuses `addYearsUtc`)
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
