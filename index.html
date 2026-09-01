@@ -374,6 +374,35 @@
         outline: 2px solid #6ea8ff;
         outline-offset: -1px;
       }
+      /* Plan 026 F2: quick year-nav row (±1/±5 y). Four compact buttons
+         spanning the popover width; the view jumps by years (month kept). */
+      #date-cal-yearnav {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 4px;
+        margin-bottom: 6px;
+      }
+      #date-cal-yearnav button {
+        border: 1px solid rgba(120, 150, 200, 0.28);
+        border-radius: 6px;
+        background: rgba(120, 150, 200, 0.08);
+        color: #cfe0f5;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        padding: 3px 0;
+        cursor: pointer;
+        transition:
+          background 120ms ease,
+          border-color 120ms ease;
+      }
+      #date-cal-yearnav button:hover {
+        background: rgba(120, 150, 200, 0.2);
+        border-color: #6ea8ff;
+      }
+      #date-cal-yearnav button:focus-visible {
+        outline: 2px solid #6ea8ff;
+        outline-offset: -1px;
+      }
       #date-cal-weekdays {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
@@ -1068,6 +1097,15 @@
         <button id="date-cal-prev" type="button" aria-label="Previous month">‹</button>
         <span id="date-cal-title">—</span>
         <button id="date-cal-next" type="button" aria-label="Next month">›</button>
+      </div>
+      <!-- Plan 026 F2: quick year nav — jump the VIEW by ±1/±5 years (month
+           preserved). Restores the year navigation plan 025 F2 removed, as a
+           calendar control rather than the old button row. -->
+      <div id="date-cal-yearnav">
+        <button id="date-cal-y-5" type="button" aria-label="Back 5 years">−5y</button>
+        <button id="date-cal-y-1" type="button" aria-label="Back 1 year">−1y</button>
+        <button id="date-cal-y+1" type="button" aria-label="Forward 1 year">+1y</button>
+        <button id="date-cal-y+5" type="button" aria-label="Forward 5 years">+5y</button>
       </div>
       <div id="date-cal-weekdays">
         <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span

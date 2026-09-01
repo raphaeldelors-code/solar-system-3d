@@ -305,6 +305,11 @@ const dateCalPrevEl = document.getElementById('date-cal-prev') as HTMLButtonElem
 const dateCalNextEl = document.getElementById('date-cal-next') as HTMLButtonElement;
 const dateCalGridEl = document.getElementById('date-cal-grid') as HTMLDivElement;
 const dateCalTodayEl = document.getElementById('date-cal-today') as HTMLButtonElement;
+// Plan 026 F2: quick year-nav buttons (±1/±5 y).
+const dateCalYn5El = document.getElementById('date-cal-y-5') as HTMLButtonElement;
+const dateCalYn1El = document.getElementById('date-cal-y-1') as HTMLButtonElement;
+const dateCalYp1El = document.getElementById('date-cal-y+1') as HTMLButtonElement;
+const dateCalYp5El = document.getElementById('date-cal-y+5') as HTMLButtonElement;
 // The month/year the popover is currently showing (independent of the sim
 // clock — the user can browse other months before committing a day).
 let calYear = 0;
@@ -915,6 +920,17 @@ function calShiftMonths(delta: number): void {
   calMonth = ((idx % 12) + 12) % 12;
   renderCalendar();
 }
+
+/** Plan 026 F2: jump the popover's view by `delta` years (month preserved). */
+function calShiftYears(delta: number): void {
+  calYear += delta;
+  renderCalendar();
+}
+
+dateCalYn5El.addEventListener('click', () => calShiftYears(-5));
+dateCalYn1El.addEventListener('click', () => calShiftYears(-1));
+dateCalYp1El.addEventListener('click', () => calShiftYears(1));
+dateCalYp5El.addEventListener('click', () => calShiftYears(5));
 
 hudDateEl.addEventListener('click', () => {
   if (calOpen) closeCalendar();
