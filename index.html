@@ -239,13 +239,20 @@
       #hud-mini #hud-speed {
         color: #8fa3bf;
       }
-      /* Plan 025 F2: per-value MAGNIFY emphasis — while a scrub is live,
-         the number actually changing grows ~1.6x with a soft glow + gentle
-         pulse. transform: scale only (no layout change → no reflow jitter);
-         transform-origin keeps each value anchored to its side (date grows
-         leftward-in-place, speed grows rightward-in-place). .hot is set per
-         axis by applyScrubMove (X crossed the dead zone → date, Y → speed;
-         a diagonal drag lights both) and cleared on release. */
+      /* Plan 025 F2 (revised 025-fix): per-value MAGNIFY emphasis — while a
+         scrub is live, the number actually changing grows ~1.4x with a soft
+         glow + gentle pulse. transform: scale only (no layout change → no
+         reflow jitter). transform-origin points OUTWARD from the pair: the
+         date (left value) grows LEFTWARD, the speed (right value) grows
+         RIGHTWARD — the F2 originals grew INWARD (date origin left, speed
+         origin right) so any live scrub, let alone the 3-finger phone
+         gesture that always drags both axes, had the two 1.6x numbers
+         growing into each other and overlapping. With outward growth they
+         can never collide, even when BOTH are hot. The pane's horizontal
+         padding widens under .scrubbing (below) so the scaled numbers stay
+         on the pane's backdrop. .hot is set per axis by applyScrubMove (X
+         crossed the dead zone → date, Y → speed; a diagonal/3-finger drag
+         lights both) and cleared on release. */
       #hud-mini #hud-date,
       #hud-mini #hud-speed {
         display: inline-block; /* transform needs a box (flex items are
@@ -257,16 +264,16 @@
           text-shadow 0.16s ease;
       }
       #hud-mini #hud-date.hot {
-        transform: scale(1.6);
-        transform-origin: left center;
+        transform: scale(1.4);
+        transform-origin: right center;
         color: #d9ffe8;
         text-shadow: 0 0 14px rgba(87, 199, 133, 0.85);
         animation: hud-hot-pulse 1.1s ease-in-out infinite;
         z-index: 1;
       }
       #hud-mini #hud-speed.hot {
-        transform: scale(1.6);
-        transform-origin: right center;
+        transform: scale(1.4);
+        transform-origin: left center;
         color: #d9f2ff;
         text-shadow: 0 0 14px rgba(110, 170, 255, 0.85);
         animation: hud-hot-pulse 1.1s ease-in-out infinite;
@@ -275,10 +282,10 @@
       @keyframes hud-hot-pulse {
         0%,
         100% {
-          transform: scale(1.6);
+          transform: scale(1.4);
         }
         50% {
-          transform: scale(1.72);
+          transform: scale(1.5);
         }
       }
       /* Plan 024 F2: the event timeline is a FULL-WIDTH BOTTOM bar — the
@@ -380,10 +387,16 @@
         transform: translateX(-50%);
       }
       /* Plan 023 F2 emphasis: pulses while a scrub is active, released on
-         release (mouse right-button up / 3-finger lift / cancel). */
+         release (mouse right-button up / 3-finger lift / cancel).
+         Plan 025-fix: the horizontal padding widens too so the 1.4x-scaled
+         numbers (date grows ~46 px LEFT, speed ~23 px RIGHT from their
+         resting boxes) stay on the pane's backdrop — see the .hot rules
+         above for the measured overshoots. */
       #hud-mini.scrubbing {
         animation: hud-scrub-pulse 0.9s ease-in-out infinite;
         border-color: rgba(87, 199, 133, 0.55);
+        padding: 4px 26px 4px 58px;
+        transition: padding 0.16s ease;
       }
       @keyframes hud-scrub-pulse {
         0%,
