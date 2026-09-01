@@ -29,22 +29,24 @@ day changes, the highlighted day + header update live (no re-open needed).
 
 ## Commits (one per feature, gates green before each)
 
-- **F1** — `feat(ui): clickable date opens a calendar popover (month nav +
-day grid + today)`. Pure calendar math in `src/render/calendar.ts`
+- **F1** ✅ `7e4b1a4` — `feat(ui): clickable date opens a calendar popover
+(month nav + day grid + today)`. Pure calendar math in `src/render/calendar.ts`
   (`monthGrid`, `daysInMonthUtc`, `firstWeekdayUtc`, `fmtMonthYear`,
-  `isSameDayUtc`) + unit tests in `tests/calendar.test.ts`. DOM: `#date-cal`
+  `isSameDayUtc`) + 11 unit tests in `tests/calendar.test.ts`. DOM: `#date-cal`
   popover in `index.html` (header ‹/›, day grid, Today). `#hud-date` gets
   `pointer-events:auto` + cursor + click handler; open/close/nav/day-select
   wiring in `main.ts`. Gated: tests + tsc + lint + prettier + build, then a
   live headless check (open, prev/next month, click a day → clock jumps
   keeping time-of-day, Today, outside-click + Esc close, live tracking while
-  running).
-- **F2** — `feat(ui): quick year nav (±1/±5 y) in the calendar popover`.
-  Adds the year row to the popover header, reusing `addYearsUtc()`. Gated the
-  same way + live check (−5y/−1y/+1y/+5y move the header year, leap-safe
-  Feb 29, day grid re-renders, clock unaffected until a day is clicked).
-- **docs** — record F1/F2 hashes in todo.md + this plan; refresh AGENTS.md
-  (needs explicit user consent — protected file).
+  running). Also fixed pre-existing Prettier drift in plans/025 that was
+  failing the whole-repo format gate.
+- **F2** ✅ `9eab67b` — `feat(ui): quick year nav (±1/±5 y) in the calendar
+popover`. Adds a 4-button year row (−5y/−1y/+1y/+5y) between the month
+  header and the weekday row; jumps the VIEW by years (month preserved),
+  commits only on a day pick. Restores the year navigation plan 025 F2
+  removed. Gated the same way + live check (+5y→2031, +1y→2032, −1y→2031,
+  −5y→2026, month preserved).
+- **docs** — this commit: record F1–F2 hashes in todo.md + this plan.
 
 ## Constants / conventions
 

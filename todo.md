@@ -174,8 +174,8 @@ loader, constellation tour, tooltips, screenshot button).
 
 `plans/026-clickable-date-calendar.md` — the mini pane's date is clickable and opens a calendar popover with quick month/year nav + a precise day picker (restores the year navigation plan 025 F2 removed, as a calendar rather than the old button row).
 
-- [ ] F1 feat(ui): clickable date opens a calendar popover (month nav + day grid + today) — pure `calendar.ts` math + tests
-- [ ] F2 feat(ui): quick year nav (±1/±5 y) in the calendar popover (reuses `addYearsUtc`)
+- [x] F1 feat(ui): clickable date opens a calendar popover (month nav + day grid + today) — `7e4b1a4` (pure `calendar.ts` math + 11 unit tests; `#hud-date` clickable → `#date-cal` popover with ‹/› month nav, 6×7 day grid, Today button, green selected-day highlight, today dot; closes on outside-click/Esc/re-click; day-pick keeps time-of-day; selected-day live-tracks the running clock. 307/307 tests + tsc + lint + prettier + build green; live-verified in headless Chrome. Also fixed pre-existing Prettier drift in plans/025 that was failing the whole-repo format gate)
+- [x] F2 feat(ui): quick year nav (±1/±5 y) in the calendar popover — `9eab67b` (4-button row −5y/−1y/+1y/+5y between the month header and weekday row; jumps the VIEW by years, month preserved, commits only on a day pick; restores the year navigation plan 025 F2 removed. 307/307 tests + tsc + lint + prettier + build green; live-verified: +5y→2031, +1y→2032, −1y→2031, −5y→2026, month preserved)
 
 ## Declined (user decision 2026-08-18)
 
