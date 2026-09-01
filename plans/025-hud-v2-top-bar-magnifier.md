@@ -53,23 +53,43 @@ User feedback on the shipped plan-024 HUD (2026-08-31, three rounds):
 
 - **F1** ✅ `1696ba9` — `fix(hud): year-jump buttons dead — pointer-events`
   (live check `/opt/data/audit/p025_f1_live_check.py`, 6/6)
-- **F2** (in tree, uncommitted) — `fix(hud): minimal date+speed pane (no
-sub-line, no gauge, no buttons) + per-value magnify emphasis while
-scrubbing`
-  (live check `/opt/data/audit/p025_f2_live_check.py` — 12 assertions)
-- **F3** — `feat(hud): top full-width event bar with 45° month axis + hover
-tooltip`
-- **F4** — `feat(hud): rolling magnifier on the event bar`
-- **docs** — `docs(scrub): record plan 025 hashes, refresh AGENTS.md`
+- **F2** ✅ `a388f35` — `feat(hud): minimal date+speed pane (no sub-line, no
+  gauge, no buttons) + per-value magnify emphasis while scrubbing`
+  (follow-up fix `7e05c7d`: magnify grows OUTWARD so date + speed never
+  overlap)
+- **F3** ✅ `b0c03f4` — `feat(hud): calm top timeline strip with centered
+  year + scrub tooltip`. FINAL shape (user revision 2026-09-01 — an earlier
+  v1 with the bar appearing only while scrubbing was rejected): the strip is
+  PERMANENT and calm — a 20 px-tall top bar (5 px line, 12 month ticks with
+  45° labels, current year centered on the line, updated per-frame from the
+  sim clock). The green fill, caret, event markers and hover tooltip are
+  SCRUB-ONLY: they appear while scrubbing and die on release. `#panel` /
+  `#hud-mini` sit at `top: 44px`, clear of the 45° labels.
+- **F4** ✅ `f2db440` — `feat(hud): rolling magnifier lens over the top strip
+  while scrubbing`. A 220×96 rounded window (`LENS_W`×`LENS_H`) follows the
+  mouse along the strip during a scrub and re-renders the LOCAL events at
+  8× zoom (`LENS_ZOOM`) with per-event emoji + labels plus a lens-center date
+  chip. Pure `lensMap()` + `LENS_*` constants in `scrubMath.ts` (unit-tested);
+  the window is a CHILD OF `#hud-timeline-track` so its `left` is
+  track-relative and the center sits exactly on the pointer (inside the bar
+  it would be off by the bar's 12 px side inset). Clamps and the event cull
+  use `LENS_W` (the window width — a width/height mix-up here blanked the
+  right half). Scrub-only, like the tooltip.
+- **docs** — this commit: record plan 025 hashes, refresh AGENTS.md + todo.md.
 
-## Constants
+## Constants (final, shipped)
 
 - `HUD_MAG_SCALE = 1.6`, pulse 1.55↔1.7 @ 1.1 s, `transform-origin: left`
   (date) / `right` (speed).
-- Bar: `top:0`, `height:52px`; panel top offset = bar height + gap.
+- Bar (F3, final v2): a PERMANENT calm 20 px top strip — 5 px line, 12 ticks
+  (Jan 1…Dec 1, the redundant 13th tick dropped), 45° month labels, year
+  centered on the line. Fill/caret/events/tooltip/lens: scrub-only.
+  `#panel` / `#hud-mini` at `top: 44px`.
 - Month labels: `transform: rotate(-45deg)`, `transform-origin: top left`.
-- Tooltip radius: 24 px; lens: ~220 px wide, ~8× zoom, date readout at
-  lens center (UTC, `MMM D`).
+- Tooltip radius: 24 px. Lens (F4): `LENS_W = 220`, `LENS_H = 96`,
+  `LENS_ZOOM = 8` (scrubMath.ts); window hangs below the strip
+  (`top: 22px`), child of `#hud-timeline-track` (track-relative `left`);
+  date readout = lens-center day (UTC, `MMM D`).
 
 ## Notes / env lessons (this session)
 
