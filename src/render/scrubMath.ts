@@ -288,3 +288,37 @@ export function nearestEventX(events: BarEvent[], xPx: number, radiusPx: number)
   }
   return best;
 }
+
+/** Plan 025 F4 — magnifier geometry constants. */
+export const LENS_ZOOM = 8; // horizontal zoom inside the lens
+// The magnifier window's WIDTH in px (== #hud-tl-lens width:220px). It is the
+// horizontal window re-rendered at LENS_ZOOM×, so it drives toLensPx, the
+// pointer clamp, and the event cull in main.ts. ~220 px wide keeps the 8×
+// window readable on a phone without a huge disc.
+export const LENS_W = 220;
+// The magnifier window's HEIGHT in px (== #hud-tl-lens height:96px). Not used
+// by the mapping (the window is LENS_W wide); kept so the CSS/JS box stays in
+// one place. A wide 220×96 pill — not a circle — suits the top strip: it
+// hangs below the line and reads 8× without swallowing the month labels.
+export const LENS_H = 96;
+
+/**
+ * Plan 025 F4 — pure lens mapping. The magnifier window is LENS_W px wide,
+ * centered on `lensX` (px, bar space). It re-renders the LENS_W-px bar-space
+ * window around `lensX` magnified LENS_ZOOM×. `toLensPx` maps any bar-space x
+ * into lens-track coordinates (px from the window's left edge); `centerDay`
+ * is the day-of-year at the window center — the value shown in the date
+ * readout.
+ */
+export function lensMap(
+  lensX: number,
+  width: number,
+  spanLenDays: number,
+): { centerDay: number; toLensPx: (barX: number) => number } {
+  const span = spanLenDays > 0 ? spanLenDays : 365;
+  const centerDay = (lensX / width) * span;
+  return {
+    centerDay,
+    toLensPx: (barX: number) => (barX - lensX) * LENS_ZOOM + LENS_W / 2,
+  };
+}

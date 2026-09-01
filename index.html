@@ -454,6 +454,101 @@
         margin-right: 5px;
         font-variant-numeric: tabular-nums;
       }
+      /* Plan 025 F4: the rolling magnifier — a wide rounded window (220×96,
+         == LENS_W × LENS_H in scrubMath) that follows the pointer along the
+         bar and re-renders the LOCAL events at 8× zoom with per-event labels,
+         plus the lens-center date readout beneath. The strip sits at the TOP
+         of the screen, so the magnifier HANGS BELOW the line (top: 20px = the
+         strip height) — a top-strip lens can't grow upward off-screen. A wide
+         pill (not a circle) suits a phone: 220px wide reads 8× without a huge
+         disc. `left` is driven by the pointer (JS); `top` is fixed here. The
+         container is a child of #hud-timeline-track so `left` is track-relative
+         (the same coordinate space the event markers / fill / caret use). */
+      #hud-tl-lens {
+        position: absolute;
+        top: 22px; /* just below the 20px strip, clear of the 45° month labels */
+        left: 50%;
+        width: 220px;
+        height: 96px;
+        pointer-events: none;
+        display: none;
+      }
+      #hud-tl-lens.show {
+        display: block;
+      }
+      /* The magnifier window backdrop (rounded pill) + the magnified 220px
+         bar-space track window (fills it), clipped to the pill. */
+      #hud-tl-lens::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 12px;
+        background: rgba(8, 14, 26, 0.9);
+        border: 1.5px solid rgba(120, 220, 160, 0.65);
+        box-shadow:
+          0 4px 16px rgba(0, 0, 0, 0.55),
+          inset 0 0 24px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(2px);
+      }
+      #hud-tl-lens-track {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        border-radius: 12px;
+      }
+      /* The magnified line across the window's middle (y=48 in the 96 track),
+         aligned with the real bar line's axis. */
+      #hud-tl-lens-track::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 45.5px;
+        height: 5px;
+        background: rgba(160, 190, 220, 0.45);
+        border-radius: 2.5px;
+      }
+      #hud-tl-lens-event {
+        position: absolute;
+        top: 48px; /* the magnified line's center (line at 45.5..50.5) */
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        max-width: 72px;
+        white-space: nowrap;
+      }
+      #hud-tl-lens-event .tl-lens-emoji {
+        font-size: 15px;
+        line-height: 1.2;
+      }
+      #hud-tl-lens-event .tl-lens-label {
+        font-size: 9px;
+        line-height: 1.15;
+        color: #d5e3f5;
+        text-align: center;
+        max-width: 72px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* The lens-center date readout — a small chip at the window's bottom
+         edge (the day-of-year at the pointer). */
+      #hud-tl-lens-date {
+        position: absolute;
+        left: 50%;
+        bottom: 5px;
+        transform: translateX(-50%);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: #9fd6a8;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        background: rgba(8, 12, 22, 0.85);
+        border-radius: 5px;
+        padding: 1px 6px;
+      }
       /* Plan 023 F2 emphasis: pulses while a scrub is active, released on
          release (mouse right-button up / 3-finger lift / cancel).
          Plan 025-fix: the horizontal padding widens too so the 1.4x-scaled
@@ -839,12 +934,16 @@
             <div id="hud-timeline-caret" class="tl-caret"></div>
           </div>
         </div>
-        <!-- Plan 025 F3 hover tooltip: CHILD OF THE TRACK (sibling of
-             #hud-timeline-bar) so its `left` is track-relative — the SAME
-             space the pointer math + event markers use (x = clientX −
-             track.left). Inside the bar it would be off by its 12px side
-             inset. Scrub-only (hidden when the scrub layer hides). -->
+        <!-- Plan 025 F3 hover tooltip + F4 magnifier: CHILDREN OF THE TRACK (
+             sibling of #hud-timeline-bar) so their `left` is track-relative —
+             the SAME space the pointer math + event markers use (x =
+             clientX − track.left). Inside the bar they'd be off by its 12px
+             side inset. Both are scrub-only (hidden when the layer hides). -->
         <div id="hud-tl-tip"></div>
+        <div id="hud-tl-lens">
+          <div id="hud-tl-lens-track"></div>
+          <div id="hud-tl-lens-date"></div>
+        </div>
       </div>
     </div>
     <div id="panel">

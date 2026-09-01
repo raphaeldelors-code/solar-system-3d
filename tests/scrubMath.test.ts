@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  LENS_W,
+  LENS_ZOOM,
   fmtMonthDayUtc,
+  lensMap,
   monthSeparators,
   nearestEventX,
   scrubClampToYear,
@@ -222,5 +225,21 @@ describe('nearestEventX (plan 025 F3 tooltip probe)', () => {
   });
   it('keeps the earlier event on an exact tie (strict <)', () => {
     expect(nearestEventX(evs, 202.5, 24)?.title).toBe('B');
+  });
+});
+
+describe('lensMap (plan 025 F4 magnifier)', () => {
+  it('maps the lens center to the middle of the lens window, 8x zoom', () => {
+    const m = lensMap(1000, 2000, 365);
+    expect(m.toLensPx(1000)).toBe(LENS_W / 2);
+    expect(m.toLensPx(1000 + 1)).toBeCloseTo(LENS_W / 2 + LENS_ZOOM, 6);
+    expect(m.toLensPx(1000 - 1)).toBeCloseTo(LENS_W / 2 - LENS_ZOOM, 6);
+    // The lens edge (±110 px in lens space) is ±110/8 = ±13.75 bar px.
+    expect(m.toLensPx(1000 - 110 / LENS_ZOOM)).toBe(0);
+    expect(m.toLensPx(1000 + 110 / LENS_ZOOM)).toBe(LENS_W);
+  });
+  it('reports the day-of-year at the lens center', () => {
+    expect(lensMap(500, 2000, 365).centerDay).toBeCloseTo(91.25, 6); // Apr 1
+    expect(lensMap(1000, 2000, 365).centerDay).toBeCloseTo(182.5, 6);
   });
 });

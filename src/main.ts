@@ -63,7 +63,9 @@ import { parseAppState, encodeAppState, type ViewState } from './state/urlState'
 import { findEvents, type Event as SimEvent } from './sim/events';
 import { J2000_UTC } from './sim/types';
 import {
+  LENS_W,
   fmtMonthDayUtc,
+  lensMap,
   nearestEventX,
   scrubClampToYear,
   scrubSpeedLog,
@@ -287,6 +289,12 @@ const hudTimelineFillEl = document.getElementById('hud-timeline-fill') as HTMLDi
 const hudTimelineCaretEl = document.getElementById('hud-timeline-caret') as HTMLDivElement;
 const hudTimelineYearEl = document.getElementById('hud-timeline-year') as HTMLSpanElement;
 const hudTlTipEl = document.getElementById('hud-tl-tip') as HTMLDivElement;
+// Plan 025 F4: the rolling magnifier lens (window + 8× event track + date
+// readout) — a child of #hud-timeline-track so its `left` is track-relative,
+// the same coordinate space the pointer math uses.
+const hudTlLensEl = document.getElementById('hud-tl-lens') as HTMLDivElement;
+const hudTlLensTrackEl = document.getElementById('hud-tl-lens-track') as HTMLDivElement;
+const hudTlLensDateEl = document.getElementById('hud-tl-lens-date') as HTMLDivElement;
 // F3: day-only vs full date for the mini strip. Matches the phone breakpoint
 // the panel collapses under (560 px) — re-checked on resize below.
 let hudDateDayOnly = window.innerWidth < 560;
@@ -1576,8 +1584,10 @@ function clearScrubHud(): void {
   hudTimelineDynEl.replaceChildren();
   hudTimelineFillEl.style.width = '0%';
   hudTimelineCaretEl.style.left = '0%';
-  // Plan 025 F3: the hover tooltip dies with the scrub layer.
+  // Plan 025 F3/F4: the hover tooltip + magnifier lens die with the scrub
+  // layer.
   tlHideTip();
+  tlHideLens();
   hudTimelineEl.classList.remove('visible');
 }
 
@@ -1658,24 +1668,30 @@ function tlPaint(year: number): void {
   tlSetCaret(caretFrac);
 }
 
-// --- Plan 025 F3: hover tooltip ------------------------------------------
+// --- Plan 025 F3: hover tooltip + F4: rolling magnifier lens ----------------
 // Position-driven (no enter/leave): while the SCRUB LAYER is visible the
-// pointer's position inside the strip's vertical band (just the 20 px line)
-// drives the tooltip; leaving the band hides it. Enter/leave were a dead-end:
-// the track starts pointer-events:none and only a hover may re-enable it, so
-// pointerenter could never fire the first time (chicken-and-egg) and the
-// tooltip stayed dead. A band check on pointermove is immune to that. Touch
-// never sees this (the scrub drag is a canvas gesture; the track is inert to
-// touch). Scrub-only: hidden the moment the scrub layer hides.
+// pointer's position inside the strip's vertical band (the line + the lens
+// overhang below it) drives both the F3 tooltip and the F4 lens; leaving the
+// band hides both. Enter/leave were a dead-end: the track starts
+// pointer-events:none and only a hover may re-enable it, so pointerenter
+// could never fire the first time (chicken-and-egg) and the tooltip stayed
+// dead. A band check on pointermove is immune to that. Touch never sees this
+// (the scrub drag is a canvas gesture; the track is inert to touch). Both
+// are scrub-only: hidden the moment the scrub layer hides.
 const TL_HOVER_BAND_TOP = 0; // the pointer is over/inside the line itself
-const TL_HOVER_BAND_BOTTOM = 28; // a little slack below the 20 px line
+const TL_HOVER_BAND_BOTTOM = 110; // the lens hangs ~106 px below the line
 const TL_TOOLTIP_RADIUS_PX = 24;
 
 function tlHideTip(): void {
   hudTlTipEl.classList.remove('show');
 }
 
-function tlShowTooltip(clientX: number): void {
+function tlHideLens(): void {
+  hudTlLensEl.classList.remove('show');
+  hudTlLensTrackEl.replaceChildren();
+}
+
+function tlTooltipAndLens(clientX: number): void {
   if (tlActiveYear === null) return;
   const rect = hudTimelineTrackEl.getBoundingClientRect();
   if (rect.width < 2) return;
@@ -1693,6 +1709,32 @@ function tlShowTooltip(clientX: number): void {
   } else {
     tlHideTip();
   }
+  // F4: the lens follows the pointer (clamped so the LENS_W-wide window stays
+  // in view) and re-renders the local events at LENS_ZOOM× around it. The
+  // window is LENS_W px wide, so the clamp and the event cull use LENS_W
+  // (LENS_H is only the box height). x is measured in TRACK space (the
+  // #hud-timeline-track rect) and the lens is a child of that track — so
+  // `left` resolves in the same space and the lens center sits EXACTLY on the
+  // pointer (no #hud-timeline-bar 12px side-inset offset).
+  const lensX = Math.max(LENS_W / 2, Math.min(width - LENS_W / 2, x));
+  const { centerDay, toLensPx } = lensMap(lensX, width, tlSpanLen);
+  // The strip is at the TOP of the screen, so the lens hangs BELOW the
+  // line (a top-strip lens can't grow upward off-screen). Fixed `top` in
+  // CSS; only `left` (pointer x, re-centered) moves it along the bar.
+  hudTlLensEl.style.left = `${lensX - LENS_W / 2}px`;
+  const frag = document.createDocumentFragment();
+  for (const b of tlBarEvents) {
+    const px = toLensPx(b.x);
+    if (px < -40 || px > LENS_W + 40) continue;
+    const node = document.createElement('div');
+    node.className = 'tl-lens-event';
+    node.style.left = `${px}px`;
+    node.innerHTML = `<span class="tl-lens-emoji">${b.emoji}</span><span class="tl-lens-label">${b.title}</span>`;
+    frag.appendChild(node);
+  }
+  hudTlLensTrackEl.replaceChildren(frag);
+  hudTlLensDateEl.textContent = fmtMonthDayUtc(tlActiveYear, centerDay);
+  hudTlLensEl.classList.add('show');
 }
 
 window.addEventListener('pointermove', (e) => {
@@ -1700,8 +1742,11 @@ window.addEventListener('pointermove', (e) => {
   const rect = hudTimelineTrackEl.getBoundingClientRect();
   const inBand =
     e.clientY >= rect.top - TL_HOVER_BAND_TOP && e.clientY <= rect.bottom + TL_HOVER_BAND_BOTTOM;
-  if (inBand) tlShowTooltip(e.clientX);
-  else tlHideTip();
+  if (inBand) tlTooltipAndLens(e.clientX);
+  else {
+    tlHideTip();
+    tlHideLens();
+  }
 });
 
 /** Rebuild the strip when the scrub enters a new year; defer the (expensive)
