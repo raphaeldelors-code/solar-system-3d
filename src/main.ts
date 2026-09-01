@@ -62,7 +62,15 @@ import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
 import { findEvents, type Event as SimEvent } from './sim/events';
 import { J2000_UTC } from './sim/types';
-import { scrubClampToYear, scrubSpeedLog, timelineLayout, yearSpanDays } from './render/scrubMath';
+import {
+  fmtMonthDayUtc,
+  nearestEventX,
+  scrubClampToYear,
+  scrubSpeedLog,
+  timelineLayout,
+  type BarEvent,
+  yearSpanDays,
+} from './render/scrubMath';
 import { yearEvents, yearSpan, hasYearEvents } from './render/yearEvents';
 
 // PWA: register the offline service worker in production builds only
@@ -268,14 +276,17 @@ const glReloadBtn = document.getElementById('gl-reload') as HTMLButtonElement;
 const hudMiniEl = document.getElementById('hud-mini') as HTMLDivElement;
 const hudDateEl = document.getElementById('hud-date') as HTMLSpanElement;
 const hudSpeedEl = document.getElementById('hud-speed') as HTMLSpanElement;
-// Plan 024 F2: full-width bottom event bar (visible only while scrubbing).
-// The #hud-timeline-dynamic container is rebuilt on year change and when a
-// deferred event sweep lands; fill + caret are persistent children.
+// Plan 025 F3: full-width TOP event bar (visible only while scrubbing).
+// The #hud-timeline-months axis (ticks + 45° month labels) is static DOM;
+// #hud-timeline-dynamic holds the event markers, rebuilt on year change and
+// when a deferred event sweep lands; fill + caret are persistent children.
 const hudTimelineEl = document.getElementById('hud-timeline') as HTMLDivElement;
+const hudTimelineTrackEl = document.getElementById('hud-timeline-track') as HTMLDivElement;
 const hudTimelineDynEl = document.getElementById('hud-timeline-dynamic') as HTMLDivElement;
 const hudTimelineFillEl = document.getElementById('hud-timeline-fill') as HTMLDivElement;
 const hudTimelineCaretEl = document.getElementById('hud-timeline-caret') as HTMLDivElement;
 const hudTimelineYearEl = document.getElementById('hud-timeline-year') as HTMLSpanElement;
+const hudTlTipEl = document.getElementById('hud-tl-tip') as HTMLDivElement;
 // F3: day-only vs full date for the mini strip. Matches the phone breakpoint
 // the panel collapses under (560 px) — re-checked on resize below.
 let hudDateDayOnly = window.innerWidth < 560;
@@ -762,6 +773,13 @@ function fmtDate(): void {
   // narrow next to the full-width panel; full `YYYY-MM-DD HH:MM` elsewhere.
   // The panel's Date row always keeps the full form.
   hudDateEl.textContent = hudDateDayOnly ? `${y}-${m}-${day}` : `${y}-${m}-${day} ${h}:${min}`;
+  // Plan 025 F3 (v2): the strip's year label is ALWAYS on, so it tracks the
+  // sim clock every frame (not just while scrubbing). Cheap: a 4-char
+  // textContent write, and only when the year actually changes.
+  const yearStr = String(y);
+  if (hudTimelineYearEl.textContent !== yearStr) {
+    hudTimelineYearEl.textContent = yearStr;
+  }
   // Keep the date picker in sync (it shows the calendar day the sim clock is
   // on). Setting .value programmatically never fires 'change', so this can't
   // loop with the picker's own change handler. Skip while the user is
@@ -1548,34 +1566,44 @@ function clearScrubHud(): void {
   // speed were .hot while the scrub was live).
   hudDateEl.classList.remove('hot');
   hudSpeedEl.classList.remove('hot');
-  // Plan 024 F2: hide the full-width event bar (it is a scrub-only
-  // affordance, like the sub-line and gauge) so no stale bar lingers after
-  // the gesture ends.
+  // Plan 024 F2 → 025 F3 (v2): clear the SCRUB layer (fill, caret, event
+  // chapters) — the strip itself (line + month axis + year label) is
+  // PERMANENT (plan 025 F3 v2), so only .visible (which shows the scrub
+  // layer) is dropped.
   tlActiveYear = null;
   tlSweeping.clear();
-  hudTimelineYearEl.textContent = '';
+  tlBarEvents = [];
   hudTimelineDynEl.replaceChildren();
   hudTimelineFillEl.style.width = '0%';
   hudTimelineCaretEl.style.left = '0%';
+  // Plan 025 F3: the hover tooltip dies with the scrub layer.
+  tlHideTip();
   hudTimelineEl.classList.remove('visible');
 }
 
-// --- Plan 023 F3 (redesigned plan 024 F2): per-year event bar --------------
-// While a scrub is live, the FULL-WIDTH BOTTOM bar (#hud-timeline) shows the
-// CURRENT calendar year (Jan→Dec): month ticks, that year's events as body
-// emoji "chapters" above the track (timelineLayout), a green fill
-// Jan 1→caret, and the "you are here" caret at clock.t. The event scan is
-// expensive (~0.1–0.3 s per year, measured), so a newly entered year paints
-// its ticks + caret immediately and defers the sweep to a rAF — the markers
-// appear the next frame(s), never blocking a pointermove. Each year is swept
-// once and cached (yearEvents), so re-scrubbing the same span is free.
-// The bar is a scrub-only affordance: .visible while scrubbing, hidden on
-// release (like the mini strip's sub-line and gauge).
+// --- Plan 023 F3 (redesigned plan 024 F2, moved to the TOP in 025 F3) -------
+// The full-width TOP strip (#hud-timeline) is PERMANENT (plan 025 F3 v2):
+// a calm 5px line, 12 month-start ticks with 45° labels (Jan…Dec), and the
+// current year label centered on the line — all always visible (the year is
+// driven per frame by fmtDate). While a scrub is live, .visible adds the
+// SCRUB layer: that year's events as body-emoji "chapters" on the track
+// (timelineLayout), a green fill Jan 1→caret, the "you are here" caret at
+// clock.t, and a one-line hover tooltip (nearest event within 24 px →
+// "MMM D · emoji Title" below the strip). The event scan is expensive
+// (~0.1–0.3 s per year, measured), so a newly entered year paints its
+// chapters immediately and defers the sweep to a rAF — the markers appear
+// the next frame(s), never blocking a pointermove. Each year is swept once
+// and cached (yearEvents), so re-scrubbing the same span is free.
 
 let tlActiveYear: number | null = null; // year the bar currently shows
 const tlSweeping = new Set<number>(); // years with a deferred sweep in flight
 let tlSpan0 = 0; // Jan 1 of tlActiveYear, days since J2000 (cached per year)
 let tlSpanLen = 365; // that year's length in days
+// The bar-space events for the ACTIVE year (x in px from the track's left
+// edge), consumed by the hover tooltip. Rebuilt in tlPaint (once per year)
+// — a px recompute is trivial, so the per-event day is derived from frac
+// when the track width is known.
+let tlBarEvents: BarEvent[] = [];
 
 function tlCurrentYear(): number {
   return new Date(J2000_UTC + clock.t * 86_400_000).getUTCFullYear();
@@ -1597,18 +1625,14 @@ function tlPaint(year: number): void {
   tlSpanLen = spanLenDays;
   const events = hasYearEvents(year) ? yearEvents(year).events : [];
   const { markers, overflow, caretFrac } = timelineLayout(span0Days, spanLenDays, events, clock.t);
-  // The bar is the persistent container; ticks/markers/fill/caret are
-  // rebuilt so a year with markers never accumulates stale markers from a
-  // prior paint.
+  // The bar is the persistent container; the month axis is STATIC DOM
+  // (plan 025 F3) — only the event markers + overflow chip are rebuilt here,
+  // so a year with markers never accumulates stale ones from a prior paint.
   hudTimelineYearEl.textContent = String(year);
   hudTimelineDynEl.replaceChildren();
+  const width = hudTimelineTrackEl.clientWidth || window.innerWidth;
   const frag = document.createDocumentFragment();
-  for (let m = 0; m <= 12; m++) {
-    const tick = document.createElement('div');
-    tick.className = 'tl-tick' + (m === 0 ? ' tl-year-start' : m === 12 ? ' tl-year-end' : '');
-    tick.style.left = `${(m / 12) * 100}%`;
-    frag.appendChild(tick);
-  }
+  tlBarEvents = [];
   for (const mk of markers) {
     const el = document.createElement('span');
     el.className = 'tl-event';
@@ -1616,6 +1640,13 @@ function tlPaint(year: number): void {
     el.textContent = mk.emoji;
     el.title = mk.title;
     frag.appendChild(el);
+    // Bar-space copy for the hover tooltip.
+    tlBarEvents.push({
+      day: mk.frac * spanLenDays,
+      x: mk.frac * width,
+      emoji: mk.emoji,
+      title: mk.title,
+    });
   }
   if (overflow > 0) {
     const chip = document.createElement('span');
@@ -1626,6 +1657,52 @@ function tlPaint(year: number): void {
   hudTimelineDynEl.appendChild(frag);
   tlSetCaret(caretFrac);
 }
+
+// --- Plan 025 F3: hover tooltip ------------------------------------------
+// Position-driven (no enter/leave): while the SCRUB LAYER is visible the
+// pointer's position inside the strip's vertical band (just the 20 px line)
+// drives the tooltip; leaving the band hides it. Enter/leave were a dead-end:
+// the track starts pointer-events:none and only a hover may re-enable it, so
+// pointerenter could never fire the first time (chicken-and-egg) and the
+// tooltip stayed dead. A band check on pointermove is immune to that. Touch
+// never sees this (the scrub drag is a canvas gesture; the track is inert to
+// touch). Scrub-only: hidden the moment the scrub layer hides.
+const TL_HOVER_BAND_TOP = 0; // the pointer is over/inside the line itself
+const TL_HOVER_BAND_BOTTOM = 28; // a little slack below the 20 px line
+const TL_TOOLTIP_RADIUS_PX = 24;
+
+function tlHideTip(): void {
+  hudTlTipEl.classList.remove('show');
+}
+
+function tlShowTooltip(clientX: number): void {
+  if (tlActiveYear === null) return;
+  const rect = hudTimelineTrackEl.getBoundingClientRect();
+  if (rect.width < 2) return;
+  const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+  const width = rect.width;
+  // F3: nearest event within the probe radius → one-line chip below the bar.
+  const ev = nearestEventX(tlBarEvents, x, TL_TOOLTIP_RADIUS_PX);
+  if (ev) {
+    const date = fmtMonthDayUtc(tlActiveYear, ev.day);
+    hudTlTipEl.innerHTML = `<span class="tl-tip-date">${date}</span>${ev.emoji} ${ev.title}`;
+    const half = hudTlTipEl.offsetWidth / 2 || 60;
+    const tx = Math.max(half, Math.min(width - half, ev.x));
+    hudTlTipEl.style.left = `${tx}px`;
+    hudTlTipEl.classList.add('show');
+  } else {
+    tlHideTip();
+  }
+}
+
+window.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse' || !hudTimelineEl.classList.contains('visible')) return;
+  const rect = hudTimelineTrackEl.getBoundingClientRect();
+  const inBand =
+    e.clientY >= rect.top - TL_HOVER_BAND_TOP && e.clientY <= rect.bottom + TL_HOVER_BAND_BOTTOM;
+  if (inBand) tlShowTooltip(e.clientX);
+  else tlHideTip();
+});
 
 /** Rebuild the strip when the scrub enters a new year; defer the (expensive)
  *  event sweep of a not-yet-cached year to a rAF so the gesture's own frame

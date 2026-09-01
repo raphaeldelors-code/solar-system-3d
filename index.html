@@ -60,7 +60,11 @@
       }
       #panel {
         position: fixed;
-        top: calc(12px + env(safe-area-inset-top));
+        /* Plan 025 F3 (v2): below the permanent top strip — the calm event
+           line + 45° month labels drop to ~32px, so the panel starts at
+           44px (the strip is always on, so nothing overlaps, nothing
+           shifts). */
+        top: calc(44px + env(safe-area-inset-top));
         left: calc(12px + env(safe-area-inset-left));
         z-index: 10;
         background: rgba(10, 14, 24, 0.82);
@@ -203,14 +207,15 @@
       }
       /* ---- Always-visible mini date/speed strip (plan 022 F3) ----
          Top-right, pointer-events: none so it never blocks the canvas or
-         the panel. On phones (<560 px) the panel is full-width and its
-         collapsed toggle bar sits at the top — so the strip drops down
-         clear of it (measured in the F3 live check). Plan 025 F2: the
-         strip is the MINIMAL date + speed + year-jump buttons — while a
-         scrub is active it just carries a pulsing .scrubbing emphasis. */
+         the panel. Plan 025 F2: the strip is the MINIMAL date + speed —
+         while a scrub is active it just carries a pulsing .scrubbing
+         emphasis. Plan 025 F3 (v2): it sits BELOW the permanent top
+         strip (line + 45° month labels drop to ~32px), so its top is 44px.
+         On phones the panel's collapsed toggle bar is full-width, so the
+         strip drops further clear of it (media query below). */
       #hud-mini {
         position: fixed;
-        top: calc(10px + env(safe-area-inset-top));
+        top: calc(44px + env(safe-area-inset-top));
         right: calc(12px + env(safe-area-inset-right));
         z-index: 20;
         pointer-events: none;
@@ -288,83 +293,119 @@
           transform: scale(1.5);
         }
       }
-      /* Plan 024 F2: the event timeline is a FULL-WIDTH BOTTOM bar — the
-         old 180 px mini-strip clogged the events together. YouTube
-         video-progress-bar inspiration: the year's events sit ON the track
-         like chapters (emoji above the line), a green fill runs Jan 1 →
-         caret, the caret + year label follow the current date. Visible only
-         while a scrub is live (.visible). pointer-events: none: it never
-         blocks the canvas. (Plan 025 F3 relocates this to the TOP.) */
+      /* Plan 025 F3 (v2): a CALM FULL-WIDTH TOP STRIP — always visible.
+         The 5px line sits in the middle of a 20px strip, 12 month ticks
+         (Jan 1 … Dec 1) carry 45° labels (Jan…Dec), and the year label
+         sits centered ON the line (no corner chip). A scrub adds the
+         green fill + caret + that year's events + hover tooltip via the
+         .scrub layer (#hud-timeline-scrub, hidden until .visible).
+         The control panel and the date+speed pane (#hud-mini) sit BELOW
+         the strip (the 45° labels drop to ~30px). pointer-events: none
+         everywhere (the strip never blocks the canvas). */
       #hud-timeline {
         position: fixed;
         left: 0;
         right: 0;
-        bottom: calc(10px + env(safe-area-inset-bottom));
+        top: calc(0px + env(safe-area-inset-top));
         z-index: 15;
         pointer-events: none;
-        display: none;
+        display: flex;
         flex-direction: column;
-        align-items: center;
-        gap: 4px;
+        align-items: stretch;
         font:
           12px/1.4 system-ui,
           sans-serif;
         font-variant-numeric: tabular-nums;
         user-select: none;
       }
-      #hud-timeline.visible {
-        display: flex;
-      }
-      #hud-timeline .tl-year {
-        font-size: 12px;
-        letter-spacing: 0.05em;
-        color: #9fd6a8;
-      }
       #hud-timeline-track {
         position: relative;
-        width: calc(100% - 48px);
-        height: 24px;
+        width: 100%;
+        height: 20px;
+        pointer-events: none;
       }
-      /* The 5 px progress line (like the video bar itself). */
+      /* The 5px progress line — centered in the 20px strip. 12px side
+         insets so the Jan label (rotated 45°, its box swings ~8px left of
+         the tick) is never clipped at the viewport edge; every fraction
+         (ticks, fill, caret, events) is bar-relative, so the inset shifts
+         nothing but the left/right margins. */
       #hud-timeline-bar {
         position: absolute;
-        left: 0;
-        right: 0;
-        top: 50%;
+        left: 12px;
+        right: 12px;
+        top: 7.5px;
         height: 5px;
-        transform: translateY(-50%);
         border-radius: 3px;
         background: rgba(120, 150, 200, 0.28);
       }
-      /* Month ticks: 13 (Jan..Dec boundaries), the year edges taller. */
+      /* Plan 025 F3: month ticks — a 9px tick straddling the line + a short
+         month label rotated 45° (Jan…Dec), anchored under its tick. 12 of
+         them (Jan 1 … Dec 1); the bar's right edge is year-end, so there is
+         no "Dec 31" tick — the months read Jan…Dec left→right. */
       #hud-timeline-bar .tl-tick {
         position: absolute;
-        top: 50%;
+        top: -2px;
         width: 1px;
         height: 9px;
-        transform: translateY(-50%);
+        transform: translateX(-50%);
         background: rgba(120, 150, 200, 0.45);
       }
-      #hud-timeline-bar .tl-tick.tl-year-start,
-      #hud-timeline-bar .tl-tick.tl-year-end {
-        height: 15px;
-        background: rgba(120, 150, 200, 0.75);
+      #hud-timeline-bar .tl-month {
+        position: absolute;
+        top: 8px;
+        left: 0;
+        font-size: 10px;
+        letter-spacing: 0.03em;
+        color: #7d90ad;
+        white-space: nowrap;
+        transform: rotate(45deg);
+        transform-origin: top left;
       }
-      /* Chapter markers: the body emoji floating ABOVE the track. */
+      /* The year label — centered ON the line, always visible, calm
+         (no chip). The 1px month ticks crossing it are faint enough that
+         a text-shadow keeps it readable. */
+      #hud-timeline-bar .tl-year {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        z-index: 2;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+        letter-spacing: 0.05em;
+        color: #9fd6a8;
+        text-shadow:
+          0 0 5px rgba(0, 0, 0, 0.9),
+          0 1px 2px rgba(0, 0, 0, 0.7);
+      }
+      /* Scrub-only layer: green fill, "you are here" caret and that year's
+         event chapters. Hidden at rest, shown by #hud-timeline.visible. */
+      #hud-timeline-scrub {
+        position: absolute;
+        inset: 0;
+        display: none;
+      }
+      #hud-timeline.visible #hud-timeline-scrub {
+        display: block;
+      }
+      /* Chapter markers: the body emoji centered ON the 5px line (a top bar
+         has no room above the line for "floating above" — the line is near
+         the viewport top). Straddling the line keeps them visible and clear
+         of the 45° month labels that sit below it. */
       #hud-timeline-bar .tl-event {
         position: absolute;
-        top: -14px;
+        top: 2.5px;
         font-size: 13px;
         line-height: 1;
-        transform: translateX(-50%);
+        transform: translate(-50%, -50%);
         pointer-events: none;
       }
       #hud-timeline-bar .tl-overflow {
         position: absolute;
         right: 2px;
-        top: -14px;
+        top: 2.5px;
         font-size: 10px;
         color: #8fa3bf;
+        transform: translateY(-50%);
       }
       /* Green progress fill: Jan 1 → caret. */
       #hud-timeline-bar .tl-fill {
@@ -385,6 +426,33 @@
         border-radius: 2px;
         box-shadow: 0 0 6px 1px rgba(87, 199, 133, 0.7);
         transform: translateX(-50%);
+      }
+      /* Plan 025 F3: hover tooltip — a one-line "MMM D · emoji Title" chip
+         just below the 45° month labels (which drop to ~28px), left of the
+         date pane, tracking the cursor. */
+      #hud-tl-tip {
+        position: absolute;
+        top: 30px;
+        z-index: 3;
+        pointer-events: none;
+        white-space: nowrap;
+        font-size: 11px;
+        color: #e8f0fb;
+        background: rgba(12, 17, 30, 0.92);
+        border: 1px solid rgba(120, 150, 200, 0.4);
+        border-radius: 6px;
+        padding: 2px 8px;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.1s ease;
+      }
+      #hud-tl-tip.show {
+        opacity: 1;
+      }
+      #hud-tl-tip .tl-tip-date {
+        color: #9fd6a8;
+        margin-right: 5px;
+        font-variant-numeric: tabular-nums;
       }
       /* Plan 023 F2 emphasis: pulses while a scrub is active, released on
          release (mouse right-button up / 3-finger lift / cancel).
@@ -411,10 +479,12 @@
       }
       @media (max-width: 560px) {
         #hud-mini {
-          /* Below the collapsed full-width panel toggle bar: its measured
-             bottom is 57.5 px (12 top + 14px coarse font + 2×12 padding),
-             so 68 px leaves an 11 px gap (verified by the F3 live check). */
-          top: calc(68px + env(safe-area-inset-top));
+          /* Phone: the panel is full-width and starts at 44px (below the
+             permanent top strip). Its collapsed toggle bar is ~12 top +
+             14px coarse font + 2×12 padding ≈ 57.5px tall → bottom ≈
+             44 + 57.5 = 101.5px, so 112px leaves a 10px gap (same cadence
+             as the desktop 44px = ~32 labels + 12px). */
+          top: calc(112px + env(safe-area-inset-top));
         }
       }
       /* ---- Body search combobox (B2) ---- */
@@ -727,20 +797,54 @@
         <span id="hud-speed"></span>
       </div>
     </div>
-    <!-- Plan 024 F2: the event timeline moved OUT of the mini strip (the
-         events were clogged into 180 px) into a full-width, bottom-positioned
-         bar — a YouTube video-progress-bar: the year's events sit on the
-         track like chapters, the caret + fill follow the current date.
-         Appears only while a scrub is live (.visible), never blocks the
-         canvas (pointer-events: none). -->
-    <div id="hud-timeline" aria-hidden="true">
-      <span id="hud-timeline-year" class="tl-year"></span>
+    <!-- Event timeline — plan 025 F3 (v2): a CALM FULL-WIDTH TOP STRIP.
+         The 5px line + 12 month ticks (Jan 1 … Dec 1, 45° labels) + the
+         centered year label are ALWAYS visible; a scrub adds the green
+         fill, the "you are here" caret, that year's events as body-emoji
+         chapters, and the hover tooltip — all hidden on release. The
+         control panel and the date+speed pane sit BELOW the strip. -->
+    <div id="hud-timeline">
       <div id="hud-timeline-track">
         <div id="hud-timeline-bar">
-          <div id="hud-timeline-dynamic"></div>
-          <div id="hud-timeline-fill" class="tl-fill"></div>
-          <div id="hud-timeline-caret" class="tl-caret"></div>
+          <div id="hud-timeline-months">
+            <div class="tl-tick" style="left: 0%"></div>
+            <div class="tl-tick" style="left: 8.4932%"></div>
+            <div class="tl-tick" style="left: 16.1644%"></div>
+            <div class="tl-tick" style="left: 24.6575%"></div>
+            <div class="tl-tick" style="left: 32.8767%"></div>
+            <div class="tl-tick" style="left: 41.3699%"></div>
+            <div class="tl-tick" style="left: 49.589%"></div>
+            <div class="tl-tick" style="left: 58.0822%"></div>
+            <div class="tl-tick" style="left: 66.5753%"></div>
+            <div class="tl-tick" style="left: 74.7945%"></div>
+            <div class="tl-tick" style="left: 83.2877%"></div>
+            <div class="tl-tick" style="left: 91.5068%"></div>
+            <div class="tl-month" style="left: 0%">Jan</div>
+            <div class="tl-month" style="left: 8.4932%">Feb</div>
+            <div class="tl-month" style="left: 16.1644%">Mar</div>
+            <div class="tl-month" style="left: 24.6575%">Apr</div>
+            <div class="tl-month" style="left: 32.8767%">May</div>
+            <div class="tl-month" style="left: 41.3699%">Jun</div>
+            <div class="tl-month" style="left: 49.589%">Jul</div>
+            <div class="tl-month" style="left: 58.0822%">Aug</div>
+            <div class="tl-month" style="left: 66.5753%">Sep</div>
+            <div class="tl-month" style="left: 74.7945%">Oct</div>
+            <div class="tl-month" style="left: 83.2877%">Nov</div>
+            <div class="tl-month" style="left: 91.5068%">Dec</div>
+          </div>
+          <div id="hud-timeline-year" class="tl-year"></div>
+          <div id="hud-timeline-scrub">
+            <div id="hud-timeline-dynamic"></div>
+            <div id="hud-timeline-fill" class="tl-fill"></div>
+            <div id="hud-timeline-caret" class="tl-caret"></div>
+          </div>
         </div>
+        <!-- Plan 025 F3 hover tooltip: CHILD OF THE TRACK (sibling of
+             #hud-timeline-bar) so its `left` is track-relative — the SAME
+             space the pointer math + event markers use (x = clientX −
+             track.left). Inside the bar it would be off by its 12px side
+             inset. Scrub-only (hidden when the scrub layer hides). -->
+        <div id="hud-tl-tip"></div>
       </div>
     </div>
     <div id="panel">

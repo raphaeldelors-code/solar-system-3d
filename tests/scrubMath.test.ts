@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  fmtMonthDayUtc,
+  monthSeparators,
+  nearestEventX,
   scrubClampToYear,
   scrubSpeedLog,
   yearSpanDays,
@@ -151,5 +154,73 @@ describe('addYearsUtc (plan 024 F3)', () => {
   it('crosses the century cleanly', () => {
     expect(addYearsUtc(new Date(Date.UTC(2000, 0, 1)), -1).getTime()).toBe(Date.UTC(1999, 0, 1));
     expect(addYearsUtc(new Date(Date.UTC(1999, 11, 31)), 1).getTime()).toBe(Date.UTC(2000, 11, 31));
+  });
+});
+
+describe('monthSeparators (plan 025 F3)', () => {
+  it('returns 12 month starts at the true 365-day fractions', () => {
+    const ticks = monthSeparators(365);
+    expect(ticks.length).toBe(12);
+    expect(ticks.map((t) => t.abbr)).toEqual([
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]);
+    expect(ticks[0]).toEqual({ abbr: 'Jan', day: 0, frac: 0 });
+    // Feb 1 = day 31, Dec 1 = day 334 of a 365-day year.
+    expect(ticks[1].day).toBe(31);
+    expect(ticks[1].frac).toBeCloseTo(31 / 365, 6);
+    expect(ticks[11].day).toBe(334);
+    expect(ticks[11].frac).toBeCloseTo(334 / 365, 6);
+  });
+
+  it('day values are 2001-anchored: non-leap year, Mar 1 = day 59', () => {
+    // The day offsets come from a fixed 2001 calendar (non-leap) so the
+    // static DOM fractions stay stable; on a leap year they drift < 0.2 %.
+    const ticks = monthSeparators(366);
+    expect(ticks[2].day).toBe(59); // Mar 1 per the 2001 calendar
+    expect(ticks[11].frac).toBeCloseTo(334 / 366, 6);
+  });
+});
+
+describe('fmtMonthDayUtc (plan 025 F3)', () => {
+  it('formats day-of-year as "MMM D" in UTC', () => {
+    expect(fmtMonthDayUtc(2026, 0)).toBe('Jan 1');
+    expect(fmtMonthDayUtc(2026, 31)).toBe('Feb 1');
+    expect(fmtMonthDayUtc(2026, 181)).toBe('Jul 1');
+    expect(fmtMonthDayUtc(2026, 364)).toBe('Dec 31');
+  });
+
+  it('floors fractional days (a 0.9-day event reads its own day)', () => {
+    expect(fmtMonthDayUtc(2026, 120.9)).toBe('May 1');
+    expect(fmtMonthDayUtc(2024, 59.4)).toBe('Feb 29'); // leap year
+  });
+});
+
+describe('nearestEventX (plan 025 F3 tooltip probe)', () => {
+  const evs = [
+    { day: 10, x: 100, emoji: '🌞', title: 'A' },
+    { day: 20, x: 200, emoji: '🌙', title: 'B' },
+    { day: 21, x: 205, emoji: '☄️', title: 'C' },
+  ];
+  it('returns the closest event within the radius', () => {
+    expect(nearestEventX(evs, 190, 24)?.title).toBe('B');
+    expect(nearestEventX(evs, 210, 24)?.title).toBe('C'); // closer to C than B
+  });
+  it('returns null beyond the radius or with no events', () => {
+    expect(nearestEventX(evs, 150, 24)).toBeNull();
+    expect(nearestEventX([], 150, 24)).toBeNull();
+  });
+  it('keeps the earlier event on an exact tie (strict <)', () => {
+    expect(nearestEventX(evs, 202.5, 24)?.title).toBe('B');
   });
 });

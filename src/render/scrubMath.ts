@@ -19,7 +19,9 @@ import { J2000_UTC } from '../sim/types';
  *   (bounds = Jan 1 → Dec 31 of that year). "Zero" is always Jan 1 of the
  *   current year — it does NOT reset to the press/landing date, and the
  *   scrub can never cross out of that year. Year hopping is the job of
- *   the ±1/±5 year-jump buttons (plan 024 F3).
+ * the ±1/±5 year-jump buttons (plan 024 F3). Plan 025 F2 then dropped those
+ * buttons from the minimal pane: year hopping now lives on the TOP full-
+ * width event bar (plan 025 F3).
  * - Y rate is logarithmic so "up = faster" spans the whole slider range in
  *   a reasonable drag: 100 px ≈ one order of magnitude.
  */
@@ -204,4 +206,85 @@ export function timelineLayout(
     .sort((a, b) => a.frac - b.frac);
   const overflow = Math.max(0, markers.length - cap);
   return { markers: markers.slice(0, cap), overflow, caretFrac: toFrac(caretTDays) };
+}
+
+// --- Plan 025 F3: top full-width bar month axis + hover probe ---------------
+
+const MONTH_ABBR = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/**
+ * Plan 025 F3 — pure month-axis geometry. The top bar spans the whole year,
+ * so it gets 12 month starts (Jan 1 … Dec 1) each carrying its short label,
+ * rotated 45° (the CSS does the rotation; this is position data). The bar's
+ * right edge IS year-end, so there is no "Dec 31" tick — the months read
+ * Jan…Dec left→right. `spanLenDays` is 365/366. (The static DOM uses the
+ * 365-day fractions; on a leap year they drift < 0.2 % — invisible.)
+ */
+export interface MonthTick {
+  abbr: string;
+  /** day-of-year (0-indexed) of the 1st of this month, per the fixed 2001
+   *  (non-leap) calendar — Jan=0 … Dec=334. The static DOM hardcodes these
+   *  /365 fractions; on a leap year they drift < 0.2 % (invisible). */
+  day: number;
+  /** 0..1 fraction across `spanLenDays` (day / spanLenDays). */
+  frac: number;
+}
+
+/** Pure: the 12 month starts (Jan 1 … Dec 1) for a year of `spanLenDays` days. */
+export function monthSeparators(spanLenDays: number): MonthTick[] {
+  const span = spanLenDays > 0 ? spanLenDays : 365;
+  const out: MonthTick[] = [];
+  for (let m = 0; m < 12; m++) {
+    const day = (Date.UTC(2001, m, 1) - Date.UTC(2001, 0, 1)) / 86_400_000;
+    if (day >= span) continue; // defensive: never for 365/366
+    out.push({ abbr: MONTH_ABBR[m], day, frac: day / span });
+  }
+  return out;
+}
+
+/** Plan 025 F3 — pure "MMM D" UTC readout for a year + day-of-year. */
+export function fmtMonthDayUtc(year: number, dayOfYear: number): string {
+  const d = new Date(Date.UTC(year, 0, 1 + Math.floor(dayOfYear)));
+  return `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+/** The events the bar's hover probe consumes (positions in px from bar left). */
+export interface BarEvent {
+  /** day-of-year (0-indexed) the event falls on. */
+  day: number;
+  /** x, px from the bar's left edge (caller precomputes: frac · width). */
+  x: number;
+  emoji: string;
+  title: string;
+}
+
+/**
+ * Plan 025 F3 — pure nearest-event probe for the hover tooltip. Returns the
+ * event whose x is closest to `xPx` within `radiusPx`, else null (ties →
+ * the leftmost/earlier one, since strict < keeps the first best).
+ */
+export function nearestEventX(events: BarEvent[], xPx: number, radiusPx: number): BarEvent | null {
+  let best: BarEvent | null = null;
+  let bestDist = Infinity;
+  for (const ev of events) {
+    const d = Math.abs(ev.x - xPx);
+    if (d <= radiusPx && d < bestDist) {
+      bestDist = d;
+      best = ev;
+    }
+  }
+  return best;
 }
