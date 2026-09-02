@@ -54,5 +54,10 @@ tooltip hide; right-drag scrub → fill + caret also appear.
 
 ## Commits (one per feature, gates green before each)
 
-- **F1** — `feat(hud): rolling lens + events + tooltip on hover (not just scrub)`
-- **docs** — record F1 hash in todo.md + this plan.
+- **F1** ✅ `98cffc2` — `feat(hud): rolling lens + events + tooltip on hover
+(not just scrub)`. Live-verified in headless Chrome: hover shows the lens
+  (date readout follows the cursor) + 21 event markers + tooltip near an
+  event; leaving the band hides lens/tooltip; right-drag scrub shows fill +
+  caret; release hides them. 307/307 tests + tsc + lint + prettier + build
+  green.
+- **docs** — this commit: record F1 hash in todo.md + this plan.

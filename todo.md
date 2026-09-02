@@ -181,7 +181,7 @@ loader, constellation tour, tooltips, screenshot button).
 
 `plans/027-hover-lens-events.md` — the rolling magnifier lens, event markers, and hover tooltip only appeared during a right-drag scrub, so a plain mouse-over ("scrolling") showed nothing. Make them follow the cursor on HOVER; the green fill + caret stay scrub-only.
 
-- [ ] F1 feat(hud): rolling lens + events + tooltip on hover (not just scrub)
+- [x] F1 feat(hud): rolling lens + events + tooltip on hover (not just scrub) — `98cffc2` (hover in the strip band now paints the current year's events + drives the rolling lens + tooltip by cursor position; green fill + caret stay scrub-only via visibility-gating. 307/307 tests + tsc + lint + prettier + build green; live-verified: hover shows lens (date follows cursor) + 21 markers + tooltip near an event, leaving the band hides lens/tooltip, right-drag scrub shows fill + caret, release hides them)
 
 ## Declined (user decision 2026-08-18)
 
