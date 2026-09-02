@@ -1901,6 +1901,21 @@ function tlTooltipAndLens(clientX: number): void {
   hudTlLensEl.classList.add('show');
 }
 
+/**
+ * Plan 028 F1: the 3-finger touch scrub has no hover, so the lens + tooltip
+ * (mouse-only, see the pointermove band handler below) never appear on a
+ * phone — the user sees the event markers but not the magnifier that makes
+ * packed events readable. This drives the same lens + tooltip from the
+ * gesture's CENTROID x (the touch "cursor") while the scrub is live.
+ * Called from the 3-finger pointermove on committed moves.
+ */
+function tlScrubLens(centroidX: number): void {
+  if (tlActiveYear === null) return;
+  tlRefresh(); // idempotent + cache-aware — paints the press year's events
+  tlShow(); // ensure the scrub layer (.visible) is shown for the markers
+  tlTooltipAndLens(centroidX);
+}
+
 window.addEventListener('pointermove', (e) => {
   if (e.pointerType !== 'mouse') return;
   const rect = hudTimelineTrackEl.getBoundingClientRect();
@@ -2139,6 +2154,7 @@ canvas.addEventListener('pointermove', (ev) => {
   if (s.movedX || s.movedY) {
     tlShow(); // plan 024 F2: the full-width bar is a scrub-only affordance
     tlRefresh(); // plan 023 F3: per-year timeline
+    tlScrubLens(avgX); // plan 028 F1: rolling lens + event tooltip on the centroid (phone)
   }
 });
 
