@@ -1829,15 +1829,19 @@ function tlPaint(year: number): void {
 }
 
 // --- Plan 025 F3: hover tooltip + F4: rolling magnifier lens ----------------
-// Position-driven (no enter/leave): while the SCRUB LAYER is visible the
-// pointer's position inside the strip's vertical band (the line + the lens
-// overhang below it) drives both the F3 tooltip and the F4 lens; leaving the
-// band hides both. Enter/leave were a dead-end: the track starts
-// pointer-events:none and only a hover may re-enable it, so pointerenter
-// could never fire the first time (chicken-and-egg) and the tooltip stayed
-// dead. A band check on pointermove is immune to that. Touch never sees this
-// (the scrub drag is a canvas gesture; the track is inert to touch). Both
-// are scrub-only: hidden the moment the scrub layer hides.
+// Position-driven (no enter/leave): while the pointer is inside the strip's
+// vertical band (the line + the lens overhang below it) the pointer's position
+// drives both the F3 tooltip and the F4 lens. Plan 027: this is now a HOVER
+// affordance — it works with a plain mouse-over (no button), not only during a
+// right-drag scrub. Entering the band paints the current year's events
+// (tlRefresh, idempotent + cache-aware) and adds .hover (which shows the
+// events layer); leaving the band hides the lens + tooltip and drops .hover.
+// The green fill + caret stay scrub-only (CSS .visible). Enter/leave were a
+// dead-end: the track starts pointer-events:none and only a hover may
+// re-enable it, so pointerenter could never fire the first time
+// (chicken-and-egg) and the tooltip stayed dead. A band check on pointermove
+// is immune to that. Touch never sees this (the scrub drag is a canvas
+// gesture; the track is inert to touch).
 const TL_HOVER_BAND_TOP = 0; // the pointer is over/inside the line itself
 const TL_HOVER_BAND_BOTTOM = 110; // the lens hangs ~106 px below the line
 const TL_TOOLTIP_RADIUS_PX = 24;
@@ -1898,14 +1902,21 @@ function tlTooltipAndLens(clientX: number): void {
 }
 
 window.addEventListener('pointermove', (e) => {
-  if (e.pointerType !== 'mouse' || !hudTimelineEl.classList.contains('visible')) return;
+  if (e.pointerType !== 'mouse') return;
   const rect = hudTimelineTrackEl.getBoundingClientRect();
   const inBand =
     e.clientY >= rect.top - TL_HOVER_BAND_TOP && e.clientY <= rect.bottom + TL_HOVER_BAND_BOTTOM;
-  if (inBand) tlTooltipAndLens(e.clientX);
-  else {
+  if (inBand) {
+    // Plan 027: hover is a real affordance — paint the current year's events
+    // (idempotent + cache-aware) and show the events layer, then drive the
+    // lens + tooltip by pointer position.
+    tlRefresh();
+    if (!hudTimelineEl.classList.contains('hover')) hudTimelineEl.classList.add('hover');
+    tlTooltipAndLens(e.clientX);
+  } else {
     tlHideTip();
     tlHideLens();
+    hudTimelineEl.classList.remove('hover');
   }
 });
 

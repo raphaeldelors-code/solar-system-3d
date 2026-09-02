@@ -567,15 +567,30 @@
           0 0 5px rgba(0, 0, 0, 0.9),
           0 1px 2px rgba(0, 0, 0, 0.7);
       }
-      /* Scrub-only layer: green fill, "you are here" caret and that year's
-         event chapters. Hidden at rest, shown by #hud-timeline.visible. */
+      /* Events + progress layer: that year's event chapters (shown on hover
+         OR scrub) plus the green fill + "you are here" caret (scrub-only).
+         Shown by #hud-timeline.hover (mouse over the strip) or .visible
+         (scrub live); the fill/caret stay hidden on hover via visibility so a
+         plain mouse-over never draws a misleading progress bar. */
       #hud-timeline-scrub {
         position: absolute;
         inset: 0;
         display: none;
       }
+      #hud-timeline.hover #hud-timeline-scrub,
       #hud-timeline.visible #hud-timeline-scrub {
         display: block;
+      }
+      /* The green fill + caret are the scrub progress indicator — hidden on
+         hover (the layer is shown for the events) and shown only while a
+         scrub is live (.visible). */
+      #hud-timeline-bar .tl-fill,
+      #hud-timeline-bar .tl-caret {
+        visibility: hidden;
+      }
+      #hud-timeline.visible #hud-timeline-bar .tl-fill,
+      #hud-timeline.visible #hud-timeline-bar .tl-caret {
+        visibility: visible;
       }
       /* Chapter markers: the body emoji centered ON the 5px line (a top bar
          has no room above the line for "floating above" — the line is near

@@ -177,6 +177,12 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] F1 feat(ui): clickable date opens a calendar popover (month nav + day grid + today) — `7e4b1a4` (pure `calendar.ts` math + 11 unit tests; `#hud-date` clickable → `#date-cal` popover with ‹/› month nav, 6×7 day grid, Today button, green selected-day highlight, today dot; closes on outside-click/Esc/re-click; day-pick keeps time-of-day; selected-day live-tracks the running clock. 307/307 tests + tsc + lint + prettier + build green; live-verified in headless Chrome. Also fixed pre-existing Prettier drift in plans/025 that was failing the whole-repo format gate)
 - [x] F2 feat(ui): quick year nav (±1/±5 y) in the calendar popover — `9eab67b` (4-button row −5y/−1y/+1y/+5y between the month header and weekday row; jumps the VIEW by years, month preserved, commits only on a day pick; restores the year navigation plan 025 F2 removed. 307/307 tests + tsc + lint + prettier + build green; live-verified: +5y→2031, +1y→2032, −1y→2031, −5y→2026, month preserved)
 
+## User queue — 2026-09-02 — plan 027 (hover the events axis: lens + events + tooltip)
+
+`plans/027-hover-lens-events.md` — the rolling magnifier lens, event markers, and hover tooltip only appeared during a right-drag scrub, so a plain mouse-over ("scrolling") showed nothing. Make them follow the cursor on HOVER; the green fill + caret stay scrub-only.
+
+- [ ] F1 feat(hud): rolling lens + events + tooltip on hover (not just scrub)
+
 ## Declined (user decision 2026-08-18)
 
 - Hohmann probe missions — declined
