@@ -1973,9 +1973,21 @@ function tlTooltipAndLens(clientX: number): void {
   if (ev) {
     const date = fmtMonthDayUtc(tlActiveYear, ev.day);
     hudTlTipEl.innerHTML = `<span class="tl-tip-date">${date}</span>${ev.emoji} ${ev.title}`;
-    const half = hudTlTipEl.offsetWidth / 2 || 60;
-    const tx = Math.max(half, Math.min(width - half, ev.x));
-    hudTlTipEl.style.left = `${tx}px`;
+    // Plan 030 F1: dock the chip at the top-right, directly UNDER the
+    // date/speed pane (#hud-mini). Measure the pane's rect — getBoundingClientRect
+    // bakes in safe-area insets, the desktop 44px / phone 112px top, the pane's
+    // height, and its .scrubbing padding growth — then place the chip 6px below
+    // it, right-aligned to the pane's right edge. Same spot every frame, so the
+    // chip never sits under the magnifier glass (which follows the pointer at
+    // the strip's top) and never overflows off the right edge (width-capped in
+    // CSS). offsetWidth is measurable while .show is applied (opacity 0 is
+    // still laid out).
+    const pane = hudMiniEl.getBoundingClientRect();
+    const tipW = hudTlTipEl.offsetWidth;
+    const tipRight = pane.right - 4;
+    const tipLeft = Math.max(12, tipRight - tipW);
+    hudTlTipEl.style.left = `${tipLeft}px`;
+    hudTlTipEl.style.top = `${pane.bottom + 6}px`;
     hudTlTipEl.classList.add('show');
   } else {
     tlHideTip();

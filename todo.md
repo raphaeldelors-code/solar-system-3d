@@ -199,3 +199,9 @@ loader, constellation tour, tooltips, screenshot button).
 `plans/029-true-magnifier-lens.md` — the rectangular 220×96 slice-window lens was rejected ("absolutely not what I want"). Rebuild it as a true magnifying glass: a circular transparent disc on the line that magnifies what is near its center (radial zoom, 4× → 1× at the rim) so packed events fan out and the exact one can be picked.
 
 - [x] F1 feat(hud): true circular magnifier lens (radial zoom, transparent glass) — hash `c8a9384` (new `src/render/lensMath.ts`: LENS_R/LENS_ZOOM/lensZoomAt/lensDisplace/lensClampX, 8 unit tests; main.ts per-element radial renderer draws line+ticks+labels+events+caret into a 112px circular canvas; old rectangular lens + lensMap removed from scrubMath.ts; index.html disc CSS + canvas; focal-date chip moved to disc bottom to clear labels/tooltip. 313/313 tests + tsc + lint + prettier + build green; live-verified headless: circular disc on line, focal date, packed 4px→11px fan-out, mouse-leave hides, 3-finger scrub shows/hides)
+
+## User queue — 2026-09-03 — plan 030 (dock event tooltip under date/speed pane)
+
+`plans/030-dock-event-tooltip.md` — the nearest-event indicator (#hud-tl-tip) was a child of the timeline track tracking the cursor, so the plan-029 magnifier glass (centered on the pointer) sometimes covered it.
+
+- [ ] F1 fix(hud): dock the nearest-event tooltip under the date/speed pane — hash TBC (move #hud-tl-tip out of the track to a fixed top-right chip below #hud-mini; per-frame top/left from the pane rect; width-capped + ellipsized; z-index 22 above the lens strip; hiding unchanged. 313/313 tests + tsc + lint + prettier + build green; live-verified headless: tip top 77 below pane bottom 71, clears lens 77>66, right-anchored; hover + 3-finger scrub show it; leave + lift hide it)
