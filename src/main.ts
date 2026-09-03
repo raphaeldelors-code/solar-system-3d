@@ -1962,14 +1962,43 @@ function tlDrawLens(x: number): void {
   }
 }
 
+/**
+ * The caret ("you are here" selector) center x in TRACK space — the same space
+ * the disc's `left` and the pointer use. The bar is inset 12px from the track
+ * (see #hud-timeline-bar), and the caret sits at `caretFrac · barWidth` in bar
+ * space, so in track space it's `12 + caretFrac · (width − 24)`. `caretFrac` is
+ * derived from `clock.t` — the SAME value that drives the top-right `#hud-date`
+ * box — so centering the disc here makes the magnified center, the caret, and
+ * the date pane all show one date (plan 032: "the lens zoom should be where the
+ * selector is").
+ */
+function tlCaretX(): number {
+  const width = hudTimelineTrackEl.clientWidth || window.innerWidth;
+  const BAR_L = 12; // #hud-timeline-bar side inset (px, CSS)
+  const barW = Math.max(1, width - 2 * BAR_L);
+  const caretFrac = timelineLayout(tlSpan0, tlSpanLen, [], clock.t).caretFrac;
+  return BAR_L + caretFrac * barW;
+}
+
 function tlTooltipAndLens(clientX: number): void {
   if (tlActiveYear === null) return;
   const rect = hudTimelineTrackEl.getBoundingClientRect();
   if (rect.width < 2) return;
-  const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
   const width = rect.width;
-  // F3: nearest event within the probe radius → one-line chip below the bar.
-  const ev = nearestEventX(tlBarEvents, x, TL_TOOLTIP_RADIUS_PX);
+  // Plan 032: the FOCAL POINT (disc center) is the SELECTOR — the green
+  // "you-are-here" caret — while a scrub is live, and the pointer on a plain
+  // hover. The caret is clock-derived (the SAME source as the top-right
+  // #hud-date box), so centering the disc on it makes the magnified center,
+  // the caret, the focal-date chip, and the date pane all show ONE date:
+  // "the lens zoom should be where the selector is … date of the lens align
+  // with date of the top right square at all time." On hover there is no
+  // visible selector, so the disc follows the pointer to inspect that day.
+  const scrubbing = !!(scrub?.movedX || threeFinger?.live);
+  const x = Math.max(0, Math.min(width, clientX - rect.left)); // pointer, track space
+  const focal = scrubbing ? lensClampX(tlCaretX(), width) : lensClampX(x, width);
+  // F3: nearest event within the probe radius about the focal (magnified
+  // center) → the chip docked under the top-right pane (plan 030).
+  const ev = nearestEventX(tlBarEvents, focal, TL_TOOLTIP_RADIUS_PX);
   if (ev) {
     const date = fmtMonthDayUtc(tlActiveYear, ev.day);
     hudTlTipEl.innerHTML = `<span class="tl-tip-date">${date}</span>${ev.emoji} ${ev.title}`;
@@ -1978,10 +2007,9 @@ function tlTooltipAndLens(clientX: number): void {
     // bakes in safe-area insets, the desktop 44px / phone 112px top, the pane's
     // height, and its .scrubbing padding growth — then place the chip 6px below
     // it, right-aligned to the pane's right edge. Same spot every frame, so the
-    // chip never sits under the magnifier glass (which follows the pointer at
-    // the strip's top) and never overflows off the right edge (width-capped in
-    // CSS). offsetWidth is measurable while .show is applied (opacity 0 is
-    // still laid out).
+    // chip never sits under the magnifier glass and never overflows off the
+    // right edge (width-capped in CSS). offsetWidth is measurable while .show
+    // is applied (opacity 0 is still laid out).
     const pane = hudMiniEl.getBoundingClientRect();
     const tipW = hudTlTipEl.offsetWidth;
     const tipRight = pane.right - 4;
@@ -1992,23 +2020,17 @@ function tlTooltipAndLens(clientX: number): void {
   } else {
     tlHideTip();
   }
-  // Plan 029 F1: the glass FOLLOWS the pointer. The disc is a child of
-  // #hud-timeline-track, so `left` is track-relative — the same space the
-  // pointer x is measured in — and the disc center (focal point) sits EXACTLY
-  // on the pointer. Clamp so the element under the cursor is always dead
-  // center, 4× (the glass may extend past the strip edge; it's clipped by the
-  // viewport, like a real glass held at the window edge).
-  const focal = lensClampX(x, width);
+  // The disc is a child of #hud-timeline-track, so `left` is track-relative —
+  // the same space the focal point is in — and the disc center sits EXACTLY on
+  // the focal (the caret while scrubbing, the pointer on hover). The glass may
+  // extend past the strip edge; it's clipped by the viewport, like a real glass
+  // held at the window edge.
   hudTlLensEl.style.left = `${focal - LENS_R}px`;
   tlDrawLens(focal);
-  // The focal-point date readout. While a scrub is live, BOTH the top-right
-  // box (#hud-date, driven by clock.t) and the green "you are here" caret
-  // inside the lens (caretFrac from clock.t) track the CLOCK — so the chip
-  // must too. Reading the pointer's position instead showed a date offset
-  // from the committed clock by (pressX/width)·span days (plan 031: the
-  // "date highlighted when scrolling ≠ the little box top-right" bug). Only
-  // a plain hover (no scrub) inspects the day at the pointer.
-  const scrubbing = !!(scrub?.movedX || threeFinger?.live);
+  // The focal-point date readout. While scrubbing, the focal IS the caret = the
+  // clock date, so the chip reads clock.t (matching the pane exactly). On hover
+  // it inspects the day under the pointer. (plan 031: never read the pointer's
+  // own position while scrubbing — it was offset from the clock.)
   const chipDay = scrubbing ? Math.max(0, clock.t - tlSpan0) : (focal / width) * tlSpanLen;
   hudTlLensDateEl.textContent = fmtMonthDayUtc(tlActiveYear, chipDay);
   hudTlLensEl.classList.add('show');
@@ -2018,15 +2040,18 @@ function tlTooltipAndLens(clientX: number): void {
  * Plan 028 F1: the 3-finger touch scrub has no hover, so the lens + tooltip
  * (mouse-only, see the pointermove band handler below) never appear on a
  * phone — the user sees the event markers but not the magnifier that makes
- * packed events readable. This drives the same lens + tooltip from the
- * gesture's CENTROID x (the touch "cursor") while the scrub is live.
- * Called from the 3-finger pointermove on committed moves.
+ * packed events readable. This shows the lens + tooltip while the scrub is
+ * live. Plan 032: the focal point is the SELECTOR (caret), computed from the
+ * clock internally — so it takes no x argument. The 3-finger move handler
+ * still reports the centroid x (unused here) purely to gate on committed
+ * moves.
  */
-function tlScrubLens(centroidX: number): void {
+function tlScrubLens(): void {
   if (tlActiveYear === null) return;
   tlRefresh(); // idempotent + cache-aware — paints the press year's events
   tlShow(); // ensure the scrub layer (.visible) is shown for the markers
-  tlTooltipAndLens(centroidX);
+  // Pass the (ignored-on-scrub) centroid; the focal comes from tlCaretX().
+  tlTooltipAndLens(Number.POSITIVE_INFINITY);
 }
 
 window.addEventListener('pointermove', (e) => {
@@ -2267,7 +2292,7 @@ canvas.addEventListener('pointermove', (ev) => {
   if (s.movedX || s.movedY) {
     tlShow(); // plan 024 F2: the full-width bar is a scrub-only affordance
     tlRefresh(); // plan 023 F3: per-year timeline
-    tlScrubLens(avgX); // plan 028 F1: rolling lens + event tooltip on the centroid (phone)
+    tlScrubLens(); // plan 028 F1 + 032: lens on the SELECTOR (caret), phone
   }
 });
 

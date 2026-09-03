@@ -200,6 +200,18 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 feat(hud): true circular magnifier lens (radial zoom, transparent glass) — hash `c8a9384` (new `src/render/lensMath.ts`: LENS_R/LENS_ZOOM/lensZoomAt/lensDisplace/lensClampX, 8 unit tests; main.ts per-element radial renderer draws line+ticks+labels+events+caret into a 112px circular canvas; old rectangular lens + lensMap removed from scrubMath.ts; index.html disc CSS + canvas; focal-date chip moved to disc bottom to clear labels/tooltip. 313/313 tests + tsc + lint + prettier + build green; live-verified headless: circular disc on line, focal date, packed 4px→11px fan-out, mouse-leave hides, 3-finger scrub shows/hides)
 
+## User queue — 2026-09-03 — plan 032 (align the lens to the selector/caret)
+
+`plans/032-align-lens-to-selector.md` — while scrubbing, the magnifier disc
+followed the POINTER/finger while the "you-are-here" caret (the selector, = the
+top-right date box) tracked the CLOCK — so the glass landed ~290px away from the
+actual selected date ("the lens effect is not aligned with the actual target").
+Fix: while a scrub is live the disc centers on the caret (`tlCaretX()`), so the
+magnified center, the caret, the focal-date chip, and the top-right box are all
+the same date. Plain hover still centers on the pointer.
+
+- [x] F1 fix(hud): center the magnifier on the selector (caret) while scrubbing — hash TBC
+
 ## User queue — 2026-09-03 — plan 031 (fix scrub focal-date chip ≠ pane)
 
 `plans/031-fix-scrub-date-mismatch.md` — while scrubbing (mouse right-drag or
@@ -211,7 +223,7 @@ Fix: the chip reads the clock's committed date (`clock.t - tlSpan0`) while a
 scrub is live; pointer-position only on plain hover.
 
 - [x] F1 fix(scrub): focal-date chip reads the clock date while scrubbing — hash 33b8eed
-- [ ] docs: this entry — hash TBC
+- [x] docs: this entry — hash fb704e0
 
 ## User queue — 2026-09-03 — plan 030 (dock event tooltip under date/speed pane)
 
