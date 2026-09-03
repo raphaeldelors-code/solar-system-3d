@@ -632,22 +632,36 @@
         box-shadow: 0 0 6px 1px rgba(87, 199, 133, 0.7);
         transform: translateX(-50%);
       }
-      /* Plan 025 F3: hover tooltip — a one-line "MMM D · emoji Title" chip
-         just below the 45° month labels (which drop to ~28px), left of the
-         date pane, tracking the cursor. */
+      /* Plan 030 F1: the nearest-event indicator. DOCKED at the top-right,
+         immediately below the date/speed pane (#hud-mini) — not a track-child
+         tracking the cursor, which let the plan-029 magnifier glass (centered
+         on the pointer, Ø112) cover it. `position: fixed` so it's anchored to
+         the viewport (and kept OUT of any transformed ancestor, e.g.
+         #hud-mini's .scrubbing scale pulse, that would otherwise become its
+         containing block). top + left are set per-frame from #hud-mini's rect
+         (tlTooltipAndLens); the element starts top-left off-screen so it can't
+         flash before the first measurement. Right-anchored: the OLD
+         translateX(-50%) centering (which centered it on the event, i.e. under
+         the lens) is dropped. Width is capped + ellipsized so a long event
+         title can't overflow off the right edge. z-index 22 sits ABOVE the
+         lens strip (z15) so it's never occluded. */
       #hud-tl-tip {
-        position: absolute;
-        top: 30px;
-        z-index: 3;
+        position: fixed;
+        top: -9999px; /* off-screen until the first JS measurement sets
+                         top + left (tlTooltipAndLens) */
+        left: -9999px;
+        z-index: 22;
         pointer-events: none;
-        white-space: nowrap;
+        max-width: min(72vw, 300px);
         font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         color: #e8f0fb;
         background: rgba(12, 17, 30, 0.92);
         border: 1px solid rgba(120, 150, 200, 0.4);
         border-radius: 6px;
         padding: 2px 8px;
-        transform: translateX(-50%);
         opacity: 0;
         transition: opacity 0.1s ease;
       }
@@ -1047,7 +1061,7 @@
         border-color: #6ea8ff;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-CKA7g6Ad.js"></script>
+    <script type="module" crossorigin src="./assets/index-CnJwRDlR.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -1083,6 +1097,14 @@
         <span id="hud-speed"></span>
       </div>
     </div>
+    <!-- Plan 030 F1: the nearest-event indicator is DOCKED at the top-right,
+         immediately BELOW the date/speed pane (#hud-mini) — no longer a
+         child of the timeline track tracking the cursor, which let the
+         plan-029 magnifier glass (centered on the pointer) cover it. Fixed
+         position; its top/left are measured per-frame from #hud-mini's
+         rect (tlTooltipAndLens) so it sits under the pane and never overlaps
+         the lens. Hiding is unchanged (pure .show class toggle). -->
+    <div id="hud-tl-tip"></div>
     <!-- Plan 026 F1: calendar popover, opened by clicking #hud-date. A normal
          interactive layer (pointer-events:auto, z-index 30 > the pane's 20)
          anchored just below the mini pane. Header = month nav (‹/›); body =
@@ -1154,12 +1176,12 @@
             <div id="hud-timeline-caret" class="tl-caret"></div>
           </div>
         </div>
-        <!-- Plan 025 F3 hover tooltip + F4 magnifier: CHILDREN OF THE TRACK (
-             sibling of #hud-timeline-bar) so their `left` is track-relative —
-             the SAME space the pointer math + event markers use (x =
-             clientX − track.left). Inside the bar they'd be off by its 12px
-             side inset. Both are scrub-only (hidden when the layer hides). -->
-        <div id="hud-tl-tip"></div>
+        <!-- Plan 029 F1 magnifier: CHILD OF THE TRACK (sibling of
+             #hud-timeline-bar) so its `left` is track-relative — the SAME
+             space the pointer math + event markers use (x = clientX −
+             track.left). Inside the bar it'd be off by its 12px side
+             inset. (The hover tooltip moved to a fixed top-right chip
+             below #hud-mini in plan 030 — see the element after #hud-mini.) -->
         <div id="hud-tl-lens">
           <canvas id="hud-tl-lens-canvas"></canvas>
           <div id="hud-tl-lens-date"></div>
