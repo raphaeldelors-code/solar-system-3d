@@ -2001,8 +2001,16 @@ function tlTooltipAndLens(clientX: number): void {
   const focal = lensClampX(x, width);
   hudTlLensEl.style.left = `${focal - LENS_R}px`;
   tlDrawLens(focal);
-  // The focal-point date readout: the day-of-year at the pointer.
-  hudTlLensDateEl.textContent = fmtMonthDayUtc(tlActiveYear, (focal / width) * tlSpanLen);
+  // The focal-point date readout. While a scrub is live, BOTH the top-right
+  // box (#hud-date, driven by clock.t) and the green "you are here" caret
+  // inside the lens (caretFrac from clock.t) track the CLOCK — so the chip
+  // must too. Reading the pointer's position instead showed a date offset
+  // from the committed clock by (pressX/width)·span days (plan 031: the
+  // "date highlighted when scrolling ≠ the little box top-right" bug). Only
+  // a plain hover (no scrub) inspects the day at the pointer.
+  const scrubbing = !!(scrub?.movedX || threeFinger?.live);
+  const chipDay = scrubbing ? Math.max(0, clock.t - tlSpan0) : (focal / width) * tlSpanLen;
+  hudTlLensDateEl.textContent = fmtMonthDayUtc(tlActiveYear, chipDay);
   hudTlLensEl.classList.add('show');
 }
 

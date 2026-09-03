@@ -200,6 +200,19 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 feat(hud): true circular magnifier lens (radial zoom, transparent glass) — hash `c8a9384` (new `src/render/lensMath.ts`: LENS_R/LENS_ZOOM/lensZoomAt/lensDisplace/lensClampX, 8 unit tests; main.ts per-element radial renderer draws line+ticks+labels+events+caret into a 112px circular canvas; old rectangular lens + lensMap removed from scrubMath.ts; index.html disc CSS + canvas; focal-date chip moved to disc bottom to clear labels/tooltip. 313/313 tests + tsc + lint + prettier + build green; live-verified headless: circular disc on line, focal date, packed 4px→11px fan-out, mouse-leave hides, 3-finger scrub shows/hides)
 
+## User queue — 2026-09-03 — plan 031 (fix scrub focal-date chip ≠ pane)
+
+`plans/031-fix-scrub-date-mismatch.md` — while scrubbing (mouse right-drag or
+3-finger touch), the focal-date chip under the glass read the POINTER POSITION
+on the bar (as if the bar's left edge is Jan 1) while the top-right box +
+in-lens caret read the CLOCK (press date + drag). They only coincided at the
+left edge, so "the date highlighted when scrolling" ≠ the little box top-right.
+Fix: the chip reads the clock's committed date (`clock.t - tlSpan0`) while a
+scrub is live; pointer-position only on plain hover.
+
+- [x] F1 fix(scrub): focal-date chip reads the clock date while scrubbing — hash TBC
+- [ ] docs: this entry — hash TBC
+
 ## User queue — 2026-09-03 — plan 030 (dock event tooltip under date/speed pane)
 
 `plans/030-dock-event-tooltip.md` — the nearest-event indicator (#hud-tl-tip) was a child of the timeline track tracking the cursor, so the plan-029 magnifier glass (centered on the pointer) sometimes covered it.
