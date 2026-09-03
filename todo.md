@@ -210,7 +210,7 @@ Fix: while a scrub is live the disc centers on the caret (`tlCaretX()`), so the
 magnified center, the caret, the focal-date chip, and the top-right box are all
 the same date. Plain hover still centers on the pointer.
 
-- [x] F1 fix(hud): center the magnifier on the selector (caret) while scrubbing — hash TBC
+- [x] F1 fix(hud): center the magnifier on the selector (caret) while scrubbing — hash 3d4afb4
 
 ## User queue — 2026-09-03 — plan 031 (fix scrub focal-date chip ≠ pane)
 
