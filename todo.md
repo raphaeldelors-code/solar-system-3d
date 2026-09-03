@@ -200,6 +200,18 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 feat(hud): true circular magnifier lens (radial zoom, transparent glass) — hash `c8a9384` (new `src/render/lensMath.ts`: LENS_R/LENS_ZOOM/lensZoomAt/lensDisplace/lensClampX, 8 unit tests; main.ts per-element radial renderer draws line+ticks+labels+events+caret into a 112px circular canvas; old rectangular lens + lensMap removed from scrubMath.ts; index.html disc CSS + canvas; focal-date chip moved to disc bottom to clear labels/tooltip. 313/313 tests + tsc + lint + prettier + build green; live-verified headless: circular disc on line, focal date, packed 4px→11px fan-out, mouse-leave hides, 3-finger scrub shows/hides)
 
+## User queue — 2026-09-03 — plan 033 (in-lens caret not at disc center)
+
+`plans/033-fix-lens-caret-inset.md` — the magnifier disc sits on the selector
+(plan 032), but the green caret / month ticks / event emojis drawn INSIDE the
+disc canvas were ~34px off-center: `tlDrawLens` subtracted a track-space focal
+from bar-space positions (12px inset × ~2.85 zoom ≈ 34px). "The green cursor
+should be at the center of our zooming lens." Fix: convert the focal to bar
+space (`xBar = x - BAR_L`) before the dx math; probe the event tooltip in bar
+space too.
+
+- [x] F1 fix(hud): center the in-lens caret on the disc (bar-space dx) — hash TBC
+
 ## User queue — 2026-09-03 — plan 032 (align the lens to the selector/caret)
 
 `plans/032-align-lens-to-selector.md` — while scrubbing, the magnifier disc

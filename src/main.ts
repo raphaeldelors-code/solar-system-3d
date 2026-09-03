@@ -1897,6 +1897,12 @@ function tlDrawLens(x: number): void {
   const barW = Math.max(1, width - 2 * BAR_L);
   const caretFrac = timelineLayout(tlSpan0, tlSpanLen, [], clock.t).caretFrac;
 
+  // Plan 033: `x` (the focal) is in TRACK space (0..width); the strip content
+  // positions below (caretFrac·barW, m.frac·barW, b.x) are in BAR space
+  // (0..barW). Convert the focal to bar space so every dx is consistent —
+  // the caret lands at dx=0 (disc center) when the disc is on the caret.
+  const xBar = x - BAR_L;
+
   ctx.lineCap = 'round';
   // 1 — the 5px line, full disc width, at the focal point (dy 0 → 4× thick).
   ctx.strokeStyle = 'rgba(160, 190, 220, 0.5)';
@@ -1907,7 +1913,7 @@ function tlDrawLens(x: number): void {
   ctx.stroke();
   // 2 — month ticks (a 9px bar straddling the line) + the 45° label.
   for (const m of TL_MONTHS) {
-    const dx = m.frac * barW - x;
+    const dx = m.frac * barW - xBar;
     const d = lensDisplace(dx, 0);
     if (!d) continue;
     const cx = LENS_R + d.x;
@@ -1933,7 +1939,7 @@ function tlDrawLens(x: number): void {
   // 3 — that year's event emojis (straddling the line) at their local zoom —
   //  this is where a packed cluster FANS OUT around the focal point.
   for (const b of tlBarEvents) {
-    const dx = b.x - x;
+    const dx = b.x - xBar;
     const d = lensDisplace(dx, 0);
     if (!d) continue;
     ctx.save();
@@ -1948,7 +1954,7 @@ function tlDrawLens(x: number): void {
   // 4 — the "you are here" caret (a 15px bar straddling the line), only when a
   //  scrub is live (the fill stays hidden, matching the CSS scrub-only rule).
   if (hudTimelineEl.classList.contains('visible')) {
-    const dx = caretFrac * barW - x;
+    const dx = caretFrac * barW - xBar;
     const d = lensDisplace(dx, 0);
     if (d) {
       const cx = LENS_R + d.x;
@@ -1996,9 +2002,12 @@ function tlTooltipAndLens(clientX: number): void {
   const scrubbing = !!(scrub?.movedX || threeFinger?.live);
   const x = Math.max(0, Math.min(width, clientX - rect.left)); // pointer, track space
   const focal = scrubbing ? lensClampX(tlCaretX(), width) : lensClampX(x, width);
+  // Plan 033: tlBarEvents x-positions are in BAR space (12px inset); probe in
+  // the same space the events live in.
+  const focalBar = focal - 12;
   // F3: nearest event within the probe radius about the focal (magnified
   // center) → the chip docked under the top-right pane (plan 030).
-  const ev = nearestEventX(tlBarEvents, focal, TL_TOOLTIP_RADIUS_PX);
+  const ev = nearestEventX(tlBarEvents, focalBar, TL_TOOLTIP_RADIUS_PX);
   if (ev) {
     const date = fmtMonthDayUtc(tlActiveYear, ev.day);
     hudTlTipEl.innerHTML = `<span class="tl-tip-date">${date}</span>${ev.emoji} ${ev.title}`;
