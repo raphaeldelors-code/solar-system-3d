@@ -63,9 +63,8 @@ import { parseAppState, encodeAppState, type ViewState } from './state/urlState'
 import { findEvents, type Event as SimEvent } from './sim/events';
 import { J2000_UTC } from './sim/types';
 import {
-  LENS_W,
   fmtMonthDayUtc,
-  lensMap,
+  monthSeparators,
   nearestEventX,
   scrubClampToYear,
   scrubSpeedLog,
@@ -73,6 +72,7 @@ import {
   type BarEvent,
   yearSpanDays,
 } from './render/scrubMath';
+import { LENS_R, lensClampX, lensDisplace } from './render/lensMath';
 import { monthGrid, fmtMonthYear, isSameDayUtc } from './render/calendar';
 import { yearEvents, yearSpan, hasYearEvents } from './render/yearEvents';
 
@@ -294,7 +294,7 @@ const hudTlTipEl = document.getElementById('hud-tl-tip') as HTMLDivElement;
 // readout) — a child of #hud-timeline-track so its `left` is track-relative,
 // the same coordinate space the pointer math uses.
 const hudTlLensEl = document.getElementById('hud-tl-lens') as HTMLDivElement;
-const hudTlLensTrackEl = document.getElementById('hud-tl-lens-track') as HTMLDivElement;
+const hudTlLensCanvasEl = document.getElementById('hud-tl-lens-canvas') as HTMLCanvasElement;
 const hudTlLensDateEl = document.getElementById('hud-tl-lens-date') as HTMLDivElement;
 // Plan 026 F1: the clickable-date calendar popover. The popover is a normal
 // interactive layer (pointer-events:auto); #hud-date re-enables pointer-events
@@ -1828,23 +1828,35 @@ function tlPaint(year: number): void {
   tlSetCaret(caretFrac);
 }
 
-// --- Plan 025 F3: hover tooltip + F4: rolling magnifier lens ----------------
+// --- Plan 025 F3: hover tooltip + Plan 029: true circular magnifier lens ----
+// The lens is a transparent circular glass disc centered on the pointer. Its
+// focal point is the point on the timeline line directly under the cursor, and
+// everything inside the disc is magnified by a RADIAL profile — maximum at the
+// focal point, falling off to exactly 1× at the rim — so the glass blends
+// seamlessly into the real strip and "what's near the center is bigger". The
+// strip sits at the TOP of the screen, so the disc is CENTERED ON the line
+// (half of it hangs below the viewport top — clipped, exactly like a real glass
+// held at the window edge). Packed events fan out around the focal point, so a
+// dense cluster is spread across the disc and the exact one can be picked.
+//
 // Position-driven (no enter/leave): while the pointer is inside the strip's
 // vertical band (the line + the lens overhang below it) the pointer's position
-// drives both the F3 tooltip and the F4 lens. Plan 027: this is now a HOVER
-// affordance — it works with a plain mouse-over (no button), not only during a
-// right-drag scrub. Entering the band paints the current year's events
-// (tlRefresh, idempotent + cache-aware) and adds .hover (which shows the
-// events layer); leaving the band hides the lens + tooltip and drops .hover.
-// The green fill + caret stay scrub-only (CSS .visible). Enter/leave were a
-// dead-end: the track starts pointer-events:none and only a hover may
-// re-enable it, so pointerenter could never fire the first time
-// (chicken-and-egg) and the tooltip stayed dead. A band check on pointermove
-// is immune to that. Touch never sees this (the scrub drag is a canvas
-// gesture; the track is inert to touch).
+// drives both the F3 tooltip and the lens. Plan 027: a plain mouse-over
+// (no button) works, not only during a right-drag scrub. Entering the band
+// paints the current year's events (tlRefresh, idempotent + cache-aware) and
+// adds .hover (which shows the events layer); leaving the band hides the lens
+// + tooltip and drops .hover. The green fill + caret stay scrub-only (CSS
+// .visible). Enter/leave were a dead-end: the track starts pointer-events:none
+// and only a hover may re-enable it, so pointerenter could never fire the first
+// time (chicken-and-egg) and the tooltip stayed dead. A band check on
+// pointermove is immune to that. Touch never sees this (the scrub drag is a
+// canvas gesture; the track is inert to touch).
 const TL_HOVER_BAND_TOP = 0; // the pointer is over/inside the line itself
-const TL_HOVER_BAND_BOTTOM = 110; // the lens hangs ~106 px below the line
+const TL_HOVER_BAND_BOTTOM = 120; // the lens disc hangs ~64px below the line
 const TL_TOOLTIP_RADIUS_PX = 24;
+// The 12 month starts (Jan 1 … Dec 1) — the same fixed fractions the static
+// DOM axis uses (365-day basis; a leap year drifts <0.2%, invisible).
+const TL_MONTHS = monthSeparators(365);
 
 function tlHideTip(): void {
   hudTlTipEl.classList.remove('show');
@@ -1852,7 +1864,102 @@ function tlHideTip(): void {
 
 function tlHideLens(): void {
   hudTlLensEl.classList.remove('show');
-  hudTlLensTrackEl.replaceChildren();
+  hudTlLensCanvasEl
+    .getContext('2d')
+    ?.clearRect(0, 0, hudTlLensCanvasEl.width, hudTlLensCanvasEl.height);
+}
+
+/**
+ * Draw the magnifier glass at strip-x `x`. The disc is a 2D canvas: each strip
+ * element (line, month ticks, that year's events, the caret) is re-drawn into
+ * the disc with a PER-ELEMENT radial transform — displaced to (offset · local
+ * zoom) and scaled by the local zoom, which varies with the element's distance
+ * from the focal point. Near the center it's big, near the rim ~1×, and the
+ * rim is seamless (lensDisplace → null at/beyond it = the real strip shows).
+ * The line, ticks and events straddle the line (their dy = elementY − lineY);
+ * the caret hangs below. Cheap: a few dozen draw ops/frame.
+ */
+function tlDrawLens(x: number): void {
+  const canvas = hudTlLensCanvasEl;
+  const dpr = window.devicePixelRatio || 1;
+  const size = LENS_R * 2;
+  if (canvas.width !== size * dpr || canvas.height !== size * dpr) {
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
+  }
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+
+  const width = hudTimelineTrackEl.clientWidth || window.innerWidth;
+  const BAR_L = 12; // #hud-timeline-bar side inset (px, CSS)
+  const barW = Math.max(1, width - 2 * BAR_L);
+  const caretFrac = timelineLayout(tlSpan0, tlSpanLen, [], clock.t).caretFrac;
+
+  ctx.lineCap = 'round';
+  // 1 — the 5px line, full disc width, at the focal point (dy 0 → 4× thick).
+  ctx.strokeStyle = 'rgba(160, 190, 220, 0.5)';
+  ctx.lineWidth = 20;
+  ctx.beginPath();
+  ctx.moveTo(2, LENS_R);
+  ctx.lineTo(size - 2, LENS_R);
+  ctx.stroke();
+  // 2 — month ticks (a 9px bar straddling the line) + the 45° label.
+  for (const m of TL_MONTHS) {
+    const dx = m.frac * barW - x;
+    const d = lensDisplace(dx, 0);
+    if (!d) continue;
+    const cx = LENS_R + d.x;
+    ctx.strokeStyle = 'rgba(120, 150, 200, 0.55)';
+    ctx.lineWidth = Math.max(1, d.scale);
+    ctx.beginPath();
+    ctx.moveTo(cx, LENS_R - 4.5 * d.scale);
+    ctx.lineTo(cx, LENS_R + 4.5 * d.scale);
+    ctx.stroke();
+    // The 45° label anchored under its tick (rotated about the anchor).
+    const ld = lensDisplace(dx, 9); // the label's top-left, ~9px below the line
+    if (ld) {
+      ctx.save();
+      ctx.translate(LENS_R + ld.x, LENS_R + ld.y);
+      ctx.rotate(Math.PI / 4);
+      ctx.scale(ld.scale, ld.scale);
+      ctx.fillStyle = '#7d90ad';
+      ctx.font = `${10}px system-ui, sans-serif`;
+      ctx.fillText(m.abbr, 0, 9);
+      ctx.restore();
+    }
+  }
+  // 3 — that year's event emojis (straddling the line) at their local zoom —
+  //  this is where a packed cluster FANS OUT around the focal point.
+  for (const b of tlBarEvents) {
+    const dx = b.x - x;
+    const d = lensDisplace(dx, 0);
+    if (!d) continue;
+    ctx.save();
+    ctx.translate(LENS_R + d.x, LENS_R + d.y);
+    ctx.scale(d.scale, d.scale);
+    ctx.font = `${13}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(b.emoji, 0, 0);
+    ctx.restore();
+  }
+  // 4 — the "you are here" caret (a 15px bar straddling the line), only when a
+  //  scrub is live (the fill stays hidden, matching the CSS scrub-only rule).
+  if (hudTimelineEl.classList.contains('visible')) {
+    const dx = caretFrac * barW - x;
+    const d = lensDisplace(dx, 0);
+    if (d) {
+      const cx = LENS_R + d.x;
+      ctx.fillStyle = '#57c785';
+      ctx.shadowColor = 'rgba(87, 199, 133, 0.7)';
+      ctx.shadowBlur = 6 * d.scale;
+      const cw = Math.max(2, 3 * d.scale);
+      ctx.fillRect(cx - cw / 2, LENS_R - 7.5 * d.scale, cw, 15 * d.scale);
+      ctx.shadowBlur = 0;
+    }
+  }
 }
 
 function tlTooltipAndLens(clientX: number): void {
@@ -1873,31 +1980,17 @@ function tlTooltipAndLens(clientX: number): void {
   } else {
     tlHideTip();
   }
-  // F4: the lens follows the pointer (clamped so the LENS_W-wide window stays
-  // in view) and re-renders the local events at LENS_ZOOM× around it. The
-  // window is LENS_W px wide, so the clamp and the event cull use LENS_W
-  // (LENS_H is only the box height). x is measured in TRACK space (the
-  // #hud-timeline-track rect) and the lens is a child of that track — so
-  // `left` resolves in the same space and the lens center sits EXACTLY on the
-  // pointer (no #hud-timeline-bar 12px side-inset offset).
-  const lensX = Math.max(LENS_W / 2, Math.min(width - LENS_W / 2, x));
-  const { centerDay, toLensPx } = lensMap(lensX, width, tlSpanLen);
-  // The strip is at the TOP of the screen, so the lens hangs BELOW the
-  // line (a top-strip lens can't grow upward off-screen). Fixed `top` in
-  // CSS; only `left` (pointer x, re-centered) moves it along the bar.
-  hudTlLensEl.style.left = `${lensX - LENS_W / 2}px`;
-  const frag = document.createDocumentFragment();
-  for (const b of tlBarEvents) {
-    const px = toLensPx(b.x);
-    if (px < -40 || px > LENS_W + 40) continue;
-    const node = document.createElement('div');
-    node.className = 'tl-lens-event';
-    node.style.left = `${px}px`;
-    node.innerHTML = `<span class="tl-lens-emoji">${b.emoji}</span><span class="tl-lens-label">${b.title}</span>`;
-    frag.appendChild(node);
-  }
-  hudTlLensTrackEl.replaceChildren(frag);
-  hudTlLensDateEl.textContent = fmtMonthDayUtc(tlActiveYear, centerDay);
+  // Plan 029 F1: the glass FOLLOWS the pointer. The disc is a child of
+  // #hud-timeline-track, so `left` is track-relative — the same space the
+  // pointer x is measured in — and the disc center (focal point) sits EXACTLY
+  // on the pointer. Clamp so the element under the cursor is always dead
+  // center, 4× (the glass may extend past the strip edge; it's clipped by the
+  // viewport, like a real glass held at the window edge).
+  const focal = lensClampX(x, width);
+  hudTlLensEl.style.left = `${focal - LENS_R}px`;
+  tlDrawLens(focal);
+  // The focal-point date readout: the day-of-year at the pointer.
+  hudTlLensDateEl.textContent = fmtMonthDayUtc(tlActiveYear, (focal / width) * tlSpanLen);
   hudTlLensEl.classList.add('show');
 }
 

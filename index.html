@@ -659,90 +659,70 @@
         margin-right: 5px;
         font-variant-numeric: tabular-nums;
       }
-      /* Plan 025 F4: the rolling magnifier — a wide rounded window (220×96,
-         == LENS_W × LENS_H in scrubMath) that follows the pointer along the
-         bar and re-renders the LOCAL events at 8× zoom with per-event labels,
-         plus the lens-center date readout beneath. The strip sits at the TOP
-         of the screen, so the magnifier HANGS BELOW the line (top: 20px = the
-         strip height) — a top-strip lens can't grow upward off-screen. A wide
-         pill (not a circle) suits a phone: 220px wide reads 8× without a huge
-         disc. `left` is driven by the pointer (JS); `top` is fixed here. The
-         container is a child of #hud-timeline-track so `left` is track-relative
-         (the same coordinate space the event markers / fill / caret use). */
+      /* Plan 029 F1: the true magnifying-glass lens — a transparent CIRCULAR
+         disc (Ø 112 == 2·LENS_R in lensMath) centered on the pointer. Its
+         focal point is the point on the line under the cursor; content inside
+         is magnified by a RADIAL profile (4× at center → 1× at the rim) so the
+         glass blends seamlessly into the real strip and "what's near the
+         center is bigger" — a packed cluster of events fans out around the
+         focal point so the exact one can be picked. The strip is at the TOP of
+         the screen, so the disc is centered ON the line (top: lineY − LENS_R =
+         −46px; the upper half hangs past the viewport top, clipped, like a
+         real glass held at the window edge). `left` is driven by the pointer
+         (JS); the disc is a child of #hud-timeline-track so `left` is
+         track-relative — the same space the pointer x is measured in. */
       #hud-tl-lens {
         position: absolute;
-        top: 22px; /* just below the 20px strip, clear of the 45° month labels */
+        top: -46px; /* center the 112px disc on the 5px line (lineY 10 − 56) */
         left: 50%;
-        width: 220px;
-        height: 96px;
+        width: 112px;
+        height: 112px;
+        border-radius: 50%;
         pointer-events: none;
         display: none;
+        z-index: 4;
       }
       #hud-tl-lens.show {
         display: block;
       }
-      /* The magnifier window backdrop (rounded pill) + the magnified 220px
-         bar-space track window (fills it), clipped to the pill. */
+      /* The transparent glass: a faint cool tint + a soft top highlight so it
+         reads as a lens, without hiding the magnified content drawn on the
+         canvas beneath. A thin bright rim ring marks the (1×) blend edge. */
       #hud-tl-lens::before {
         content: '';
         position: absolute;
         inset: 0;
-        border-radius: 12px;
-        background: rgba(8, 14, 26, 0.9);
-        border: 1.5px solid rgba(120, 220, 160, 0.65);
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 50% 32%,
+          rgba(140, 205, 255, 0.1),
+          rgba(10, 18, 32, 0.04) 55%,
+          rgba(10, 18, 32, 0.14)
+        );
+        border: 1.5px solid rgba(150, 220, 255, 0.55);
         box-shadow:
-          0 4px 16px rgba(0, 0, 0, 0.55),
-          inset 0 0 24px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(2px);
+          0 5px 18px rgba(0, 0, 0, 0.5),
+          inset 0 0 22px rgba(140, 205, 255, 0.12);
+        backdrop-filter: blur(1.5px) saturate(1.05);
       }
-      #hud-tl-lens-track {
+      /* The magnified strip content, re-drawn into the disc with the per-
+         element radial transform (JS). border-radius:50% clips the drawn line
+         to a chord so it fades at the rim like the rest of the glass. */
+      #hud-tl-lens-canvas {
         position: absolute;
         inset: 0;
-        overflow: hidden;
-        border-radius: 12px;
+        width: 112px;
+        height: 112px;
+        border-radius: 50%;
       }
-      /* The magnified line across the window's middle (y=48 in the 96 track),
-         aligned with the real bar line's axis. */
-      #hud-tl-lens-track::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        right: 0;
-        top: 45.5px;
-        height: 5px;
-        background: rgba(160, 190, 220, 0.45);
-        border-radius: 2.5px;
-      }
-      #hud-tl-lens-event {
-        position: absolute;
-        top: 48px; /* the magnified line's center (line at 45.5..50.5) */
-        transform: translate(-50%, -50%);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1px;
-        max-width: 72px;
-        white-space: nowrap;
-      }
-      #hud-tl-lens-event .tl-lens-emoji {
-        font-size: 15px;
-        line-height: 1.2;
-      }
-      #hud-tl-lens-event .tl-lens-label {
-        font-size: 9px;
-        line-height: 1.15;
-        color: #d5e3f5;
-        text-align: center;
-        max-width: 72px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      /* The lens-center date readout — a small chip at the window's bottom
-         edge (the day-of-year at the pointer). */
+      /* The focal-point date readout — a small chip at the disc's BOTTOM edge
+         (the day-of-year at the pointer). It sits below the magnified month
+         labels (which reach ~y46 near center) and the hover tooltip (y30–48),
+         so the three never collide. */
       #hud-tl-lens-date {
         position: absolute;
+        top: 100px;
         left: 50%;
-        bottom: 5px;
         transform: translateX(-50%);
         font-size: 11px;
         font-weight: 600;
@@ -1180,7 +1160,7 @@
              side inset. Both are scrub-only (hidden when the layer hides). -->
         <div id="hud-tl-tip"></div>
         <div id="hud-tl-lens">
-          <div id="hud-tl-lens-track"></div>
+          <canvas id="hud-tl-lens-canvas"></canvas>
           <div id="hud-tl-lens-date"></div>
         </div>
       </div>

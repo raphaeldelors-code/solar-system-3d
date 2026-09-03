@@ -193,3 +193,9 @@ loader, constellation tour, tooltips, screenshot button).
 `plans/028-touch-scrub-lens.md` — on a phone the rolling magnifier lens + event tooltip were mouse-only, so the 3-finger scrub (the phone's "cursor") showed the event markers but never the lens. Drive the lens + tooltip from the gesture centroid while the scrub is live.
 
 - [x] F1 feat(hud): 3-finger scrub drives the rolling lens + event tooltip (phone) — `419edfc` (new `tlScrubLens(centroidX)` = tlRefresh + tlShow + tlTooltipAndLens, called from the 3-finger pointermove on committed moves; desktop unchanged — mouse hover owns the lens, right-drag shows fill+caret only. 307/307 tests + tsc + lint + prettier + build green; live-verified at 390×844: 3-finger drag → 21 markers + lens block with "Sep 20" chip + 2 labeled events after the rAF sweep, release clears everything; 1280×800 regression: hover lens on, right-drag fill+caret on/lens off, release clean)
+
+## User queue — 2026-09-02 — plan 029 (true circular magnifier lens)
+
+`plans/029-true-magnifier-lens.md` — the rectangular 220×96 slice-window lens was rejected ("absolutely not what I want"). Rebuild it as a true magnifying glass: a circular transparent disc on the line that magnifies what is near its center (radial zoom, 4× → 1× at the rim) so packed events fan out and the exact one can be picked.
+
+- [ ] F1 feat(hud): true circular magnifier lens (radial zoom, transparent glass) — hash TBC (new `src/render/lensMath.ts`: LENS_R/LENS_ZOOM/lensZoomAt/lensDisplace/lensClampX, 8 unit tests; main.ts per-element radial renderer draws line+ticks+labels+events+caret into a 112px circular canvas; old rectangular lens + lensMap removed from scrubMath.ts; index.html disc CSS + canvas; focal-date chip moved to disc bottom to clear labels/tooltip. 313/313 tests + tsc + lint + prettier + build green; live-verified headless: circular disc on line, focal date, packed 4px→11px fan-out, mouse-leave hides, 3-finger scrub shows/hides)
