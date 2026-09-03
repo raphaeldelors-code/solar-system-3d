@@ -210,7 +210,7 @@ left edge, so "the date highlighted when scrolling" ≠ the little box top-right
 Fix: the chip reads the clock's committed date (`clock.t - tlSpan0`) while a
 scrub is live; pointer-position only on plain hover.
 
-- [x] F1 fix(scrub): focal-date chip reads the clock date while scrubbing — hash TBC
+- [x] F1 fix(scrub): focal-date chip reads the clock date while scrubbing — hash 33b8eed
 - [ ] docs: this entry — hash TBC
 
 ## User queue — 2026-09-03 — plan 030 (dock event tooltip under date/speed pane)
