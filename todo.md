@@ -210,7 +210,7 @@ should be at the center of our zooming lens." Fix: convert the focal to bar
 space (`xBar = x - BAR_L`) before the dx math; probe the event tooltip in bar
 space too.
 
-- [x] F1 fix(hud): center the in-lens caret on the disc (bar-space dx) — hash TBC
+- [x] F1 fix(hud): center the in-lens caret on the disc (bar-space dx) — hash f9f224e
 
 ## User queue — 2026-09-03 — plan 032 (align the lens to the selector/caret)
 
