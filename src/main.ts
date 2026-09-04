@@ -1810,7 +1810,9 @@ function tlPaint(year: number): void {
     el.textContent = mk.emoji;
     el.title = mk.title;
     frag.appendChild(el);
-    // Bar-space copy for the hover tooltip.
+    // Track-space copy for the lens + tooltip (tlDrawLens subtracts the
+    // track-space focal `x`; the month ticks/caret use frac·barW in bar
+    // space, which is why they take `xBar` instead).
     tlBarEvents.push({
       day: mk.frac * spanLenDays,
       x: mk.frac * width,
@@ -1939,7 +1941,9 @@ function tlDrawLens(x: number): void {
   // 3 — that year's event emojis (straddling the line) at their local zoom —
   //  this is where a packed cluster FANS OUT around the focal point.
   for (const b of tlBarEvents) {
-    const dx = b.x - xBar;
+    // b.x is stored in TRACK space (frac·width, plan 023) — use `x`, not
+    // `xBar`, or events sit 12px off the caret (48px at 4× center zoom).
+    const dx = b.x - x;
     const d = lensDisplace(dx, 0);
     if (!d) continue;
     ctx.save();

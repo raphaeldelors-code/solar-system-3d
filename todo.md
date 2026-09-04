@@ -200,6 +200,17 @@ loader, constellation tour, tooltips, screenshot button).
 
 - [x] F1 feat(hud): true circular magnifier lens (radial zoom, transparent glass) — hash `c8a9384` (new `src/render/lensMath.ts`: LENS_R/LENS_ZOOM/lensZoomAt/lensDisplace/lensClampX, 8 unit tests; main.ts per-element radial renderer draws line+ticks+labels+events+caret into a 112px circular canvas; old rectangular lens + lensMap removed from scrubMath.ts; index.html disc CSS + canvas; focal-date chip moved to disc bottom to clear labels/tooltip. 313/313 tests + tsc + lint + prettier + build green; live-verified headless: circular disc on line, focal date, packed 4px→11px fan-out, mouse-leave hides, 3-finger scrub shows/hides)
 
+## User queue — 2026-09-03 — plan 034 (in-lens event dots 12px off)
+
+`plans/034-fix-lens-event-offset.md` — "events badly positioned, don't match
+the date picked via scrolling." The DOM is correct (caret + every event on
+the same frac scale, verified); the bug is a plan-033 regression in
+`tlDrawLens`: the event emoji `dx` mixed track-space `b.x` (frac·width) with
+bar-space `xBar` (focal−12) → −12px strip = −48px at 4× center zoom, events
+drawn left of the caret inside the disc.
+
+- [x] F1 fix(hud): align in-lens event dots with the caret (track-space dx) — hash TBC
+
 ## User queue — 2026-09-03 — plan 033 (in-lens caret not at disc center)
 
 `plans/033-fix-lens-caret-inset.md` — the magnifier disc sits on the selector
