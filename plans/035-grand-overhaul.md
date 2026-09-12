@@ -5,7 +5,8 @@
 > interaction upgrade. Each F is a self-contained feature: its own worktree,
 > one feature commit, a green gate set (tsc / 313+ tests / eslint / prettier /
 > vite build / headless-Chrome check), and a push. Record each hash in this file
-> + `todo.md` in a follow-up docs commit (never `--amend`).
+>
+> - `todo.md` in a follow-up docs commit (never `--amend`).
 
 ## Goal
 
@@ -33,7 +34,7 @@ of it on.
 - Belts: `InstancedMesh` (good). 313/313 tests green; repo 7.4M.
 - three **0.168.0** ships (verified in `node_modules/three/examples/jsm/`)
   `EffectComposer, RenderPass, UnrealBloomPass, OutputPass, SMAAPass,
-  TAARenderPass, SSAARenderPass, BokehPass, FilmPass` — all importable via
+TAARenderPass, SSAARenderPass, BokehPass, FilmPass` — all importable via
   `three/examples/jsm/...` (same convention the code already uses).
 - Reliable real-texture source (verified 200 via jsDelivr): the three.js repo's
   NASA-derived `examples/textures/planets/` — `earth_atmos_2048.jpg` (day),
@@ -75,15 +76,17 @@ feature commit.
 
 ## Features (in landing order = impact order)
 
-### F1 — HDR post-processing stack + glowing Sun  `[worktree wt-35-01]`
+### F1 — HDR post-processing stack + glowing Sun `[worktree wt-35-01]`
+
 The single biggest "wow". Replace flat output with a real HDR pipeline.
+
 - **Files:** `src/render/scene.ts` (buildScene renderer + new `render()` path),
   new `src/render/post.ts` (build the `EffectComposer`: `RenderPass` →
   `UnrealBloomPass` → `OutputPass`; optional `SMAAPass`/`TAARenderPass` if
   `antialias` is dropped to let MSAA live in the RT).
 - **Changes:**
   - `renderer.toneMapping = ACESFilmicToneMapping; renderer.toneMappingExposure
-    ≈1.1;` (from `NoToneMapping`). Composer renders to a `HalfFloatType`
+≈1.1;` (from `NoToneMapping`). Composer renders to a `HalfFloatType`
     target so bloom gets real HDR headroom; `OutputPass` applies tone map +
     sRGB at the end (correct with three's color-management).
   - **Sun corona/glow:** the Sun is unlit (`MeshBasicMaterial`) — make it
@@ -95,7 +98,7 @@ The single biggest "wow". Replace flat output with a real HDR pipeline.
     disc itself stays bright; the halo is `AdditiveBlending`, `depthWrite:false`.
   - **Planets get rim bloom** for free from the same composer (specular/high
     intensity edges bloom subtly). Tune bloom `strength≈0.7, radius≈0.5,
-    threshold≈0.85` so only the sun + bright rims bloom, not everything.
+threshold≈0.85` so only the sun + bright rims bloom, not everything.
 - **Acceptance:** headless Chrome — canvas now shows a glowing halo around the
   sun (vision + pixel probe of the corona region vs the flat "before"); planet
   edges show a soft rim; no whole-scene wash-out; **60 fps** (measure rAF delta
@@ -103,7 +106,8 @@ The single biggest "wow". Replace flat output with a real HDR pipeline.
 - **Risk/mitigation:** HDR RT cost — cap composer pixel ratio at 2 and provide a
   `?post=0` URL switch to fall back to the direct renderer if a device chokes.
 
-### F2 — Deep sky: Milky Way + rich starfield + zodiacal light  `[wt-35-02]`
+### F2 — Deep sky: Milky Way + rich starfield + zodiacal light `[wt-35-02]`
+
 - **Files:** `src/render/scene.ts` (starfield block L295–317), new
   `src/render/skybox.ts`, `public/textures/milkyway_8k.jpg` (real equirect,
   from a freely-usable source) + `public/textures/stars…`.
@@ -112,7 +116,7 @@ The single biggest "wow". Replace flat output with a real HDR pipeline.
     field: (a) a **Milky-Way equirect skybox** (`scene.background` or a large
     inward `SphereGeometry` with `BackSide`) — the real band of stars; (b) a
     denser **colored** near-starfield (thousands of points with per-point color
-    + size, from the HD color palette) for parallax depth.
+    - size, from the HD color palette) for parallax depth.
   - Add **zodiacal light**: a faint, elongated additive glow plane/dust band in
     the ecliptic plane (subtle `AdditiveBlending` gradient), the real scattering
     of interplanetary dust seen after sunset.
@@ -121,10 +125,11 @@ The single biggest "wow". Replace flat output with a real HDR pipeline.
   (vs flat black before); stars have color variation; a faint zodiacal glow
   near the ecliptic. Gate set green.
 
-### F3 — Real NASA planet textures + enhanced procedural fallback  `[wt-35-03]`
+### F3 — Real NASA planet textures + enhanced procedural fallback `[wt-35-03]`
+
 - **Files:** `src/render/textures.ts`, `src/render/scene.ts` (material build
   L363–368), `src/data/bodies.ts` (add optional `textures: {day, normal,
-  specular, bump?}` refs per body), new `public/textures/planets/*.jpg` (earth
+specular, bump?}` refs per body), new `public/textures/planets/*.jpg` (earth
   day/cloud/normal/spec + moon; best-available for the others).
 - **Changes:**
   - **Async texture loader** (`THREE.TextureLoader`, `THREE.ImageBasedLights`
@@ -145,9 +150,10 @@ The single biggest "wow". Replace flat output with a real HDR pipeline.
   as good as before, better if real maps land). Procedural fallback verified by
   loading with network off. Gate set green.
 
-### F4 — Atmospheres (fresnel rim) + translucent rings  `[wt-35-04]`
+### F4 — Atmospheres (fresnel rim) + translucent rings `[wt-35-04]`
+
 - **Files:** new `src/render/atmosphere.ts` (fresnel shader shell), `src/render/
-  scene.ts` (atmosphere shells + ring material L402–426).
+scene.ts` (atmosphere shells + ring material L402–426).
 - **Changes:**
   - **Atmosphere glow** per planet with air: a slightly-larger `SphereGeometry`
     with a **fresnel scattering shader** (additive, rim-bright, tinted by the
@@ -163,7 +169,8 @@ The single biggest "wow". Replace flat output with a real HDR pipeline.
   matching its atmosphere; Saturn's rings show the Cassini gap and translucent
   bands, with the correct shadow. Gate set green.
 
-### F5 — Cinematic camera: polished fly-to + intro tour + more commands  `[wt-35-05]`
+### F5 — Cinematic camera: polished fly-to + intro tour + more commands `[wt-35-05]`
+
 - **Files:** `src/main.ts` (camera/fly logic, HUD, keyboard map, commands),
   `index.html` (HUD copy/help, new controls).
 - **Changes:**
@@ -187,7 +194,8 @@ The single biggest "wow". Replace flat output with a real HDR pipeline.
   (DOM/state asserts); intro plays and is skippable; fly-to eases (no snap).
   Gate set green + vision of the info card.
 
-### F6 — Performance pass (hold 60 fps with everything on)  `[wt-35-06]`
+### F6 — Performance pass (hold 60 fps with everything on) `[wt-35-06]`
+
 - **Files:** `src/render/scene.ts`, `src/render/belts.ts`, `src/render/post.ts`,
   `src/main.ts` (frame loop).
 - **Changes:**
@@ -195,20 +203,21 @@ The single biggest "wow". Replace flat output with a real HDR pipeline.
     billboard** belt (or coarser instances) so the belt doesn't dominate fill
     when zoomed out. Gate on camera distance.
   - Cap `setPixelRatio`/composer RT at 2; skip re-render when the scene is
-  static (paused + no scrub + no tween) to save battery — resume on any input.
+    static (paused + no scrub + no tween) to save battery — resume on any input.
   - Profile per-frame in headless Chrome; target ≥ 55 fps at 1280×800 with all
-  features on; keep the existing allocation-free belt loop.
+    features on; keep the existing allocation-free belt loop.
 - **Acceptance:** measured fps (in-page rAF sampler) ≥ 55 with all toggles on,
   both 1080p-equivalent and a 4K-ish RT; no GC spikes. Gate set green.
 
 ---
 
 ## Cross-cutting verification (every feature)
+
 1. `npm test` → all pass (add unit tests for any new pure logic: e.g. skybox
    star-color sampling, belt-LOD distance threshold, command→state mapping —
    all in `src/sim`-free modules so they're node-testable).
 2. `npm run build` → tsc strict + vite green; `npm run lint`; `npm run
-   format:check`.
+format:check`.
 3. **Headless Chrome** on the built site (`npm run preview` + the CDP shell
    from the `headless-chrome-live-check` skill): DOM/JS assertions for the
    behavioral bits + **`vision_analyze`** screenshots for the visual bits,
@@ -219,6 +228,7 @@ The single biggest "wow". Replace flat output with a real HDR pipeline.
    (GitHub Pages auto-deploys on main push).
 
 ## Deliverable when done
+
 A deployed, cinematic solar system at
 `https://raphaeldelors-code.github.io/solar-system-3d/` with a glowing sun,
 Milky Way + zodiacal sky, realistic textured planets with atmospheres +
@@ -228,6 +238,7 @@ plus before/after screenshots in `.baseline/` and a full per-feature commit
 history.
 
 ## Not doing (scope guard)
+
 - No new physics solvers (Kepler + geocentric moon stays — it's correct for our
   purposes); no exoplanets, no other star systems.
 - No WebGPU (stays WebGL2 / three r168) — keep broad compat + the Pages deploy.
