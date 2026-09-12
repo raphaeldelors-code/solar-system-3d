@@ -32,6 +32,12 @@ export interface BeltDefinition {
   sizeJitter: number;
   /** Base color (0xrrggbb); per-instance brightness varies around it. */
   color: number;
+  /**
+   * Far-LOD point size in scene units (default 1.5). Belts that span a large
+   * radius (Kuiper) set a smaller value so the dust cloud reads as a faint
+   * band at overview distance instead of a second bright dotted ring.
+   */
+  farPointSize?: number;
 }
 
 export interface BeltObject {
@@ -65,9 +71,18 @@ export const BELTS: BeltDefinition[] = [
     a: [30, 48], // beyond Neptune
     e: [0.0, 0.3],
     i: [0, 8],
-    baseSize: 0.075,
+    // 2026-09-12: 0.075 → 0.05. At overview distance the 1,400 rocks were the
+    // brightest feature on screen (brighter than the orbit lines); a rock
+    // this size at that distance reads as a dot, and 1,400 dots read as a
+    // glowing ring. 0.05 keeps the belt visible in close-up without shouting
+    // from the overview.
+    baseSize: 0.05,
     sizeJitter: 0.6,
     color: 0xbcd2ee,
+    // Far-LOD point size (scene units). The Kuiper belt spans ~2.4× the
+    // asteroid belt's radius, so its dust cloud needs smaller points to read
+    // as a faint band rather than a second bright dotted ring (2026-09-12).
+    farPointSize: 0.7,
   },
 ];
 

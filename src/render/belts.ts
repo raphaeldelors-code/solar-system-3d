@@ -101,7 +101,7 @@ export function buildBeltField(def: BeltDefinition): BeltField {
   );
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   const pmat = new THREE.PointsMaterial({
-    size: 1.5,
+    size: def.farPointSize ?? 1.5,
     sizeAttenuation: true,
     vertexColors: true,
     transparent: true,
@@ -208,7 +208,8 @@ export function applyBeltLod(
   // the old 1.4× "compensation" actually PUSHED it past full brightness and
   // made the zoomed-out belt glow. At most ~half strength now, so the far
   // cloud reads as faint dust and the cross-fade dips slightly rather than
-  // flaring.
-  pmat.opacity = (1 - decision.blend) * 0.55;
+  // flaring. (2026-09-12: 0.55 → 0.45 — at overview distance even half
+  // strength read as a second bright ring, the Kuiper belt especially.)
+  pmat.opacity = (1 - decision.blend) * 0.45;
   return decision.mode;
 }
