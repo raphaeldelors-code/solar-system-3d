@@ -105,6 +105,32 @@ threshold≈0.85` so only the sun + bright rims bloom, not everything.
   in-page). Gate set green.
 - **Risk/mitigation:** HDR RT cost — cap composer pixel ratio at 2 and provide a
   `?post=0` URL switch to fall back to the direct renderer if a device chokes.
+- **Implementation record (2026-09-12, commit `650a136`):** implemented as
+  `src/render/post.ts` — `buildPostStack()` returns a `PostStack` with an
+  `EffectComposer` over a **HalfFloat** `WebGLRenderTarget` (true HDR headroom
+  so the sun's >1.0 brightness survives into bloom; render targets render with
+  `NoToneMapping` in three r168, so `OutputPass` is the single place ACES
+  filmic + sRGB is applied — verified no double tone-map), plus
+  `buildSunGlow()` — a separate **additive billboard sprite** (canvas radial
+  gradient, white core → warm orange → transparent, `depthWrite:false`,
+  `depthTest:true` so planets occlude it) rather than an emissive-material
+  change, keeping the shadow pass untouched. The composer chain is
+  `RenderPass → UnrealBloomPass → SMAAPass → OutputPass` (SMAA re-antialiases
+  the non-MSAA RT; the direct `?post=0` path keeps the MSAA canvas). Bloom is
+  tuned conservative (`strength 0.25 / radius 0.4 / threshold 0.9`) after live
+  vision A/B — an initial `0.55/0.7/0.92` + 10× corona washed the whole
+  viewport amber (failed the "no whole-scene wash-out" criterion); the final
+  4.5× corona with a steep falloff gives a tight local glow with a mostly
+  black background (pixel-probe: mean 24.9 vs 94.5 before, 74% dark pixels vs
+  16%). `src/render/scene.ts` exposes `BuiltScene.post` + `BuiltScene.sunGlow`
+  (the glow scale tracks the live morphed sun radius after the
+  `applyScaleMorph` loop); `src/main.ts` adds a `postOn` flag, a **`?post=0`**
+  URL switch and a **F2** keyboard toggle (F2 chosen because `p` is already
+  the pause URL param) with resize handled by `post.resize()`, and
+  `src/state/urlState.ts` documents `?post=0` as a non-shareable device switch.
+  Verified: gate set green (313/313, tsc, lint, format, build) + headless
+  Chrome live — corona visible around the sun, planets/orbits crisp, F2 and
+  `?post=0` both fall back to the flat direct render.
 
 ### F2 — Deep sky: Milky Way + rich starfield + zodiacal light `[wt-35-02]`
 

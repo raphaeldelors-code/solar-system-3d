@@ -21,7 +21,7 @@ full autonomy ("don't disappoint me"). Worktrees `solar-system-3d-wt-NN`; each F
 one green-gated feature commit + docs commit with hash + push, merged to main in
 order. (Supersedes old open item B4 below.)
 
-- [ ] F1 feat(render): HDR post stack (ACES + UnrealBloom + HalfFloat RT) + glowing sun (corona/halo) — `wt-35-01`
+- [x] F1 feat(render): HDR post stack (ACES + UnrealBloom + HalfFloat RT) + glowing sun (corona/halo) — `wt-35-01` — `650a136`
 - [ ] F2 feat(render): deep sky — Milky Way equirect + colored starfield + zodiacal light — `wt-35-02`
 - [ ] F3 feat(render): real NASA textures (day/normal/spec) + Earth clouds + ocean specular + procedural fallback — `wt-35-03`
 - [ ] F4 feat(render): fresnel atmosphere shells + translucent Cassini-division ring texture (shadows kept) — `wt-35-04`
