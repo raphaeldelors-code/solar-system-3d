@@ -12,6 +12,22 @@ the plan files — this file stays a thin index.
 Core, realism, polish all shipped (PWA, URL state, shadows, belts, real-texture
 loader, constellation tour, tooltips, screenshot button).
 
+## Phase 6 — GRAND OVERHAUL (2026-09-12) — see `plans/035-grand-overhaul.md`
+
+Goal: the most beautiful + realistic solar system ever built in a browser —
+cinematic HDR + glowing sun, Milky Way/zodiacal sky, NASA textures, atmospheres,
+translucent shadowed rings, cinematic intro + command palette, 60 fps. User gave
+full autonomy ("don't disappoint me"). Worktrees `solar-system-3d-wt-NN`; each F =
+one green-gated feature commit + docs commit with hash + push, merged to main in
+order. (Supersedes old open item B4 below.)
+
+- [ ] F1 feat(render): HDR post stack (ACES + UnrealBloom + HalfFloat RT) + glowing sun (corona/halo) — `wt-35-01`
+- [ ] F2 feat(render): deep sky — Milky Way equirect + colored starfield + zodiacal light — `wt-35-02`
+- [ ] F3 feat(render): real NASA textures (day/normal/spec) + Earth clouds + ocean specular + procedural fallback — `wt-35-03`
+- [ ] F4 feat(render): fresnel atmosphere shells + translucent Cassini-division ring texture (shadows kept) — `wt-35-04`
+- [ ] F5 feat(web): cinematic intro + polished fly-to + command palette/shortcuts + body info card — `wt-35-05`
+- [ ] F6 perf: 60 fps pass (belt LOD, pixel-ratio cap, idle skip, profile) — `wt-35-06`
+
 ## Phase 4 — Review fixes + features (see `plans/002-review-fixes-and-features.md`)
 
 - [x] Plan 002 written
@@ -22,7 +38,7 @@ loader, constellation tour, tooltips, screenshot button).
 - [x] B1 feat(sim): celestial event engine (eclipses, transits, conjunctions, oppositions, Saturn edge-on) + Events UI
 - [x] B2 feat(nav): body search combobox + clean grouped satellite menu
 - [x] B3 feat(render): true-scale tour (3 s morph + captions + return) — `4e7ec45`. "⚖ Real scale" eases the whole scene visible↔true (sizes, distances, belts, orbit lines) over 3 s with staged captions; "↩ Return" reverses from wherever (even mid-morph). Parking at p=1 sets scale=TRUE_SCALE (authoritative for select/URL/framing; the p=1 blend IS TRUE_SCALE so nothing snaps). Tour is transient (not url-encoded); any manual camera input ends it. UI: index.html #scale-tour / #scale-return / #scale-caption. SUPERSEDED by the single toggle (user queue 2026-08-21, first item).
-- [ ] B4 feat(render): real NASA/SSS textures committed + LICENSE credits
+- [ ] B4 feat(render): real NASA/SSS textures committed + LICENSE credits — **SUPERSEDED by Plan 035 F3**
 - [x] C: update AGENTS.md (toggle, moon live-resample, constellation label invariants), final gates, live-site verify — 2026-08-21 (E1–E3 docs)
 
 ## User queue — 2026-08-20 (before B3)
