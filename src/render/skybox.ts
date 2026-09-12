@@ -51,11 +51,15 @@ export const ZODIACAL_RADIUS = 4000;
  * authored). The shipped equirect bake is full-strength galaxy art and reads
  * as the single brightest thing in the frame at the overview — dimmed so the
  * band sets the mood without stealing focus from the system.
- * 2026-09-12: 0.5 → 0.3 — at oblique mid-zoom views the band still crossed
- * the upper half of the frame brighter than the planets; trim further while
- * keeping individual stars (rendered separately) untouched.
+ * 2026-09-12: 0.5 → 0.05 — successive user feedback passes ("the huge one …
+ * the milky way" / "much less present, just like the middle one"). At 0.1
+ * the band still rated 6/10; the user's bar is the Kuiper belt (~1/10,
+ * barely there). An A/B (layer hidden) proved the one-sided "fog" over half
+ * the sky is the ZODIACAL dome (fixed separately, 0.08 → 0.03), not this
+ * texture. At 0.05 the band is a faint texture: visible when you look for
+ * it, never the frame's subject.
  */
-export const MILKYWAY_TINT = 0.3;
+export const MILKYWAY_TINT = 0.05;
 
 /**
  * Stellar blackbody color palette (approximate hues), by class:
@@ -138,7 +142,7 @@ export function makeStarAttributes(
  * zero) = `peak`; falls off sharply toward the anti-Sun and gently toward the
  * ecliptic horizon — the classic triangular afterglow shape.
  */
-export function zodiacalPeakOpacity(altDeg: number, sepDeg: number, peak = 0.08): number {
+export function zodiacalPeakOpacity(altDeg: number, sepDeg: number, peak = 0.015): number {
   // Away from the Sun: cosine^3 falls to 0 at 90° (anti-solar direction = 0).
   const t = Math.max(0, Math.cos((sepDeg * Math.PI) / 180));
   // Toward the ecliptic plane: rises from the horizon, never fully dark.
@@ -251,8 +255,14 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
     uniforms: {
       uColor: { value: new THREE.Color(1.0, 0.85, 0.62) }, // warm dust
       // Peak alpha on the Sun in the ecliptic plane — keep in sync with the
-      // pure zodiacalPeakOpacity default (0.08 after the 2026-09-12 dimming).
-      uPeak: { value: 0.08 },
+      // pure zodiacalPeakOpacity default. 2026-09-12: 0.08 → 0.015. The user
+      // reported the north of the sky as "foggy" vs the black south — the
+      // A/B (layer hidden) proved that smooth warm haze was this dome, not
+      // the galaxy texture: it glows brightest toward the Sun (one side) and
+      // falls to zero opposite (the other side) — exactly the one-sided
+      // asymmetry reported. 0.015 keeps only a whisper of afterglow hugging
+      // the Sun; at any other view the sky reads clean black.
+      uPeak: { value: 0.015 },
       uR: { value: ZODIACAL_RADIUS },
       uCamPos: { value: new THREE.Vector3(0, 16, 30) },
     },

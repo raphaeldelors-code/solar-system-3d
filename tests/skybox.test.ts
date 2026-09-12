@@ -99,9 +99,9 @@ describe('makeStarAttributes', () => {
 });
 
 describe('zodiacalPeakOpacity', () => {
-  it('peaks at the Sun on the ecliptic plane (dimmed to 0.08 after the 2026-09-12 user dimming)', () => {
+  it('peaks at the Sun on the ecliptic plane (dimmed to 0.015 after the 2026-09-12 "foggy sky" user pass)', () => {
     const peak = zodiacalPeakOpacity(0, 0);
-    expect(peak).toBeCloseTo(0.08, 5);
+    expect(peak).toBeCloseTo(0.015, 5);
     // Strictly above every non-central direction.
     for (const [alt, sep] of [
       [0, 10],
