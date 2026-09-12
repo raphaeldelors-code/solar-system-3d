@@ -51,15 +51,17 @@ export const ZODIACAL_RADIUS = 4000;
  * authored). The shipped equirect bake is full-strength galaxy art and reads
  * as the single brightest thing in the frame at the overview — dimmed so the
  * band sets the mood without stealing focus from the system.
- * 2026-09-12: 0.5 → 0.05 — successive user feedback passes ("the huge one …
- * the milky way" / "much less present, just like the middle one"). At 0.1
- * the band still rated 6/10; the user's bar is the Kuiper belt (~1/10,
- * barely there). An A/B (layer hidden) proved the one-sided "fog" over half
- * the sky is the ZODIACAL dome (fixed separately, 0.08 → 0.03), not this
- * texture. At 0.05 the band is a faint texture: visible when you look for
- * it, never the frame's subject.
+ * 2026-09-12: 0.5 → 0.3 — the band is a faint texture, not the frame's subject.
+ * 2026-09-12 (pass 4, REVERTED): briefly cut to 0.05, but the user found the
+ * near-invisible band "ugly / less lighty" and asked for the SAME brightness
+ * as before with MUCH fewer stars. The right fix was in the texture, not the
+ * tint: `scripts/bake_milkyway.py --star-scale 0.10 --band-scale 0.55`
+ * regenerates the equirect with ~23k stars instead of ~234k and a 3.4×
+ * stronger smooth band glow (the lost star-field luminance relocated into the
+ * glow). Tint back at 0.3 → same overall brightness as the pass-3 deploy,
+ * but the band reads smooth with far fewer specks.
  */
-export const MILKYWAY_TINT = 0.05;
+export const MILKYWAY_TINT = 0.3;
 
 /**
  * Stellar blackbody color palette (approximate hues), by class:
