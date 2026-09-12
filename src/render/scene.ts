@@ -24,7 +24,7 @@ import {
 } from './textures';
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
-import { buildBeltField, updateBeltField, type BeltField } from './belts';
+import { buildBeltField, updateBeltField, applyBeltLod, type BeltField } from './belts';
 import { CONSTELLATIONS, raDecToUnit, type Constellation } from '../data/constellations';
 import { FIGURE_FITS, figurePlacement } from '../data/figures';
 import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows';
@@ -602,8 +602,9 @@ export function buildScene(
     const field = buildBeltField(def);
     belts.push(field);
     scene.add(field.mesh);
+    scene.add(field.points); // F6 far-LOD cloud (hidden until a far view)
   }
-  updateBeltFields({ belts } as Pick<BuiltScene, 'belts'>, 0, scale);
+  updateBeltFields({ belts } as Pick<BuiltScene, 'belts'>, 0, scale, 0);
 
   function dispose() {
     for (const d of disposables) d.dispose();
@@ -1596,14 +1597,51 @@ export function updatePositions(built: BuiltScene, tDays: number, scale: VisualS
 const UPDATE_POS_SCRATCH = new THREE.Vector3();
 const UPDATE_AU_SCRATCH: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
 
-/** Advance every belt field to simulation time `tDays` (per frame). */
+/** Per-belt mean scene radius (computed once; the belt is a ring at ~fixed radius). */
+const BELT_MEAN_RADIUS: Map<string, number> = new Map();
+function beltMeanRadius(field: BeltField): number {
+  let cached = BELT_MEAN_RADIUS.get(field.def.id);
+  if (cached === undefined) {
+    // Mean of the (constant) semi-major axis mapped through the VISIBLE ramp —
+    // true scale collapses the outer belt but the LOD is a visual-distance
+    // decision, so use the visible-mode radius as the reference.
+    const a = (field.def.a[0] + field.def.a[1]) / 2;
+    cached = planetDistance(a);
+    BELT_MEAN_RADIUS.set(field.def.id, cached);
+  }
+  return cached;
+}
+
+/**
+ * Advance every belt field to simulation time `tDays` (per frame) and apply
+ * the F6 LOD (near rocks vs far point cloud) for the current camera distance.
+ * `camDist` = camera distance from origin; `0` at build time (near view).
+ */
 export function updateBeltFields(
   built: Pick<BuiltScene, 'belts'>,
   tDays: number,
   scale: VisualScale,
+  camDist: number,
 ): void {
   for (const field of built.belts) {
     updateBeltField(field, tDays, scale, scale.beltSizeFactor);
+    applyBeltLod(field, camDist, beltMeanRadius(field), scale.beltSizeFactor ?? 1);
+  }
+}
+
+/**
+ * F6: re-apply ONLY the LOD choice (near rocks vs far point cloud) for the
+ * current camera distance, without re-solving the belt Kepler positions.
+ * Called when the camera moves while the sim is paused — the belt positions
+ * are frozen but the near/far cross-fade depends on how far the camera is.
+ */
+export function applyBeltLodOnly(
+  built: Pick<BuiltScene, 'belts'>,
+  scale: VisualScale,
+  camDist: number,
+): void {
+  for (const field of built.belts) {
+    applyBeltLod(field, camDist, beltMeanRadius(field), scale.beltSizeFactor ?? 1);
   }
 }
 

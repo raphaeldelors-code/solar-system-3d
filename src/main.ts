@@ -17,6 +17,7 @@ import {
   updatePositions,
   applySpin,
   updateBeltFields,
+  applyBeltLodOnly,
   satelliteExtentScene,
   updateBodyHighlight,
   constellationCenter,
@@ -64,6 +65,7 @@ import { attachRealTextures } from './render/realTextures';
 import { INTRO_LEGS, INTRO_DURATION, titleOpacity, introShouldPlay } from './render/intro';
 import { commandForKey, digitToPlanet, paletteEntries, COMMANDS } from './render/commands';
 import { bodyFacts } from './render/bodyFacts';
+import { sceneIsStatic } from './render/idle';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
 import { findEvents, type Event as SimEvent } from './sim/events';
@@ -403,6 +405,28 @@ let lastDays = clock.t;
 let lastMs = performance.now();
 // Throttle for the per-frame Moon orbit-line resample (see the frame loop).
 let lastMoonResampleMs = 0;
+
+// ---------------------------------------------------------------------------
+// F6 idle-skip: skip the (expensive) WebGL render pass when the on-screen
+// frame is provably static — sim paused, camera settled (no flight/morph/drag),
+// no scrub, no intro/tour, and no wall-clock-driven highlight pulse. `sceneDirty`
+// is set by any input that can change the view (controls change, keydown, pointer,
+// resize, command) and consumed on the next render. When idle we still keep the
+// rAF chain alive (so the first interaction re-renders immediately) but skip the
+// GPU render entirely — this is the "battery" saving of the F6 perf pass.
+// ---------------------------------------------------------------------------
+let sceneDirty = true;
+function markSceneDirty(): void {
+  sceneDirty = true;
+}
+// F6 camera-motion scratch: detect any camera/target change between frames
+// (drag, wheel zoom, damping settle, follow lerp) without relying on the
+// OrbitControls 'change' event. A sub-1e-4 move counts as "moving".
+const F6_LAST_CAM = { x: 0, y: 0, z: 0 };
+const F6_LAST_TARGET = { x: 0, y: 0, z: 0 };
+let f6CamInit = false;
+/** F6: true when this frame's camera moved vs the last rendered frame. */
+let f6CameraMoving = false;
 // True while the WebGL context is down (driver reset / tab reclaimed). The
 // render loop keeps ticking its rAF chain but skips all sim + GPU work until
 // the browser fires `webglcontextrestored`, so a lost context costs nothing
@@ -517,6 +541,7 @@ function morphEnd(): void {
  */
 function requestScale(target: 'real' | 'visible'): void {
   if (scaleTarget() === target) return;
+  markSceneDirty(); // F6: scale change re-maps every body
   if (morph && morph.dir !== 0) {
     // Mid-morph: reverse from the current progress (p stays as-is).
     morph.dir = target === 'real' ? 1 : -1;
@@ -775,6 +800,7 @@ function wireAnchorButtons(): void {
 }
 
 function applyToggles(): void {
+  markSceneDirty(); // F6: orbit/label/belt/figure visibility changed
   for (const entry of built.bodies.values()) {
     if (entry.orbit) (entry.orbit.material as THREE.Material).visible = orbitsEl.checked;
     entry.label.visible = labelsEl.checked;
@@ -874,6 +900,7 @@ function applyDatePick(): void {
   if (Math.abs(target.getTime() - cur.getTime()) < 60_000) return; // same day
   clock.setDate(target);
   resampleMoonNow(); // Moon orbit line jumps with the epoch
+  markSceneDirty(); // F6: date jump repositions every body
   dateEl.classList.remove('flash');
   void dateEl.offsetWidth;
   dateEl.classList.add('flash');
@@ -924,6 +951,7 @@ function pickCalendarDay(day: number): void {
   if (Math.abs(target.getTime() - cur.getTime()) < 60_000) return; // same day
   clock.setDate(target);
   resampleMoonNow(); // Moon orbit line jumps with the epoch
+  markSceneDirty(); // F6: date jump repositions every body
   dateEl.classList.remove('flash');
   void dateEl.offsetWidth;
   dateEl.classList.add('flash');
@@ -1023,6 +1051,7 @@ document.addEventListener('keydown', (ev) => {
     ev.preventDefault();
     postOn = !postOn;
     built.sunGlow.visible = postOn;
+    markSceneDirty(); // F6: F2 changes the HDR path even when the view is parked
   }
 });
 
@@ -1115,6 +1144,7 @@ function setInfoFacts(def: BodyDefinition | null): void {
 function applySliderSpeed(logValue: number): void {
   speedEl.value = String(logValue);
   clock.setLogSpeed(logValue);
+  markSceneDirty(); // F6: speed change alters motion
   fmtSpeed();
   syncUrl();
 }
@@ -1126,6 +1156,7 @@ speedEl.addEventListener('input', () => {
 pauseBtn.addEventListener('click', () => {
   clock.setPaused(!clock.isPaused);
   pauseBtn.textContent = clock.isPaused ? 'Resume' : 'Pause';
+  markSceneDirty(); // F6: pause/resume changes motion state
   syncUrl();
 });
 
@@ -1136,6 +1167,7 @@ reverseBtn.addEventListener('click', () => {
   clock.setReversed(!clock.isReversed);
   reverseBtn.textContent = clock.isReversed ? 'Reverse ←' : 'Reverse →';
   reverseBtn.classList.toggle('active', clock.isReversed);
+  markSceneDirty(); // F6: direction change (affects motion when running)
   fmtSpeed();
   syncUrl();
 });
@@ -1143,6 +1175,7 @@ reverseBtn.addEventListener('click', () => {
 nowBtn.addEventListener('click', () => {
   clock.setDate(new Date());
   resampleMoonNow(); // Moon orbit line jumps with the epoch
+  markSceneDirty(); // F6: epoch jump repositions every body
   syncUrl();
 });
 
@@ -1448,6 +1481,7 @@ function toggleAtmospheres(): void {
 
 /** Show/hide the deep-sky sub-layers (Milky-Way + starfield = `m`, zodiacal = `z`). */
 function applySkyVisibility(): void {
+  markSceneDirty(); // F6: sky layer visibility changed
   const g = built.skybox.group;
   const mw = g.getObjectByName('milkyway-skybox');
   const stars = g.getObjectByName('starfield');
@@ -1519,6 +1553,7 @@ function releaseFollow(): void {
  * stale palette entry can never throw.
  */
 function runCommand(id: string): void {
+  markSceneDirty(); // F6: any command may change the frame
   if (id.startsWith('jump-digit-')) {
     const d = id.slice('jump-digit-'.length);
     const pid = digitToPlanet(d, PLANETS, 'sun');
@@ -1917,6 +1952,7 @@ document.addEventListener('pointerdown', (ev) => {
 });
 
 window.addEventListener('resize', () => {
+  markSceneDirty(); // F6: viewport changed — repaint
   built.camera.aspect = window.innerWidth / window.innerHeight;
   built.camera.updateProjectionMatrix();
   built.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -3094,6 +3130,19 @@ function frame(): void {
   const dtReal = Math.min(0.1, (nowMs - lastMs) / 1000);
   lastMs = nowMs;
 
+  // F6: on the very first frame, seed the reference camera/target snapshot
+  // that the render tail compares against. (The reference is only refreshed
+  // in the tail, after a frame is actually rendered — see `f6CamInit`.)
+  if (!f6CamInit) {
+    F6_LAST_CAM.x = built.camera.position.x;
+    F6_LAST_CAM.y = built.camera.position.y;
+    F6_LAST_CAM.z = built.camera.position.z;
+    F6_LAST_TARGET.x = built.controls.target.x;
+    F6_LAST_TARGET.y = built.controls.target.y;
+    F6_LAST_TARGET.z = built.controls.target.z;
+    f6CamInit = true;
+  }
+
   // F5: the cinematic intro's title fades in/out on its own real-time clock
   // (independent of the sim, so it reads the same at any speed / paused).
   if (intro) tickIntroTitle(dtReal);
@@ -3172,8 +3221,12 @@ function frame(): void {
   updatePositions(built, clock.t, frameScale);
   // The belt population (2,100 Kepler solves + matrix composes) is the
   // heaviest per-frame CPU cost. When the sim is paused nothing moves, so
-  // skip it entirely — belt matrices were already written on the last tick.
-  if (!clock.isPaused) updateBeltFields(built, clock.t, frameScale);
+  // skip the re-solve entirely (matrices already written on the last tick).
+  // The F6 near/far LOD cross-fade, which depends on camera distance, is
+  // applied in the render tail (after the camera branches) — see there.
+  if (!clock.isPaused) {
+    updateBeltFields(built, clock.t, frameScale, built.camera.position.length());
+  }
   applySpin(built, dtDays);
 
   if (flight) {
@@ -3258,6 +3311,64 @@ function frame(): void {
     built.controls.update();
   }
 
+  // --- F6 idle-skip gate (computed AFTER the camera branches moved the camera) ---
+  // When the sim is paused, the camera/target haven't moved this frame (no
+  // drag, wheel, damping settle, follow-lerp, flight, or tour), nothing is
+  // scrubbing / morphing / flying / in the intro, and no input has marked the
+  // scene dirty since the last rendered frame — the on-screen frame is static,
+  // so skip the (expensive) WebGL render AND the per-frame DOM/emphasis/pulse
+  // passes. The rAF chain (scheduled at the top of `frame`) stays alive, so the
+  // very next interaction re-renders immediately. This is the battery saving of
+  // the F6 perf pass: a parked, paused view costs ~0 GPU.
+  {
+    const c = built.camera.position;
+    const t = built.controls.target;
+    f6CameraMoving =
+      Math.abs(c.x - F6_LAST_CAM.x) +
+        Math.abs(c.y - F6_LAST_CAM.y) +
+        Math.abs(c.z - F6_LAST_CAM.z) +
+        Math.abs(t.x - F6_LAST_TARGET.x) +
+        Math.abs(t.y - F6_LAST_TARGET.y) +
+        Math.abs(t.z - F6_LAST_TARGET.z) >
+      1e-4;
+    // F6: when paused the belt re-solve is skipped above, but the near/far LOD
+    // cross-fade depends on camera distance — re-apply it if the camera moved
+    // (a zoom while paused), without re-solving the frozen belt positions.
+    if (clock.isPaused && f6CameraMoving) {
+      applyBeltLodOnly(built, frameScale, c.length());
+    }
+    // NB: we do NOT gate on selectedBodyId/selectedConstellation here. The
+    // picked-body / picked-constellation highlight is a wall-clock pulse that
+    // is a pure function of `nowMs` (no accumulation), so if the frame is
+    // static it freezes harmlessly and resumes seamlessly on the next input —
+    // no visible jump. Gating on it would make the skip a no-op for the common
+    // default view (which is always anchored on the Sun, a selected body).
+    if (
+      !sceneDirty &&
+      sceneIsStatic({
+        paused: clock.isPaused,
+        cameraMoving: f6CameraMoving,
+        scrubbing: !!(scrub?.movedX || threeFinger?.live),
+        flightActive: flight !== null,
+        morphActive: morph !== null,
+        skyTourActive: skyTour !== null,
+        introActive: intro !== null,
+      })
+    ) {
+      return; // static frame — skip render + DOM; rAF continues (scheduled above)
+    }
+    // We render this frame: refresh the reference camera/target (so the next
+    // frame's motion test is measured from this rendered pose) and clear the
+    // dirty flag. A frame that moved OR was dirty always renders.
+    F6_LAST_CAM.x = c.x;
+    F6_LAST_CAM.y = c.y;
+    F6_LAST_CAM.z = c.z;
+    F6_LAST_TARGET.x = t.x;
+    F6_LAST_TARGET.y = t.y;
+    F6_LAST_TARGET.z = t.z;
+    sceneDirty = false;
+  }
+
   // Plan 016 P1: re-evaluate the 88 view emphases every frame — the
   // screen-space label overlay reads them at display rate (no stepping).
   computeConstellationEmphases();
@@ -3338,6 +3449,7 @@ canvas.addEventListener('webglcontextlost', (ev: Event) => {
 
 canvas.addEventListener('webglcontextrestored', () => {
   contextLost = false;
+  markSceneDirty(); // F6: repaint after context restore
   glLostEl.hidden = true;
   glLostEl.classList.remove('show');
   // Resync the renderer to the (possibly) current viewport after the browser
