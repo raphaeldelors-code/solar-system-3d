@@ -55,8 +55,29 @@ Chosen over a photo re-projection so the sky is small (~2 MB), fully
 deterministic, and carries no photo attribution.
 
 Do NOT delete it — the skybox silently falls back to a flat dark sky
-if the load fails, which looks like a regression. To regenerate, re-run
-the bake and overwrite this file (see plan 035 F2 notes).
+if the load fails, which looks like a regression.
+
+## Regenerating the all-sky bake
+
+The generator is committed at **`scripts/bake_milkyway.py`** (deterministic,
+seeded; reproduces the exact galactic→equatorial→scene→equirectUV chain of
+the runtime). Re-bake with:
+
+    uv run --with numpy --with pillow python scripts/bake_milkyway.py \
+        --star-scale 0.10 --band-scale 0.55
+
+- `--star-scale` (default **0.10**) — multiplier on both baked star
+  populations. `1.0` = the original 2026-09-12 bake (~234k stars). `0.10`
+  ≈ 23k stars (the current "much fewer stars" look the user wants).
+- `--band-scale` (default **0.55**) — multiplier on the smooth band-glow
+  luminance. `1.0` = original. `0.55` ≈ 3.4× brighter glow, which relays the
+  luminance that used to live in the now-thinner star field so the band
+  **keeps the same overall brightness** with far fewer specks.
+
+The two knobs trade off exactly: lower `--star-scale` + raise `--band-scale`
+keeps the band as bright but smoother. Verify after a re-bake that the
+band-strip mean is unchanged (~0.10 at the Milky Way pose) while the
+bright-pixel count in the band drops.
 
 ## Planets (plan 035 F3)
 
