@@ -46,6 +46,13 @@ export const SKYBOX_SEGMENTS = 96;
  * glow tints the stars behind it rather than covering them.
  */
 export const ZODIACAL_RADIUS = 4000;
+/**
+ * Uniform brightness tint applied to the Milky-Way skybox (0..1, 1 = as
+ * authored). The shipped equirect bake is full-strength galaxy art and reads
+ * as the single brightest thing in the frame at the overview — dimmed to
+ * ~half so the band sets the mood without stealing focus from the system.
+ */
+export const MILKYWAY_TINT = 0.5;
 
 /**
  * Stellar blackbody color palette (approximate hues), by class:
@@ -128,7 +135,7 @@ export function makeStarAttributes(
  * zero) = `peak`; falls off sharply toward the anti-Sun and gently toward the
  * ecliptic horizon — the classic triangular afterglow shape.
  */
-export function zodiacalPeakOpacity(altDeg: number, sepDeg: number, peak = 0.16): number {
+export function zodiacalPeakOpacity(altDeg: number, sepDeg: number, peak = 0.08): number {
   // Away from the Sun: cosine^3 falls to 0 at 90° (anti-solar direction = 0).
   const t = Math.max(0, Math.cos((sepDeg * Math.PI) / 180));
   // Toward the ecliptic plane: rises from the horizon, never fully dark.
@@ -169,6 +176,11 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
   const skyGeo = new THREE.SphereGeometry(SKYBOX_RADIUS, SKYBOX_SEGMENTS, 48);
   const skyMat = new THREE.MeshBasicMaterial({
     map: skyTex,
+    // The bake is authored BRIGHT (full-scale galaxy art); at full intensity
+    // the Milky-Way band competed with the Sun for attention, so it is tinted
+    // down ~half (2026-09-12 user feedback: "the huge one … I think it's the
+    // milky way"). toneMapped off keeps the tint a plain linear multiply.
+    color: new THREE.Color(MILKYWAY_TINT, MILKYWAY_TINT, MILKYWAY_TINT),
     side: THREE.BackSide,
     depthWrite: false, // never occlude in the depth buffer
     toneMapped: false, // keep authored brightness (no ACES dip)
@@ -235,7 +247,9 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
   const zodiMat = new THREE.ShaderMaterial({
     uniforms: {
       uColor: { value: new THREE.Color(1.0, 0.85, 0.62) }, // warm dust
-      uPeak: { value: 0.16 },
+      // Peak alpha on the Sun in the ecliptic plane — keep in sync with the
+      // pure zodiacalPeakOpacity default (0.08 after the 2026-09-12 dimming).
+      uPeak: { value: 0.08 },
       uR: { value: ZODIACAL_RADIUS },
       uCamPos: { value: new THREE.Vector3(0, 16, 30) },
     },

@@ -19,6 +19,7 @@ import {
   STAR_COLORS,
   SKYBOX_RADIUS,
   ZODIACAL_RADIUS,
+  MILKYWAY_TINT,
 } from '../src/render/skybox';
 
 describe('mulberry32 (seeded RNG)', () => {
@@ -98,9 +99,9 @@ describe('makeStarAttributes', () => {
 });
 
 describe('zodiacalPeakOpacity', () => {
-  it('peaks at the Sun on the ecliptic plane', () => {
+  it('peaks at the Sun on the ecliptic plane (dimmed to 0.08 after the 2026-09-12 user dimming)', () => {
     const peak = zodiacalPeakOpacity(0, 0);
-    expect(peak).toBeCloseTo(0.16, 5);
+    expect(peak).toBeCloseTo(0.08, 5);
     // Strictly above every non-central direction.
     for (const [alt, sep] of [
       [0, 10],
@@ -148,5 +149,10 @@ describe('layout invariants (layering)', () => {
   it('skybox shell is inside the camera far plane (20000, scene.ts)', () => {
     expect(SKYBOX_RADIUS).toBeGreaterThan(STAR_SHELL_MAX);
     expect(SKYBOX_RADIUS).toBeLessThan(20000);
+  });
+
+  it('the Milky-Way tint is a dimming factor in (0, 1)', () => {
+    expect(MILKYWAY_TINT).toBeGreaterThan(0);
+    expect(MILKYWAY_TINT).toBeLessThan(1);
   });
 });

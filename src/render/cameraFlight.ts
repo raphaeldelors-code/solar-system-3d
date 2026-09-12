@@ -52,10 +52,10 @@ export interface Flight {
   t: number;
   /**
    * Body the flight is targeting (picked planet / moon). When set, the
-   * render loop substitutes that body's LIVE world position for the
-   * interpolated target each frame (and re-derives the camera from it), so a
-   * moving body is landed on, not where it was when the flight started.
-   * `null` for the global anchors (Sun / constellations).
+   * caller passes that body's LIVE world position to `stepFlight`, which
+   * eases the target toward it (see there) so a moving body is landed on,
+   * not where it was when the flight began. `null` for the global anchors
+   * (Sun / constellations).
    */
   followId: string | null;
   /** FOV (degrees) the camera eases to over the flight. */
@@ -65,7 +65,11 @@ export interface Flight {
 }
 
 export interface FlightSample {
-  /** Interpolated orbit target (or the live body position, set by caller). */
+  /**
+   * Interpolated orbit target. When `liveTarget` was passed to `stepFlight`
+   * (a followed body), this is the eased `fromTarget -> live` position — the
+   * camera lands exactly on the body's live position at `done`.
+   */
   target: Vec3;
   /** Interpolated camera − target offset. */
   offset: Vec3;
@@ -246,18 +250,27 @@ export function frameConstellation(
 
 /**
  * Advance a flight by `dt` seconds and return the camera pose for this
- * frame. Mutates `flight.t` (so it is stateful across frames). The caller
- * may override `sample.target` with a live body position (for a picked body)
- * and then use `add(sample.target, sample.offset)` as the camera position.
+ * frame. Mutates `flight.t` (so it is stateful across frames).
+ *
+ * `liveTarget` is the CURRENT world position of the followed body (pass it
+ * only when `flight.followId` is set). When given, the orbit target is the
+ * eased lerp `fromTarget -> liveTarget` — NOT the raw live position. That
+ * one detail is what makes a follow swap seamless (the cinematic's Sun→Earth
+ * leg, or re-picking a body mid-flight): an un-eased substitution would jump
+ * the target — and therefore the whole camera — to the new body on the very
+ * first frame. Easing means the target glides from where the previous leg
+ * left it to the body as it orbits, arriving exactly ON the body (k = 1 →
+ * `target === liveTarget`) so the landing framing is unchanged.
  */
-export function stepFlight(flight: Flight, dtSeconds: number): FlightSample {
+export function stepFlight(flight: Flight, dtSeconds: number, liveTarget?: Vec3): FlightSample {
   flight.t += dtSeconds;
   const k = easeInOutCubic(flight.t / flight.duration);
   const lp = (a: number, b: number) => a + (b - a) * k;
+  const to = liveTarget ?? flight.toTarget;
   const target: Vec3 = [
-    lp(flight.fromTarget[0], flight.toTarget[0]),
-    lp(flight.fromTarget[1], flight.toTarget[1]),
-    lp(flight.fromTarget[2], flight.toTarget[2]),
+    lp(flight.fromTarget[0], to[0]),
+    lp(flight.fromTarget[1], to[1]),
+    lp(flight.fromTarget[2], to[2]),
   ];
   const offset: Vec3 = [
     lp(flight.fromOffset[0], flight.toOffset[0]),

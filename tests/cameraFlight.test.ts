@@ -208,7 +208,7 @@ describe('stepFlight', () => {
     approx(end.target[0], 5, 1e-6);
     approx(end.pos[0], 10, 1e-6);
   });
-  it('rigidly tracks a moving body: offset preserved, target substituted', () => {
+  it('rigidly tracks a moving body: offset preserved, target eased to live position', () => {
     const f = makeFlight(
       [0, 0, 0],
       [0, 0, 0], // from: cam at origin orbiting origin
@@ -220,21 +220,58 @@ describe('stepFlight', () => {
     );
     // Mid-flight (t=0.5): offset is halfway between [0,0,0] and [5,0,0] = [2.5,0,0].
     f.t = 0.5;
-    const s = stepFlight(f, 0);
+    const s = stepFlight(f, 0, [137, 0, 0]);
     approx(s.offset[0], 2.5, 1e-6);
-    // The render loop substitutes the body's LIVE position for the target;
-    // the camera lands rigidly at liveTarget + offset, so a body that moved
-    // to [137,0,0] is still framed exactly at landing.
-    const liveBody = [137, 0, 0];
+    // The target is the EASED from->live lerp: halfway to the body's current
+    // [137,0,0] position = [68.5,0,0] (NOT a jump there on this frame).
+    approx(s.target[0], 68.5, 1e-6);
+    // At landing (k=1) the eased target IS the live position, so the body
+    // that moved to [137,0,0] is framed exactly: camera = live + toOffset.
     f.t = 1.0;
-    const end = stepFlight(f, 0);
-    const camAtLanding = [
-      liveBody[0] + end.offset[0],
-      liveBody[1] + end.offset[1],
-      liveBody[2] + end.offset[2],
-    ];
-    // offset at landing = toOffset = [5,0,0]
-    approx(camAtLanding[0], 142, 1e-6);
+    const end = stepFlight(f, 0, [137, 0, 0]);
+    approx(end.target[0], 137, 1e-9);
+    approx(end.pos[0], 137 + 5, 1e-9); // toOffset = [5,0,0]
     expect(end.done).toBe(true);
+  });
+  it('a follow swap glides instead of jumping (the intro Sun→Earth leg)', () => {
+    // Reproduce the bug shape: a leg starts with the target parked near the
+    // origin (the Sun) while its follow target is the far body (Earth). The
+    // FIRST frame must NOT teleport the camera to the body — it must start at
+    // the from pose and glide.
+    const f = makeFlight(
+      [4, 2.4, 8], // from: a Sun-framed camera
+      [0, 0, 0], // orbiting the origin (the Sun leg just landed here)
+      { target: [21, 0, 0], pos: [21.8, 1.3, 9.6] }, // to: Earth framing (38° elev)
+      2.2,
+      'earth',
+      50,
+      50,
+    );
+    const earth: [number, number, number] = [21, 0.2, 0.4]; // Earth's live position
+    // Frame 1: target ≈ from target (Sun), camera ≈ from pose. No jump.
+    const first = stepFlight(f, 0.016, earth);
+    expect(first.done).toBe(false);
+    const startDist = Math.hypot(first.target[0] - 0, first.target[1] - 0, first.target[2] - 0);
+    const jumpIfNaive = Math.hypot(
+      first.target[0] - earth[0],
+      first.target[1] - earth[1],
+      first.target[2] - earth[2],
+    );
+    expect(startDist).toBeLessThan(1); // still near the Sun
+    expect(jumpIfNaive).toBeGreaterThan(15); // NOT teleported to Earth
+    // Landing: eased target reaches Earth's LIVE position exactly.
+    f.t = 2.2;
+    const end = stepFlight(f, 0, [21, 0.2, 0.4]);
+    expect(end.done).toBe(true);
+    approx(end.target[0], 21, 1e-9);
+    approx(end.target[1], 0.2, 1e-9);
+    approx(end.target[2], 0.4, 1e-9);
+  });
+  it('without a liveTarget the target eases to the static toTarget (global anchors)', () => {
+    const f = mk();
+    f.t = 0.5;
+    const mid = stepFlight(f, 0);
+    approx(mid.target[0], 2.5, 1e-6); // [0,0,0] -> [5,0,0] halfway
+    approx(mid.pos[0], 5, 1e-6);
   });
 });

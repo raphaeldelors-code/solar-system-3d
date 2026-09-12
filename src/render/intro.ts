@@ -22,11 +22,14 @@ export interface IntroLeg {
   zoom: number;
 }
 
-/** The three intro legs, in order. Total ≈ 5.4 s (≤ 6 s per spec). */
+/** The three intro legs, in order. Total ≈ 5.8 s (≤ 6 s per spec). */
 export const INTRO_LEGS: IntroLeg[] = [
   { bodyId: 'sun', duration: 2.0, zoom: 3.0 }, // far-out establishing pull
   { bodyId: 'sun', duration: 1.6, zoom: 1.0 }, // settle / orbit the Sun
-  { bodyId: 'earth', duration: 1.8, zoom: 1.0 }, // push to Earth (landing)
+  // Push to Earth (landing). The target eases Sun→Earth over the whole leg
+  // (see stepFlight's liveTarget) so it reads as a deliberate sweep, not a
+  // jump — the leg is deliberately the longest to keep that sweep graceful.
+  { bodyId: 'earth', duration: 2.2, zoom: 1.0 },
 ];
 
 /** Total intro length in seconds (sum of the legs). */

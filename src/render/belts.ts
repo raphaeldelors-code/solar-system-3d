@@ -58,7 +58,9 @@ export function buildBeltField(def: BeltDefinition): BeltField {
     // A touch of emissive keeps the far side of each rock (and the whole
     // belt at long camera distances) readable against the dark space, so the
     // field reads as a belt rather than a scattering of near-black dots.
-    emissive: new THREE.Color(def.color).multiplyScalar(0.12),
+    // Kept LOW (0.05): the rocks are lit by the Sun lamp anyway — a higher
+    // floor made the whole belt glow like it was self-illuminated.
+    emissive: new THREE.Color(def.color).multiplyScalar(0.05),
     roughness: 0.85,
     metalness: 0,
     // The near representation cross-fades against the far point cloud, so the
@@ -203,7 +205,10 @@ export function applyBeltLod(
   points.visible = decision.blend < 0.98;
   mat.opacity = decision.blend;
   // The additive far cloud would double-brighten the belt at mid cross-fade;
-  // the 1.4x compensation keeps total belt brightness roughly constant.
-  pmat.opacity = (1 - decision.blend) * 1.4;
+  // the old 1.4× "compensation" actually PUSHED it past full brightness and
+  // made the zoomed-out belt glow. At most ~half strength now, so the far
+  // cloud reads as faint dust and the cross-fade dips slightly rather than
+  // flaring.
+  pmat.opacity = (1 - decision.blend) * 0.55;
   return decision.mode;
 }

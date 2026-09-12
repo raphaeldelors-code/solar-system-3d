@@ -3234,16 +3234,20 @@ function frame(): void {
     // (target + offset) path — do NOT call controls.update() here: with
     // damping on it would re-derive the camera from its internal spherical
     // state (and any residual drag delta) and fight/corrupt the flight. If
-    // the flight tracks a picked body, substitute its live world position so
-    // a fast-moving planet is landed on, not where it was when we started.
+    // the flight tracks a picked body, hand its live world position to
+    // stepFlight: the target is EASED from the flight-start target to the
+    // body's current position (see stepFlight), so a follow SWAP — the
+    // intro's Sun→Earth leg — glides instead of teleporting the camera to
+    // the new body on the first frame.
     built.controls.enabled = false;
-    const sample = stepFlight(flight, dtReal);
-    let target = sample.target;
+    let liveTarget: [number, number, number] | undefined;
     if (flight.followId) {
       const e = built.bodies.get(flight.followId);
-      if (e) target = [e.worldPos.x, e.worldPos.y, e.worldPos.z];
+      if (e) liveTarget = [e.worldPos.x, e.worldPos.y, e.worldPos.z];
     }
-    // camera = live target + eased offset (rigidly tracks a moving body).
+    const sample = stepFlight(flight, dtReal, liveTarget);
+    const target = sample.target;
+    // camera = eased target + eased offset (glides onto a moving body).
     built.controls.target.set(target[0], target[1], target[2]);
     built.camera.position.set(
       target[0] + sample.offset[0],

@@ -58,8 +58,8 @@ describe('bodyFacts', () => {
 // ---- intro -----------------------------------------------------------------
 
 describe('intro', () => {
-  it('totals a duration of ~5.4 s (≤ 6 s)', () => {
-    expect(INTRO_DURATION).toBeCloseTo(5.4, 2);
+  it('totals a duration of ~5.8 s (≤ 6 s)', () => {
+    expect(INTRO_DURATION).toBeCloseTo(5.8, 2);
     expect(INTRO_DURATION).toBeLessThan(6);
   });
 
