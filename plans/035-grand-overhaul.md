@@ -307,6 +307,41 @@ outerR)` rewrites `RingGeometry`'s 2D position-mapped UVs so `u` = radial
   (DOM/state asserts); intro plays and is skippable; fly-to eases (no snap).
   Gate set green + vision of the info card.
 
+> **Implementation record (`7c3a555`, 2026-09-12):** Built in the main
+> worktree (no `wt-35-05` worktree — direct on main, gated before commit).
+> Three new pure modules (unit-tested in `tests/f5Commands.test.ts`, 15
+> tests) + `main.ts`/`index.html` wiring.
+>
+> **Cinematic intro — `src/render/intro.ts`.** A 3-leg eased dolly riding
+> on the existing flight system (far-out system anchor → Sun → Earth,
+> `INTRO_DURATION ≈ 5.4 s`, under the 6 s budget), with a title that
+> fades in/out on a real-time clock spanning the whole intro
+> (`titleOpacity(t)`). `introShouldPlay(reduced, introParam, urlPinsView)`
+> honours `prefers-reduced-motion`, a `?intro=0` opt-out, and a pinned
+> `?f`/`?t`/`?cmd` URL (a share link must land exactly, not dolly). Any
+> manual input on the canvas (pointer/wheel/touch/key) skips to the
+> end (`finishIntro(true)` → lands on Earth, arms follow).
+>
+> **Commands — `src/render/commands.ts`.** One registry of every command
+> (Space pause, ↑/↓ speed, n now, r reverse, o/l/b/f/m/z/a/p scene
+> toggles, t scale, c camera preset, Esc release, s screenshot, 1–9/0
+> planet jumps) shared by the keyboard handler, the `?cmd=` deep link,
+> and the palette. `commandForKey` / `digitToPlanet` / `paletteEntries`
+> are pure. The palette (`/` or `?`, Esc to close) filters live and
+> supports ↑/↓/Enter; `?cmd=palette` deep-links it open (25 rows).
+>
+> **Body info card — `src/render/bodyFacts.ts`.** The existing selection
+> card gains a static "facts" block (radius, day length, axial tilt, fun
+> fact) derived display-only from the existing `BodyDefinition` data — no
+> new sim math.
+>
+> **Verified:** 363 tests + tsc + eslint + prettier + build green.
+> Headless Chrome live-verified: intro plays (title fades), skippable,
+> and lands on Earth with the info card populated; digit keys 1–9/0 fly to
+> the right bodies; Space/↑/↓/n/r/t/c/Esc/s and m/z/a/p toggles all
+> dispatch correctly; palette opens, filters, and Enter-selects Jupiter;
+> `?cmd=palette` opens the palette on load.
+
 ### F6 — Performance pass (hold 60 fps with everything on) `[wt-35-06]`
 
 - **Files:** `src/render/scene.ts`, `src/render/belts.ts`, `src/render/post.ts`,

@@ -25,7 +25,7 @@ order. (Supersedes old open item B4 below.)
 - [x] F2 feat(render): deep sky — Milky Way equirect + colored starfield + zodiacal light — `wt-35-02` — `bfa8088`
 - [x] F3 feat(textures): real NASA textures (day/normal/roughness/clouds) + Earth cloud shell + ocean roughness + procedural fallback — `4380074`
 - [x] F4 feat(render): fresnel atmospheres (Earth/Venus/etc) + translucent Cassini-division ring texture (shadows kept) — `ac80f48`
-- [ ] F5 feat(web): cinematic intro + polished fly-to + command palette/shortcuts + body info card — `wt-35-05`
+- [x] F5 feat(web): cinematic intro + polished fly-to + command palette/shortcuts + body info card — `7c3a555`
 - [ ] F6 perf: 60 fps pass (belt LOD, pixel-ratio cap, idle skip, profile) — `wt-35-06`
 
 ## Phase 4 — Review fixes + features (see `plans/002-review-fixes-and-features.md`)
