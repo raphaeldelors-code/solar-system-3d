@@ -7,6 +7,8 @@ don't match the date picked via scrolling." The event emojis inside the
 magnifier disc sit to the LEFT of the green caret / of the focal date, even
 though the caret itself is correctly on the selector and the date box matches.
 
+Committed as `bc5382d` (2026-09-12, feature commit) + this docs entry.
+
 ## Root cause (regression introduced by plan 033)
 
 In `tlDrawLens` (src/main.ts) the per-element `dx` was rewritten in plan 033 to

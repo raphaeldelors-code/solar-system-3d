@@ -209,7 +209,7 @@ the same frac scale, verified); the bug is a plan-033 regression in
 bar-space `xBar` (focal−12) → −12px strip = −48px at 4× center zoom, events
 drawn left of the caret inside the disc.
 
-- [x] F1 fix(hud): align in-lens event dots with the caret (track-space dx) — hash TBC
+- [x] F1 fix(hud): align in-lens event dots with the caret (bar-space dx) — hash `bc5382d`
 
 ## User queue — 2026-09-03 — plan 033 (in-lens caret not at disc center)
 
