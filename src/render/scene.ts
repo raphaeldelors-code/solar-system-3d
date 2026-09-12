@@ -157,6 +157,13 @@ export interface SceneBody {
   /** This body's rendered radius at build time (the mesh's baked radius). */
   builtRadius: number;
   /**
+   * Animated cloud shell (Earth only, plan 035 F3): a transparent sphere
+   * that rotates ~5 % of the surface spin rate ("living Earth"). Created
+   * lazily by `attachRealTextures` when a real cloud map loads; null until
+   * then and for every non-cloud body.
+   */
+  cloudsMesh: THREE.Mesh | null;
+  /**
    * Full width (scene units) to frame when the camera flies to this body:
    * the diameter for a plain body, or the ring's OUTER diameter for a
    * ringed planet, so a fly-to lands with the whole body + rings in view.
@@ -526,6 +533,7 @@ export function buildScene(
       visibleRadius,
       trueRadius,
       builtRadius: r,
+      cloudsMesh: null,
       frameExtent,
     };
     map.set(def.id, entry);
@@ -553,6 +561,15 @@ export function buildScene(
   function dispose() {
     for (const d of disposables) d.dispose();
     for (const b of belts) b.dispose();
+    // Cloud shells (plan 035 F3): per-body geo+mat. The cloud texture itself
+    // lives in the shared realTextureCache (persisted across rebuilds), so we
+    // only dispose the geometry and material the shell owns.
+    for (const entry of map.values()) {
+      if (entry.cloudsMesh) {
+        entry.cloudsMesh.geometry.dispose();
+        (entry.cloudsMesh.material as THREE.Material).dispose();
+      }
+    }
     constellations.userData.dispose?.();
     for (const child of constellationFigures.children) {
       const mesh = child as THREE.Mesh;
@@ -1657,6 +1674,12 @@ export function applySpin(built: BuiltScene, dtDays: number): void {
     const daysPerSpin = entry.def.rotationHours / 24;
     entry.spin += (dtDays / Math.abs(daysPerSpin)) * Math.PI * 2 * Math.sign(daysPerSpin);
     entry.mesh.rotation.y = entry.spin;
+    // Earth clouds (plan 035 F3): rotate at ~5 % of the surface rate so the
+    // weather layer drifts over the (static, sun-fixed) real day map — the
+    // classic "living Earth" parallax.
+    if (entry.cloudsMesh) {
+      entry.cloudsMesh.rotation.y = entry.spin * 0.05;
+    }
   }
 }
 

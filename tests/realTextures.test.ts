@@ -1,15 +1,19 @@
 /**
- * Real-texture support tests: URL contract, HEAD-probe caching, and
- * attach/swap behaviour. All fetch/loader calls are injected fakes so the
- * tests run in plain Node (three.js Texture objects need no WebGL context).
+ * Real-texture support tests (plan 035 F3): URL contract, HEAD-probe caching,
+ * multi-channel load, attach/swap + cloud shell. All fetch/loader calls are
+ * injected fakes so the tests run in plain Node (three.js Texture objects
+ * need no WebGL context).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
 import {
   textureUrlFor,
   probeRealTexture,
+  loadChannel,
+  loadBodyTextures,
   loadRealTexture,
   attachRealTextures,
+  createCloudShell,
   resetProbeCache,
   resetRealTextureCache,
 } from '../src/render/realTextures';
@@ -22,7 +26,7 @@ function okFetch(existing: Set<string>): FakeFetch {
   return (url) => Promise.resolve({ ok: existing.has(url) });
 }
 
-/** Minimal SceneBody stub: only def.id and mesh.material are read. */
+/** Minimal SceneBody stub: def, pivot, mesh, material are what attach reads. */
 function stubBody(id: string): { entry: SceneBody; mat: THREE.MeshStandardMaterial } {
   const def = { id, name: id.toUpperCase(), kind: 'planet' } as unknown as BodyDefinition;
   const mat = new THREE.MeshStandardMaterial();
@@ -33,9 +37,17 @@ function stubBody(id: string): { entry: SceneBody; mat: THREE.MeshStandardMateri
     mesh,
     label: new THREE.Sprite(),
     orbit: null,
+    orbitEmphasis: new THREE.Mesh(),
+    ringsMesh: null,
     parent: null,
     spin: 0,
     worldPos: new THREE.Vector3(),
+    sceneRadius: 1,
+    visibleRadius: 1,
+    trueRadius: 1,
+    builtRadius: 1,
+    cloudsMesh: null,
+    frameExtent: 2,
   } as unknown as SceneBody;
   return { entry, mat };
 }
@@ -62,22 +74,25 @@ beforeEach(() => {
 });
 
 describe('textureUrlFor', () => {
-  it('builds the public/textures/<id>.jpg contract', () => {
-    expect(textureUrlFor('earth')).toBe('textures/earth.jpg');
-    expect(textureUrlFor('sun')).toBe('textures/sun.jpg');
+  it('builds the public/textures/planets/<id>_<channel> contract', () => {
+    expect(textureUrlFor('earth')).toBe('textures/planets/earth_day.jpg');
+    expect(textureUrlFor('earth', 'normal')).toBe('textures/planets/earth_normal.jpg');
+    expect(textureUrlFor('earth', 'roughness')).toBe('textures/planets/earth_roughness.jpg');
+    expect(textureUrlFor('earth', 'clouds')).toBe('textures/planets/earth_clouds.png');
+    expect(textureUrlFor('sun')).toBe('textures/planets/sun_day.jpg');
   });
 });
 
 describe('probeRealTexture', () => {
   it('is true only for existing files', async () => {
-    const f = okFetch(new Set(['textures/earth.jpg']));
-    await expect(probeRealTexture('textures/earth.jpg', f)).resolves.toBe(true);
-    await expect(probeRealTexture('textures/mars.jpg', f)).resolves.toBe(false);
+    const f = okFetch(new Set(['textures/planets/earth_day.jpg']));
+    await expect(probeRealTexture('textures/planets/earth_day.jpg', f)).resolves.toBe(true);
+    await expect(probeRealTexture('textures/planets/mars_day.jpg', f)).resolves.toBe(false);
   });
 
   it('treats network errors as "absent"', async () => {
     const f: FakeFetch = () => Promise.reject(new Error('offline'));
-    await expect(probeRealTexture('textures/venus.jpg', f)).resolves.toBe(false);
+    await expect(probeRealTexture('textures/planets/venus_day.jpg', f)).resolves.toBe(false);
   });
 
   it('dedupes concurrent probes to a single request', async () => {
@@ -87,63 +102,106 @@ describe('probeRealTexture', () => {
       return Promise.resolve({ ok: true });
     };
     const [a, b, c] = await Promise.all([
-      probeRealTexture('textures/jupiter.jpg', f),
-      probeRealTexture('textures/jupiter.jpg', f),
-      probeRealTexture('textures/jupiter.jpg', f),
+      probeRealTexture('textures/planets/jupiter_day.jpg', f),
+      probeRealTexture('textures/planets/jupiter_day.jpg', f),
+      probeRealTexture('textures/planets/jupiter_day.jpg', f),
     ]);
     expect([a, b, c]).toEqual([true, true, true]);
     expect(n).toBe(1);
   });
 });
 
-describe('loadRealTexture', () => {
+describe('loadChannel', () => {
   it('returns null when no file exists (no decode attempted)', async () => {
     const calls: string[] = [];
-    const tex = await loadRealTexture('mars', fakeLoader(new Set(), calls));
+    const tex = await loadChannel('mars', 'day', fakeLoader(new Set(), calls));
     expect(tex).toBeNull();
     expect(calls).toEqual([]);
   });
 
-  it('applies sRGB + horizontal wrap and caches per id', async () => {
-    const existing = new Set(['textures/earth.jpg']);
+  it('applies sRGB + horizontal wrap to day, NoColorSpace to normal', async () => {
+    const existing = new Set([
+      'textures/planets/earth_day.jpg',
+      'textures/planets/earth_normal.jpg',
+    ]);
     const calls: string[] = [];
     const loader = fakeLoader(existing, calls);
     const f = okFetch(existing);
-    const t1 = await loadRealTexture('earth', loader, f);
-    expect(t1).not.toBeNull();
-    expect(t1!.colorSpace).toBe(THREE.SRGBColorSpace);
-    expect(t1!.wrapS).toBe(THREE.RepeatWrapping);
-    // Second call: same texture instance, no re-decode.
-    const t2 = await loadRealTexture('earth', loader, f);
-    expect(t2).toBe(t1);
-    expect(calls).toEqual(['textures/earth.jpg']);
+    const day = await loadChannel('earth', 'day', loader, f);
+    expect(day).not.toBeNull();
+    expect(day!.colorSpace).toBe(THREE.SRGBColorSpace);
+    expect(day!.wrapS).toBe(THREE.RepeatWrapping);
+    const normal = await loadChannel('earth', 'normal', loader, f);
+    expect(normal).not.toBeNull();
+    expect(normal!.colorSpace).toBe(THREE.NoColorSpace);
+    // Cache per (id, channel): second call returns the same instance.
+    const day2 = await loadChannel('earth', 'day', loader, f);
+    expect(day2).toBe(day);
+    expect(calls).toEqual(['textures/planets/earth_day.jpg', 'textures/planets/earth_normal.jpg']);
   });
 
   it('returns null on decode failure without polluting the cache', async () => {
-    // Probe succeeds (HEAD 200) but the loader rejects.
-    const f = okFetch(new Set(['textures/moon.jpg']));
+    const f = okFetch(new Set(['textures/planets/moon_day.jpg']));
     const badLoader = {
       load(_url: string, _on: unknown, _prog: unknown, onError: (e: unknown) => void) {
         onError(new Error('corrupt image'));
       },
     } as unknown as THREE.TextureLoader;
-    expect(await loadRealTexture('moon', badLoader, f)).toBeNull();
-    // A working loader now succeeds and is actually consulted.
-    const good = fakeLoader(new Set(['textures/moon.jpg']), []);
-    expect(await loadRealTexture('moon', good, f)).not.toBeNull();
+    expect(await loadChannel('moon', 'day', badLoader, f)).toBeNull();
+    const good = fakeLoader(new Set(['textures/planets/moon_day.jpg']), []);
+    expect(await loadChannel('moon', 'day', good, f)).not.toBeNull();
+  });
+});
+
+describe('loadBodyTextures', () => {
+  it('returns null when no day map exists', async () => {
+    const f = okFetch(new Set());
+    const loader = fakeLoader(new Set(), []);
+    await expect(loadBodyTextures('venus', loader, f)).resolves.toBeNull();
+  });
+
+  it('loads day + normal + roughness + clouds in parallel when present', async () => {
+    const existing = new Set([
+      'textures/planets/earth_day.jpg',
+      'textures/planets/earth_normal.jpg',
+      'textures/planets/earth_roughness.jpg',
+      'textures/planets/earth_clouds.png',
+    ]);
+    const calls: string[] = [];
+    const loader = fakeLoader(existing, calls);
+    const f = okFetch(existing);
+    const t = await loadBodyTextures('earth', loader, f);
+    expect(t).not.toBeNull();
+    expect(t!.day).not.toBeNull();
+    expect(t!.normal).not.toBeNull();
+    expect(t!.roughness).not.toBeNull();
+    expect(t!.clouds).not.toBeNull();
+    // All four channels loaded.
+    expect(calls.length).toBe(4);
+  });
+});
+
+describe('createCloudShell', () => {
+  it('creates a transparent sphere at radius +1.5 % as a child of the pivot', () => {
+    const { entry } = stubBody('earth');
+    const tex = new THREE.Texture();
+    const { mesh, geo, mat } = createCloudShell(entry, tex, 1.0);
+    expect(entry.pivot.children).toContain(mesh);
+    expect(geo.parameters.radius).toBeCloseTo(1.015, 3);
+    expect(mat.transparent).toBe(true);
+    expect(mesh.castShadow).toBe(false);
+    expect(mesh.receiveShadow).toBe(false);
   });
 });
 
 describe('attachRealTextures', () => {
-  it('swaps only bodies that have a real file; reports the count', async () => {
-    const existing = new Set(['textures/earth.jpg']); // mars absent
+  it('swaps only bodies that have a real day file; reports the count', async () => {
+    const existing = new Set(['textures/planets/earth_day.jpg']); // mars absent
     const f = okFetch(existing);
     const calls: string[] = [];
     const loader = fakeLoader(existing, calls);
     const earth = stubBody('earth');
     const mars = stubBody('mars');
-    // needsUpdate is a setter-only accessor in this three.js version (no
-    // getter), so intercept the set to assert it was marked for recompile.
     let markedForUpdate = false;
     Object.defineProperty(earth.mat, 'needsUpdate', {
       set(v: boolean) {
@@ -156,12 +214,61 @@ describe('attachRealTextures', () => {
     expect(earth.mat.map).not.toBeNull();
     expect(markedForUpdate).toBe(true);
     expect(mars.mat.map).toBeNull();
-    expect(calls).toEqual(['textures/earth.jpg']);
+    // earth: only day channel exists → only one probe+load.
+    expect(calls).toEqual(['textures/planets/earth_day.jpg']);
+  });
+
+  it('applies normal + roughness maps to a Standard material', async () => {
+    const existing = new Set([
+      'textures/planets/earth_day.jpg',
+      'textures/planets/earth_normal.jpg',
+      'textures/planets/earth_roughness.jpg',
+    ]);
+    const f = okFetch(existing);
+    const loader = fakeLoader(existing, []);
+    const { entry, mat } = stubBody('earth');
+    await attachRealTextures([entry], loader, f);
+    expect(mat.map).not.toBeNull();
+    expect(mat.normalMap).not.toBeNull();
+    expect(mat.roughnessMap).not.toBeNull();
+    expect(mat.roughness).toBe(1.0);
+  });
+
+  it('creates the Earth cloud shell once (idempotent on rebuild)', async () => {
+    const existing = new Set([
+      'textures/planets/earth_day.jpg',
+      'textures/planets/earth_clouds.png',
+    ]);
+    const f = okFetch(existing);
+    const loader = fakeLoader(existing, []);
+    const { entry } = stubBody('earth');
+    await attachRealTextures([entry], loader, f);
+    expect(entry.cloudsMesh).not.toBeNull();
+    const first = entry.cloudsMesh;
+    // Second pass (scene rebuild): the cached cloud texture is re-attached,
+    // but the shell is NOT re-created (same mesh instance).
+    await attachRealTextures([entry], loader, f);
+    expect(entry.cloudsMesh).toBe(first);
+    expect(
+      entry.pivot.children.filter((c) => (c as THREE.Mesh).name === `clouds:${entry.def.name}`),
+    ).toHaveLength(1);
   });
 
   it('handles an empty body list', async () => {
     const f = okFetch(new Set());
     const loader = fakeLoader(new Set(), []);
     await expect(attachRealTextures([], loader, f)).resolves.toBe(0);
+  });
+});
+
+describe('loadRealTexture (back-compat)', () => {
+  it('delegates to the day channel', async () => {
+    const existing = new Set(['textures/planets/earth_day.jpg']);
+    const calls: string[] = [];
+    const loader = fakeLoader(existing, calls);
+    const f = okFetch(existing);
+    const t = await loadRealTexture('earth', loader, f);
+    expect(t).not.toBeNull();
+    expect(calls).toEqual(['textures/planets/earth_day.jpg']);
   });
 });
