@@ -246,6 +246,42 @@ scene.ts` (atmosphere shells + ring material L402–426).
   matching its atmosphere; Saturn's rings show the Cassini gap and translucent
   bands, with the correct shadow. Gate set green.
 
+> **Implementation record (`ac80f48`, 2026-09-12):** Built in the main worktree
+> (no `wt-35-04` worktree — direct on main, gated before commit). Two new
+> render modules + `scene.ts` wiring + 13 unit tests (`tests/atmosphereRings.test.ts`).
+>
+> **Atmospheres — `src/render/atmosphere.ts`.** `buildShell(config, radius)`
+> returns a slightly-larger (1.06×) `SphereGeometry` mesh with a custom
+> **fresnel rim shader**: `rim = 1 - nDotView` (1 at the silhouette, 0
+> head-on), `pow()`-concentrated into a thin bright limb, `AdditiveBlending`,
+> `depthWrite:false`, `toneMapped:false` (so the HDR stack in F1 doesn't wash
+> the rim). `side: FrontSide` — the fresnel math is the front-hemisphere
+> formulation (a `BackSide` shell makes `nDotView<0` → rim=1 everywhere → a
+> flat disc; this was the one bug found and fixed). `atmosphereConfigFor(id)`
+> is a per-body tint map (Earth vivid blue, Venus amber, Mars thin red, gas /
+> ice giants their tint, Sun/Moon/Mercury → `null` = no shell). `SceneBody`
+> gains an `atmosphereMesh`, scaled in the true-scale tour and disposed via a
+> `disposeAtmosphere()` that releases the geometry/material/shader.
+>
+> **Rings — `src/render/rings.ts`.** `makeRingTexture()` bakes a 1024×1 radial
+> `CanvasTexture` strip: bright B/A bands, a **hard Cassini division** (dark
+> notch ~t=0.72), an Encke inner gap, and limb fade. `ringBandProfile(t)` is
+> the pure band math (unit-tested). `remapRingUVRadial(geometry, innerR,
+outerR)` rewrites `RingGeometry`'s 2D position-mapped UVs so `u` = radial
+> fraction, because the stock UVs are a flat top-down position map and would
+> smear a radial strip texture. `scene.ts` keeps the white base color so the
+> sRGB map carries ring colour/alpha, `depthWrite:false` for see-through gaps,
+> `renderOrder:1`, and **keeps `castShadow`/`receiveShadow`** so Saturn's
+> shadow band across the rings still works.
+>
+> **Verified:** 348 tests + tsc + eslint + prettier + build green. Headless
+> Chrome (light path, `p=0`): Earth shows a **clear blue atmospheric rim
+> hugging the limb**, Venus a faint cream haze, Saturn's rings **translucent
+> (planet visible through the gaps)** — all vision-confirmed. The Cassini
+> division and planet-shadow band are unit-tested in `ringBandProfile` but are
+> too narrow to resolve on-screen at overview scale, so their visual presence
+> is asserted in tests, not in the screenshots.
+
 ### F5 — Cinematic camera: polished fly-to + intro tour + more commands `[wt-35-05]`
 
 - **Files:** `src/main.ts` (camera/fly logic, HUD, keyboard map, commands),
