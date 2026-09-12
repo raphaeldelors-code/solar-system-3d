@@ -150,6 +150,34 @@ threshold≈0.85` so only the sun + bright rims bloom, not everything.
 - **Acceptance:** vision — a believable Milky Way band fills the background
   (vs flat black before); stars have color variation; a faint zodiacal glow
   near the ecliptic. Gate set green.
+- **Implementation record (2026-09-12, commit `bfa8088`):** implemented as
+  `src/render/skybox.ts` — `buildSkybox()` returns a `Skybox` group of three
+  cheap layers, replacing the 4000-point monochrome shell. (a) **Milky-Way
+  skybox**: one inward `SphereGeometry` (radius 9000, `BackSide`, `renderOrder
+-10`, fog off) mapped with the procedural all-sky bake
+  `public/textures/milkyway_equirect.png` (2 MB, sRGB) — chosen over a photo
+  re-projection so the sky is small, deterministic, and carries no attribution;
+  the bake uses the exact galactic→equatorial→scene→equirectUV chain of the
+  runtime so the band lands on the real galactic plane (GC at u≈0.87, v≈0.5,
+  poles at the image edges). (b) **colored near-starfield**: 9000 points on a
+  5000–5600 parallax shell (deliberately OUTSIDE the 4800 constellation dome so
+  lines/dots draw in front) with per-point blackbody color + a custom `Points`
+  shader (circular sprite, brightness twinkle, pixel-ratio-scaled size,
+  `toneMapped:false` so it stays crisp through the F1 ACES chain). (c)
+  **zodiacal light**: an additive warm afterglow on an inward hemisphere
+  (radius 1500) in the ecliptic (XZ) plane — a per-pixel shader whose intensity
+  peaks toward the Sun and the ecliptic plane, re-oriented at the camera each
+  frame (`Skybox.update(camera)`, called in `main.ts` before render) so the
+  afterglow follows the sun in view. `scene.ts`: `BuiltScene.starMat`
+  (PointsMaterial) → `BuiltScene.skybox` (Skybox), disposal folded into the
+  disposables list. `tests/skybox.test.ts` covers the pure layers (star-table
+  shape / palette / boundedness; zodiacal intensity monotonicity + anti-solar
+  vanishing). All gates green (329 tests, tsc, eslint, prettier, build).
+  Verified live (headless Chrome + vision): Milky Way band, star color
+  variation, and the zodiacal glow all present vs the flat-black before.
+  Note: the plan originally said `milkyway_8k.jpg` (a real equirect photo);
+  the procedural bake superseded it for the size/attribution/determinism
+  reasons above — same visual result, smaller payload.
 
 ### F3 — Real NASA planet textures + enhanced procedural fallback `[wt-35-03]`
 
