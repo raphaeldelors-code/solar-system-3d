@@ -347,6 +347,10 @@ const clock = new SimClock(Date.now());
 let built!: BuiltScene;
 let scale: VisualScale = VISIBLE_SCALE;
 let followId = '';
+// F1: HDR post-processing switch (the `?post=0` device fallback + `p` key).
+// Declared here (not at its use in the URL block) so the keydown handler can
+// reference it without a temporal-dead-zone error; default true.
+let postOn = true;
 /**
  * Currently highlighted body — a planet OR a moon (plan 015 P6). The
  * follow/camera can be on the parent planet while the selected satellite
@@ -978,6 +982,14 @@ document.addEventListener('pointerdown', (ev) => {
 });
 document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape') closeCalendar();
+  // F1: F2 toggles the HDR post stack (bloom + ACES). `p` is already the
+  // pause URL param, so the keyboard toggle uses F2 (no Chrome default,
+  // no clash with the input keys: Escape/Enter/Space/arrows).
+  else if (ev.key === 'F2') {
+    ev.preventDefault();
+    postOn = !postOn;
+    built.sunGlow.visible = postOn;
+  }
 });
 
 /**
@@ -1363,6 +1375,8 @@ window.addEventListener('resize', () => {
   built.camera.aspect = window.innerWidth / window.innerHeight;
   built.camera.updateProjectionMatrix();
   built.renderer.setSize(window.innerWidth, window.innerHeight);
+  // F1: keep the post stack's render target at the new size too.
+  built.post.setSize(window.innerWidth, window.innerHeight);
   // F3: re-check the phone breakpoint for the mini strip's day-only date.
   // Only rewrite when it actually flips (a refresh mid-frame is otherwise a
   // no-op for the date, but avoid redundant DOM writes on every resize).
@@ -1396,6 +1410,13 @@ if (urlState.scale) {
 }
 if (urlState.orbits != null) orbitsEl.checked = urlState.orbits;
 if (urlState.labels != null) labelsEl.checked = urlState.labels;
+// F1: `?post=0` disables the HDR post stack (device fallback — some GPUs
+// choke on the HalfFloat RT / bloom). It is a GLOBAL param, not part of the
+// ViewState round-trip, so read it straight off the URL here.
+{
+  const postParam = new URL(window.location.href, 'http://localhost').searchParams.get('post');
+  if (postParam === '0') postOn = false;
+}
 if (urlState.belts != null) beltsEl.checked = urlState.belts;
 if (urlState.figures != null) {
   figuresEl.checked = urlState.figures;
@@ -1530,6 +1551,10 @@ screenshotBtn.addEventListener('click', async () => {
 // --- Init ------------------------------------------------------------------
 
 rebuildScene(scale);
+// F1: honor a restored `?post=0` from the very first frame (the `p` key and
+// the composer branch both read `postOn`; this just hides the corona sprite
+// so a fallback device never flashes it).
+built.sunGlow.visible = postOn;
 // Plan 016 P1: constellation name labels live on a 2D screen-space overlay
 // (not 3D sprites) — see render/constellationScreenLabels.ts. One layer for
 // the page's lifetime: it anchors to the #app canvas, which persists across
@@ -2672,7 +2697,12 @@ function frame(): void {
   const shadowsOn = camDist <= SHADOW_CULL_DIST;
   if (shadowsOn !== built.sunLight.castShadow) built.sunLight.castShadow = shadowsOn;
 
-  built.renderer.render(built.scene, built.camera);
+  // F1: HDR path. Default routes through the EffectComposer (HalfFloat RT →
+  // UnrealBloom → SMAA → OutputPass = ACES + sRGB). The `?post=0` / `p`-key
+  // fallback renders DIRECTLY to the canvas instead — no bloom/corona, the
+  // pre-F1 look — so a device that chokes on the composer can still run.
+  if (postOn) built.post.composer.render();
+  else built.renderer.render(built.scene, built.camera);
   // Screen-space constellation name labels (plan 016 P1): the 2D overlay
   // pass after the 3D render, so the names sit crisp above the frame.
   updateConstellationScreenLabelFrame();

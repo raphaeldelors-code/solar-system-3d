@@ -16,6 +16,12 @@
  *   rv  = reversed time on/off (1/0)  (forward by default)
  *   ev  = events panel open/closed (1/0)  (closed by default)
  *   cam = "px,py,pz,tx,ty,tz" camera pos + target (6 finite numbers)
+ *   post = "0" ONLY = disable the HDR post stack (device fallback; default on)
+ *
+ * `post` is a GLOBAL device-performance switch, not shareable scene state: it
+ * lives outside the ViewState round-trip (encodeAppState never writes it) and
+ * is managed directly by the F2 key toggle in main.ts (`p` is the pause param,
+ * so the keyboard toggle avoids that mnemonic clash).
  */
 
 export type ScaleChoice = 'visible' | 'true';

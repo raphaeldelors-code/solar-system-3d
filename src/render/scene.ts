@@ -37,6 +37,7 @@ import {
   baseMoonDistance,
   followDistanceKm,
 } from './visibleScale';
+import { buildPostStack, buildSunGlow, type PostStack } from './post';
 
 export const AU = 1; // 1 scene unit per AU
 const AU_TO_KM = 1.495978707e8;
@@ -176,6 +177,10 @@ export interface BuiltScene {
   constellations: THREE.Group;
   /** Classic figure plates (plan 007); hidden until the Figures toggle. */
   constellationFigures: THREE.Group;
+  /** HDR→bloom→SMAA→Output post stack (plan 035 F1). */
+  post: PostStack;
+  /** Sun corona sprite (plan 035 F1); positioned at the sun, ~10× its radius. */
+  sunGlow: THREE.Sprite;
   /** Per-frame scratch state (sorted body order for updatePositions). */
   userData: { updateOrder?: SceneBody[] };
   dispose: () => void;
@@ -247,6 +252,9 @@ export function buildScene(
 ): BuiltScene {
   const renderer = new THREE.WebGLRenderer({
     canvas,
+    // Keep canvas MSAA on: the default path renders through the EffectComposer
+    // (whose RT uses SMAA), but the `?post=0` fallback renders DIRECTLY to this
+    // canvas, where MSAA is the only AA. Both paths stay smooth.
     antialias: true,
     // Keep the frame buffer alive after present so canvas.toBlob() in
     // main.ts can export a PNG screenshot of the current view.
@@ -324,7 +332,14 @@ export function buildScene(
   const constellationFigures = buildConstellationFigures();
   scene.add(constellationFigures);
 
-  const disposables: { dispose: () => void }[] = [starGeo, starMat];
+  const post = buildPostStack(renderer, scene, camera, window.innerWidth, window.innerHeight);
+
+  // Sun corona: a separate additive billboard that gives the unlit sun disc a
+  // real glow/halo (the plan-016 flat "teal ring" replaced by a radial corona).
+  const sunGlow = buildSunGlow(SUN_R * 4.5);
+  scene.add(sunGlow.sprite);
+
+  const disposables: { dispose: () => void }[] = [starGeo, starMat, post, sunGlow];
   const map = new Map<string, SceneBody>();
 
   // Planets and Sun first so moons can resolve their parents.
@@ -570,6 +585,8 @@ export function buildScene(
     starMat,
     constellations,
     constellationFigures,
+    post,
+    sunGlow: sunGlow.sprite,
     userData: {},
     dispose,
   };
@@ -1567,6 +1584,10 @@ export function applyScaleMorph(built: BuiltScene, p: number): void {
     (entry.label.material as THREE.SpriteMaterial).opacity = 1;
     entry.sceneRadius = r;
   }
+  // Sun corona: the sun sits at the origin and never moves; its sprite is a
+  // scene child, so track the (just-updated) sun radius here (4.5x the disc).
+  const sun = built.bodies.get('sun');
+  if (sun) built.sunGlow.scale.set(sun.sceneRadius * 4.5, sun.sceneRadius * 4.5, 1);
 }
 
 /**
