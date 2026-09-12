@@ -419,7 +419,7 @@ morphActive, skyTourActive, introActive})` is a pure predicate. In the
 > 2026-09-12):** User screenshot of the deployed site: the outer (Kuiper)
 > ring was still the most prominent feature at overview — brighter than the
 > orbit lines. Root cause: at overview camera distances (< `beltDist +
-> LOD_NEAR_DIST`) the LOD keeps the FULL lit-rock representation at opacity
+LOD_NEAR_DIST`) the LOD keeps the FULL lit-rock representation at opacity
 > 1; the Kuiper rocks are 1.5× the asteroid rocks' size, ice-blue, sun-lit —
 > 1,400 bright dots read as a glowing ring. The soft dust point cloud (the
 > intended far representation) only engages at `camDist ≈ 166`, far beyond
@@ -433,6 +433,25 @@ morphActive, skyTourActive, introActive})` is a pure predicate. In the
 > dominant feature; vision A/B: "no longer a prominent bright ring — a faint
 > background band".
 
+> **Implementation record (pass 3, `6a43253`, 2026-09-12) — the belt the user
+> kept seeing was the FAR point cloud, not the rocks.** The user sent three
+> oblique, portrait, multi-zoom screenshots (elevation ~22–40°) and said the
+> Kuiper belt around the outer planets is fine, but "the small one around the
+> sun" (asteroid belt) and "the big one … the milky way" still read too bright.
+> Live material probe at camDist 175 exposed the real cause: the belt LOD flips
+> to the far point cloud at `beltDist 28.8 + LOD_NEAR_DIST 120 = 149`, so at the
+> user's inner-system zoom the on-screen belt was **1,800 additive points at
+> size 1.5** (mesh at opacity 0.26, points at 0.33), _not_ the instanced rocks.
+> Pass 2 had trimmed the rocks and the Kuiper far-points (0.7) but left the
+> inner far-cloud at the 1.5 default — a 2× point size the user was looking at
+> straight on. Fix: new `farPointSize: 0.75` on the asteroid belt (dot area ÷4
+> at the same radius), plus the close-up rock LOD trimmed (baseSize 0.05 → 0.027,
+> color 0xcfc2ac → 0xb0a289, count 1800 → 1100). Milky Way `MILKYWAY_TINT`
+> 0.5 → 0.3. Verified at three portrait/oblique poses matching the user's
+> screenshots: inner pose asteroid-band p90 104 → 50, vision belt prominence
+> 8/10 → 4/10 with planets 9/10; sky pose band 6/10 with the system outdrawing
+> it. 381 tests + tsc strict + eslint + prettier + build green.
+>
 > **Implementation record (`4ceb4bc`, 2026-09-12):** Two user-reported visual
 > bugs fixed on `main` after F1–F6 shipped, gated before commit, live-verified
 > headless before deploy.
