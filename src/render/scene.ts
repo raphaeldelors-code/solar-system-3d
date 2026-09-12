@@ -38,6 +38,7 @@ import {
   followDistanceKm,
 } from './visibleScale';
 import { buildPostStack, buildSunGlow, type PostStack } from './post';
+import { buildSkybox, type Skybox } from './skybox';
 
 export const AU = 1; // 1 scene unit per AU
 const AU_TO_KM = 1.495978707e8;
@@ -172,7 +173,8 @@ export interface BuiltScene {
   /** Small-body fields (asteroid + Kuiper belts). */
   belts: BeltField[];
   sunLight: THREE.PointLight;
-  starMat: THREE.PointsMaterial;
+  /** Deep-sky background group (plan 035 F2): Milky-Way skybox + stars + zodiacal. */
+  skybox: Skybox;
   /** Constellation figure lines + named-star markers (decorative sky). */
   constellations: THREE.Group;
   /** Classic figure plates (plan 007); hidden until the Figures toggle. */
@@ -300,29 +302,17 @@ export function buildScene(
   scene.add(sunLight);
   scene.add(new THREE.AmbientLight(0x223044, 0.4));
 
-  // Starfield.
-  const starCount = 4000;
-  const starPos = new Float32Array(starCount * 3);
-  for (let i = 0; i < starCount; i++) {
-    const u = Math.random(),
-      v = Math.random();
-    const theta = 2 * Math.PI * u,
-      phi = Math.acos(2 * v - 1);
-    const r = 5000 + Math.random() * 3000;
-    starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-    starPos[i * 3 + 1] = r * Math.cos(phi);
-    starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-  }
-  const starGeo = new THREE.BufferGeometry();
-  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-  const starMat = new THREE.PointsMaterial({
-    color: 0xdde6f5,
-    size: 1.3,
-    sizeAttenuation: false,
-    transparent: true,
-    opacity: 0.55,
+  // Deep sky (plan 035 F2): real Milky-Way equirect skybox + colored
+  // near-starfield + zodiacal light, replacing the old 4000-point
+  // monochrome shell. One group, a few draw calls total.
+  const skybox = buildSkybox(new THREE.TextureLoader(), 'textures/milkyway_equirect.png');
+  // Track pixel ratio so the per-point star size stays constant in CSS px.
+  skybox.group.traverse((o) => {
+    if (o instanceof THREE.Points && o.material instanceof THREE.ShaderMaterial) {
+      o.material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+    }
   });
-  scene.add(new THREE.Points(starGeo, starMat));
+  scene.add(skybox.group);
 
   // Constellation figure lines + named-star markers on the celestial sphere.
   const constellations = buildConstellations();
@@ -339,7 +329,7 @@ export function buildScene(
   const sunGlow = buildSunGlow(SUN_R * 4.5);
   scene.add(sunGlow.sprite);
 
-  const disposables: { dispose: () => void }[] = [starGeo, starMat, post, sunGlow];
+  const disposables: { dispose: () => void }[] = [skybox, post, sunGlow];
   const map = new Map<string, SceneBody>();
 
   // Planets and Sun first so moons can resolve their parents.
@@ -582,7 +572,7 @@ export function buildScene(
     bodies: map,
     belts,
     sunLight,
-    starMat,
+    skybox,
     constellations,
     constellationFigures,
     post,

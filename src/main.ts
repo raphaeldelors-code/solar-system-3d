@@ -2697,6 +2697,10 @@ function frame(): void {
   const shadowsOn = camDist <= SHADOW_CULL_DIST;
   if (shadowsOn !== built.sunLight.castShadow) built.sunLight.castShadow = shadowsOn;
 
+  // F2: the zodiacal-light afterglow stays pointed at the Sun as the camera
+  // orbits — refresh its view direction from the (final) camera position.
+  built.skybox.update(built.camera);
+
   // F1: HDR path. Default routes through the EffectComposer (HalfFloat RT →
   // UnrealBloom → SMAA → OutputPass = ACES + sRGB). The `?post=0` / `p`-key
   // fallback renders DIRECTLY to the canvas instead — no bloom/corona, the
