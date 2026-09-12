@@ -49,10 +49,13 @@ export const ZODIACAL_RADIUS = 4000;
 /**
  * Uniform brightness tint applied to the Milky-Way skybox (0..1, 1 = as
  * authored). The shipped equirect bake is full-strength galaxy art and reads
- * as the single brightest thing in the frame at the overview — dimmed to
- * ~half so the band sets the mood without stealing focus from the system.
+ * as the single brightest thing in the frame at the overview — dimmed so the
+ * band sets the mood without stealing focus from the system.
+ * 2026-09-12: 0.5 → 0.3 — at oblique mid-zoom views the band still crossed
+ * the upper half of the frame brighter than the planets; trim further while
+ * keeping individual stars (rendered separately) untouched.
  */
-export const MILKYWAY_TINT = 0.5;
+export const MILKYWAY_TINT = 0.3;
 
 /**
  * Stellar blackbody color palette (approximate hues), by class:

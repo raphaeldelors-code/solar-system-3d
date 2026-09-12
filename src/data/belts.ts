@@ -54,14 +54,32 @@ export const BELTS: BeltDefinition[] = [
   {
     id: 'asteroid-belt',
     name: 'Main asteroid belt',
-    count: 1800,
+    // 2026-09-12: 1800 → 1100. At the inner-system zoom the ring read as a
+    // solid hot band — the busiest object on screen, above the planets.
+    // Thinning the population (deterministic seed unchanged) breaks it up
+    // into a believable scatter instead of a wall of dots.
+    count: 1100,
     seed: 0x5eed,
     a: [2.1, 3.3], // between Mars and Jupiter
     e: [0.0, 0.25],
     i: [0, 12],
-    baseSize: 0.05,
+    // 2026-09-12: 0.05 → 0.027. At the inner-system zoom (out to Jupiter) the
+    // sun-lit rocks read as a hot solid ring — brighter than the planets and
+    // the orbit lines. Smaller rocks keep the belt present but let the
+    // planets back into the foreground. (Kuiper was trimmed the same way.)
+    baseSize: 0.027,
     sizeJitter: 0.5,
-    color: 0xcfc2ac,
+    // Warm tan dimmed ~15% so the lit rocks don't glow against the dark disk.
+    color: 0xb0a289,
+    // FAR-LOD fix (2026-09-12): at inner-system zoom (camera ≈ 150–200 units)
+    // the LOD has already switched to the point cloud — 1,800 additive points
+    // at size 1.5 read as a dense glowing dot ring, the busiest object on
+    // screen. Halving the point size (0.75) cuts each dot's area ~4× so the
+    // cloud reads as a faint dust band and the planets come back to the
+    // foreground. (Kuiper already uses 0.7; the inner belt was left at the
+    // 1.5 default — the actual cause of the "small belt around the sun is
+    // too bright" report.)
+    farPointSize: 0.75,
   },
   {
     id: 'kuiper-belt',
