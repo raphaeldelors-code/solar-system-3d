@@ -38,6 +38,7 @@ fixes".
 
 - [x] fix(view): intro Sun→Earth leg eases (no frame-1 teleport) — `stepFlight` liveTarget easing + Earth leg 1.8s→2.2s — `4ceb4bc`
 - [x] fix(render): dim over-bright sky — Milky Way `MILKYWAY_TINT` 0.5, zodiacal peak 0.16→0.08, belt emissive 0.12→0.05, far-cloud 1.4×→0.55× — `4ceb4bc` (same commit)
+- [x] fix(render): Kuiper belt still too prominent at overview — `baseSize` 0.075→0.05, per-belt `farPointSize` (Kuiper 0.7), far-cloud ceiling 0.55→0.45
 
 ## Phase 4 — Review fixes + features (see `plans/002-review-fixes-and-features.md`)
 

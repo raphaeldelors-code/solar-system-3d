@@ -414,6 +414,25 @@ morphActive, skyTourActive, introActive})` is a pure predicate. In the
 
 ### Post-plan fixes (2026-09-12, user feedback after deployment)
 
+> **Implementation record (pass 2, Kuiper belt `baseSize` 0.075 → 0.05,
+> per-belt `farPointSize` 0.7, far-cloud opacity ceiling 0.55 → 0.45,
+> 2026-09-12):** User screenshot of the deployed site: the outer (Kuiper)
+> ring was still the most prominent feature at overview — brighter than the
+> orbit lines. Root cause: at overview camera distances (< `beltDist +
+> LOD_NEAR_DIST`) the LOD keeps the FULL lit-rock representation at opacity
+> 1; the Kuiper rocks are 1.5× the asteroid rocks' size, ice-blue, sun-lit —
+> 1,400 bright dots read as a glowing ring. The soft dust point cloud (the
+> intended far representation) only engages at `camDist ≈ 166`, far beyond
+> typical overview framing. Fix: Kuiper `baseSize` 0.075 → 0.05 (rocks stay
+> visible up close, stop shouting from afar), a new optional
+> `BeltDefinition.farPointSize` (Kuiper 0.7 vs asteroid 1.5, so the dust
+> cloud of the wide belt reads as a band, not a second dotted ring), and the
+> far-cloud opacity ceiling 0.55 → 0.45. Verified live: at overview the
+> Kuiper ring's radial p90 brightness dropped from the p90=177/217 tier
+> (user screenshot, before) to p90 ≈ 13–34 (after) while the sun stays the
+> dominant feature; vision A/B: "no longer a prominent bright ring — a faint
+> background band".
+
 > **Implementation record (`4ceb4bc`, 2026-09-12):** Two user-reported visual
 > bugs fixed on `main` after F1–F6 shipped, gated before commit, live-verified
 > headless before deploy.
