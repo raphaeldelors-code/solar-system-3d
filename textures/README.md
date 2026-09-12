@@ -37,3 +37,23 @@ Match the id exactly, lowercase, `.jpg`:
 
 Files not in this list are ignored. To remove a real texture, delete the file
 and reload.
+
+## Deep-sky background (`milkyway_equirect.png`, plan 035 F2)
+
+This file is NOT a real-surface texture (it is not `<bodyId>.jpg`);
+it is the whole-sky equirect map rendered by `src/render/skybox.ts` on a
+large inward sphere behind the constellations (the `milkyway-skybox` mesh).
+
+It is a **procedurally generated** all-sky Milky Way, NOT a photograph:
+a deterministic bake (Python, seeded) forward-splats a Gaussian galactic
+band (mottle + dark dust lanes + a warm galactic-centre bulge) plus two
+star populations onto a 4096×2048 (2:1) equirect canvas, using the SAME
+galactic→equatorial→scene→equirectUV chain the app uses at runtime
+(scene frame of `raDecToUnit` in `src/data/constellations.ts`; galactic
+centre lands at u≈0.87, v≈0.5; poles at the image top/bottom).
+Chosen over a photo re-projection so the sky is small (~2 MB), fully
+deterministic, and carries no photo attribution.
+
+Do NOT delete it — the skybox silently falls back to a flat dark sky
+if the load fails, which looks like a regression. To regenerate, re-run
+the bake and overwrite this file (see plan 035 F2 notes).
