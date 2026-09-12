@@ -1060,8 +1060,163 @@
         background: #2b4a7a;
         border-color: #6ea8ff;
       }
+      /* ===== Plan 035 F5: cinematic intro =====
+         Full-screen overlay, pointer-transparent (the canvas underneath stays
+         interactive — ANY manual input on it skips the intro via JS). The
+         title fades in/out on its own clock (tickIntroTitle), so no CSS
+         animation — only the final opacity transition on exit. */
+      #intro {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        user-select: none;
+      }
+      #intro-title {
+        opacity: 0; /* driven by tickIntroTitle */
+        text-align: center;
+        color: #eaf2ff;
+        text-shadow: 0 0 24px rgba(110, 168, 255, 0.55);
+      }
+      #intro .intro-title-main {
+        font-size: clamp(28px, 6vw, 54px);
+        font-weight: 200;
+        letter-spacing: 0.42em;
+        text-indent: 0.42em; /* center the letterspaced word */
+      }
+      #intro .intro-title-sub {
+        margin-top: 10px;
+        font-size: clamp(12px, 1.8vw, 15px);
+        letter-spacing: 0.18em;
+        color: #9fb8dd;
+      }
+      #intro-skip {
+        pointer-events: auto;
+        margin-top: 6px;
+        border: 1px solid rgba(120, 150, 200, 0.35);
+        border-radius: 999px;
+        background: rgba(10, 16, 28, 0.55);
+        color: #cfe0f5;
+        font:
+          12px/1 system-ui,
+          sans-serif;
+        letter-spacing: 0.04em;
+        padding: 7px 18px;
+        cursor: pointer;
+        transition:
+          background 140ms ease,
+          border-color 140ms ease;
+      }
+      #intro-skip:hover {
+        background: rgba(120, 150, 200, 0.22);
+        border-color: #6ea8ff;
+      }
+      #intro-skip:focus-visible {
+        outline: 2px solid #6ea8ff;
+        outline-offset: 2px;
+      }
+
+      /* ===== Plan 035 F5: command palette =====
+         Centered modal, below the intro (z 50). Hidden via [hidden]; JS
+         focuses the input on open. Click-outside closes (JS pointerdown). */
+      #palette {
+        position: fixed;
+        top: 18%;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        width: min(560px, calc(100vw - 32px));
+        background: rgba(10, 16, 28, 0.96);
+        border: 1px solid rgba(120, 150, 200, 0.3);
+        border-radius: 12px;
+        box-shadow: 0 14px 44px rgba(0, 0, 0, 0.6);
+        overflow: hidden;
+        font:
+          13px/1.5 system-ui,
+          sans-serif;
+        color: #cfe0f5;
+      }
+      #palette[hidden] {
+        display: none;
+      }
+      #palette-head {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(120, 150, 200, 0.22);
+      }
+      #palette-input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid rgba(120, 150, 200, 0.3);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #eaf2ff;
+        font:
+          14px/1.4 system-ui,
+          sans-serif;
+        padding: 8px 12px;
+        outline: none;
+      }
+      #palette-input:focus {
+        border-color: #6ea8ff;
+      }
+      #palette-list {
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 6px;
+      }
+      .pal-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px;
+        border-radius: 7px;
+        cursor: pointer;
+      }
+      .pal-item.active {
+        background: rgba(110, 168, 255, 0.16);
+      }
+      .pal-keys {
+        flex: 0 0 64px;
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        color: #8fb4e8;
+        background: rgba(120, 150, 200, 0.12);
+        border-radius: 4px;
+        padding: 2px 6px;
+        text-align: center;
+        white-space: nowrap;
+      }
+      .pal-label {
+        flex: 0 0 auto;
+        font-weight: 600;
+        color: #eaf2ff;
+      }
+      .pal-hint {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #8fa3bf;
+        font-size: 12px;
+      }
+      .pal-empty {
+        padding: 14px;
+        text-align: center;
+        color: #8fa3bf;
+      }
+      .palette-foot {
+        border-top: 1px solid rgba(120, 150, 200, 0.22);
+        padding: 5px 12px;
+        font-size: 11px;
+        color: #7f93b5;
+      }
     </style>
-    <script type="module" crossorigin src="./assets/index-dXJLCLjS.js"></script>
+    <script type="module" crossorigin src="./assets/index-Dbj_pfWb.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -1077,6 +1232,32 @@
       </div>
     </div>
     <div id="tooltip" aria-hidden="true"></div>
+
+    <!-- Plan 035 F5: cinematic intro (first-load dolly + title) and the
+         command palette (press / or ? to open). Both are hidden by default;
+         startIntro()/openPalette() reveal them. The intro is pointer-transparent
+         (the canvas underneath stays interactive — any manual input skips it). -->
+    <div id="intro" hidden aria-hidden="true">
+      <div id="intro-title">
+        <div class="intro-title-main">SOLAR SYSTEM 3D</div>
+        <div class="intro-title-sub">a real-time, shareable tour of the planets</div>
+      </div>
+      <button id="intro-skip" type="button">Skip intro →</button>
+    </div>
+
+    <div id="palette" hidden>
+      <div id="palette-head">
+        <input
+          id="palette-input"
+          type="text"
+          placeholder="Type a command…  ( / to open )"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      <div id="palette-list" role="listbox"></div>
+      <div class="palette-foot">↑↓ navigate · Enter run · Esc close</div>
+    </div>
     <!-- Plan 022 F3: always-visible mini date/speed strip (top-right).
          pointer-events: none — it never blocks the canvas or the panel.
          Deliberately NOT aria-live: 60 fps updates would spam screen
@@ -1297,9 +1478,13 @@
           <div class="info-row">
             <span id="info-label-3">Peri / Apo</span><span id="info-range" class="value">—</span>
           </div>
+          <!-- Plan 035 F5: static "facts" rows (radius / day / tilt / fun fact),
+               filled by setInfoFacts() — the live rows above stay untouched. -->
+          <div id="info-facts"></div>
         </div>
         <div class="hint" id="hint">
-          Drag: rotate · Wheel: zoom · Right-drag: scrub time & speed · Click a body to fly to it
+          Drag: rotate · Wheel: zoom · Click a body to fly to it · /: commands (keys: space n r o l
+          b f a p t c s 1-9 0)
         </div>
         <div class="hint" id="credit">
           Constellation figures: Stellarium "western" illustrations by Johan Meuris (Free Art
