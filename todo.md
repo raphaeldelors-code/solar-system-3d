@@ -23,7 +23,7 @@ order. (Supersedes old open item B4 below.)
 
 - [x] F1 feat(render): HDR post stack (ACES + UnrealBloom + HalfFloat RT) + glowing sun (corona/halo) — `wt-35-01` — `650a136`
 - [x] F2 feat(render): deep sky — Milky Way equirect + colored starfield + zodiacal light — `wt-35-02` — `bfa8088`
-- [ ] F3 feat(render): real NASA textures (day/normal/spec) + Earth clouds + ocean specular + procedural fallback — `wt-35-03`
+- [x] F3 feat(textures): real NASA textures (day/normal/roughness/clouds) + Earth cloud shell + ocean roughness + procedural fallback — `4380074`
 - [ ] F4 feat(render): fresnel atmosphere shells + translucent Cassini-division ring texture (shadows kept) — `wt-35-04`
 - [ ] F5 feat(web): cinematic intro + polished fly-to + command palette/shortcuts + body info card — `wt-35-05`
 - [ ] F6 perf: 60 fps pass (belt LOD, pixel-ratio cap, idle skip, profile) — `wt-35-06`

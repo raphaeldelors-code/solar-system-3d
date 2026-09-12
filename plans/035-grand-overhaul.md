@@ -204,6 +204,29 @@ specular, bump?}` refs per body), new `public/textures/planets/*.jpg` (earth
   as good as before, better if real maps land). Procedural fallback verified by
   loading with network off. Gate set green.
 
+> **Implementation record (`4380074`, 2026-09-12):** Built in the main worktree
+> (no `wt-35-03`). Real maps are public-domain NASA/JPL equirect: Earth
+> day/normal/clouds + Moon from the three.js `examples/textures/planets/` set,
+> Mercury/Mars/Jupiter/Saturn/Uranus/Neptune day maps from Solar System Scope
+> 2k. `realTextures.ts` is now a multi-channel loader (day/normal/roughness/
+> clouds) with HEAD-probe presence detection, a per-body cache, and an
+> `attachRealTextures` swap + animated cloud shell. Earth's "ocean specular"
+> is realised as a **roughness map** (inverted from the NASA specular map —
+> ocean=smooth→glint, land=rough→matte) on `MeshStandardMaterial`, since the
+> PBR stack (F1 ACES) uses roughness rather than the legacy `specularMap`.
+> `SceneBody.cloudsMesh` holds the Earth cloud shell (radius +1.5%, differential
+> rotation in `applySpin`); disposal handles its geo+mat. 11 maps total, 2.3 MB;
+> `dist/` = 5.4 MB core + 2.3 MB planets = **7.7 MB** (under the 12 MB budget).
+> **Superseded plan detail:** the plan named `textures: {day, normal, specular,
+bump?}` per body in `bodies.ts` — not needed: presence is discovered by
+> HEAD-probing `planets/<id>_<channel>.jpg`, so no data-model change.
+> **Venus** has no real 2k map (SSS 2k_venus 404s) so it keeps its procedural
+> banded look — this exercises the offline/procedural fallback path, which is
+> the plan's own acceptance criterion. Live-verified (headless Chrome + vision):
+> Earth = real Blue Marble (oceans/continents/cloud patches + terminator),
+> Moon_day 210 KB fetched + same swap pipeline, Venus procedural. 335 tests +
+> tsc + eslint + prettier + build green.
+
 ### F4 — Atmospheres (fresnel rim) + translucent rings `[wt-35-04]`
 
 - **Files:** new `src/render/atmosphere.ts` (fresnel shader shell), `src/render/
