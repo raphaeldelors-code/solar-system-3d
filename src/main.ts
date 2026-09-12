@@ -1801,6 +1801,8 @@ function tlPaint(year: number): void {
   hudTimelineYearEl.textContent = String(year);
   hudTimelineDynEl.replaceChildren();
   const width = hudTimelineTrackEl.clientWidth || window.innerWidth;
+  const BAR_L = 12; // #hud-timeline-bar side inset (px, CSS)
+  const barW = Math.max(1, width - 2 * BAR_L);
   const frag = document.createDocumentFragment();
   tlBarEvents = [];
   for (const mk of markers) {
@@ -1810,12 +1812,12 @@ function tlPaint(year: number): void {
     el.textContent = mk.emoji;
     el.title = mk.title;
     frag.appendChild(el);
-    // Track-space copy for the lens + tooltip (tlDrawLens subtracts the
-    // track-space focal `x`; the month ticks/caret use frac·barW in bar
-    // space, which is why they take `xBar` instead).
+    // Bar-space copy for the lens + tooltip: the month ticks and the caret
+    // both sit at `frac·barW` (the bar is inset 12px from the track), so an
+    // event at the caret must too — that's what makes the in-disc dx = 0.
     tlBarEvents.push({
       day: mk.frac * spanLenDays,
-      x: mk.frac * width,
+      x: mk.frac * barW,
       emoji: mk.emoji,
       title: mk.title,
     });
@@ -1941,9 +1943,9 @@ function tlDrawLens(x: number): void {
   // 3 — that year's event emojis (straddling the line) at their local zoom —
   //  this is where a packed cluster FANS OUT around the focal point.
   for (const b of tlBarEvents) {
-    // b.x is stored in TRACK space (frac·width, plan 023) — use `x`, not
-    // `xBar`, or events sit 12px off the caret (48px at 4× center zoom).
-    const dx = b.x - x;
+    // b.x is stored in BAR space (frac·barW, plan 034) to match the month
+    // ticks and the caret — so an event at the caret has dx = 0 (center).
+    const dx = b.x - xBar;
     const d = lensDisplace(dx, 0);
     if (!d) continue;
     ctx.save();
