@@ -40,6 +40,7 @@ fixes".
 - [x] fix(render): dim over-bright sky — Milky Way `MILKYWAY_TINT` 0.5, zodiacal peak 0.16→0.08, belt emissive 0.12→0.05, far-cloud 1.4×→0.55× — `4ceb4bc` (same commit)
 - [x] fix(render): Kuiper belt still too prominent at overview — `baseSize` 0.075→0.05, per-belt `farPointSize` (Kuiper 0.7), far-cloud ceiling 0.55→0.45
 - [x] fix(render): inner asteroid belt + Milky Way still bright at oblique zooms — root cause was the FAR point cloud (LOD flips at camDist 149), asteroid `farPointSize` 1.5→0.75, rock LOD baseSize 0.05→0.027 / color 0xcfc2ac→0xb0a289 / count 1800→1100, `MILKYWAY_TINT` 0.5→0.3 — `6a43253`
+- [x] fix(render): "foggy north / black south" = zodiacal dome (A/B-proven), `uPeak` 0.08→0.015; `MILKYWAY_TINT` 0.3→0.05 for Kuiper-level band — `365efe8`
 
 ## Phase 4 — Review fixes + features (see `plans/002-review-fixes-and-features.md`)
 

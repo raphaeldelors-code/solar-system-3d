@@ -452,6 +452,28 @@ LOD_NEAR_DIST`) the LOD keeps the FULL lit-rock representation at opacity
 > 8/10 → 4/10 with planets 9/10; sky pose band 6/10 with the system outdrawing
 > it. 381 tests + tsc strict + eslint + prettier + build green.
 >
+> **Implementation record (pass 4, `365efe8`, 2026-09-12) — the "foggy north"
+> was the ZODIACAL dome, and the tint changes had never reached the live
+> site.** User: inner belt now OK, but the Milky Way "way too present — I
+> don't see any change", plus a new observation: the north of the sky looks
+> foggy while the south is clean black. Layer A/B (object hidden, same
+> pose) isolated the cause: hiding the `zodiacal-light` dome took the warm
+> haze from 7/10 → 2/10, hiding the galaxy skybox only 7/10 → 5/10. The dome
+> is brightest toward the Sun and zero anti-solar — precisely the reported
+> one-sided asymmetry; the sun's own corona (on-frame in the intro pose) is
+> a separate, correct glow. Two compounding reasons the user saw "no
+> change": (1) passes 3a/3b/3c only dimmed `MILKYWAY_TINT`, the wrong layer
+> for the fog; (2) the live gh-pages bundle was still serving pass-2 values
+> (`index-CxQwHzU3.js` → later `index-CGGFN8co.js`, tint 0.3, zodiacal 0.08)
+> while the pass-3 bundle sat built but undeployed. Fix: `uPeak` /
+> `zodiacalPeakOpacity` default 0.08 → 0.015 (whisper of afterglow hugging
+> the Sun; clean black from every other view) and `MILKYWAY_TINT` 0.3 → 0.05
+> (band at Kuiper-belt level — "much less present, just like the middle
+> one"). The test asserting the 0.08 peak updated to 0.015. Verified at the
+> user's oblique poses: upper-sky median 37.7 → 20.3, p90 166 → 93. Deployed
+> immediately after verification — do not ship unverified-locally values AND
+> forget the deploy step.
+>
 > **Implementation record (`4ceb4bc`, 2026-09-12):** Two user-reported visual
 > bugs fixed on `main` after F1–F6 shipped, gated before commit, live-verified
 > headless before deploy.
