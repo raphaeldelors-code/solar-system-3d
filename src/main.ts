@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { SimClock } from './sim/clock';
-import { ALL_BODIES } from './data/bodies';
+import { ALL_BODIES, PLANETS } from './data/bodies';
 import { searchBodies, groupedBodyMenu } from './data/searchIndex';
 import {
   searchConstellations,
@@ -58,10 +58,16 @@ import {
   type Flight,
 } from './render/cameraFlight';
 import { attachRealTextures } from './render/realTextures';
+// Plan 035 F5 — cinematic intro, keyboard/palette commands, and the info-card
+// "facts" rows. All three are pure modules (unit-tested in tests/f5Commands.
+// test.ts); main.ts only wires their results to the DOM + scene.
+import { INTRO_LEGS, INTRO_DURATION, titleOpacity, introShouldPlay } from './render/intro';
+import { commandForKey, digitToPlanet, paletteEntries, COMMANDS } from './render/commands';
+import { bodyFacts } from './render/bodyFacts';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
 import { findEvents, type Event as SimEvent } from './sim/events';
-import { J2000_UTC } from './sim/types';
+import { J2000_UTC, type BodyDefinition } from './sim/types';
 import {
   fmtMonthDayUtc,
   monthSeparators,
@@ -267,6 +273,33 @@ const screenshotBtn = document.getElementById('screenshot') as HTMLButtonElement
 const tooltipEl = document.getElementById('tooltip') as HTMLDivElement;
 const infoEl = document.getElementById('info') as HTMLDivElement;
 const glLostEl = document.getElementById('gl-lost') as HTMLDivElement;
+// --- Plan 035 F5 state + elements ------------------------------------------
+// Cinematic intro: a one-shot, skippable dolly on first load (far-out → Sun
+// → Earth) with the title fading in/out. Skipped for reduced-motion, `?intro=0`,
+// and shared links that pin a view (a restore must not get overridden).
+let intro: {
+  leg: number; // index into INTRO_LEGS
+  titleEl: HTMLDivElement | null;
+} | null = null;
+const introWrapEl = document.getElementById('intro') as HTMLDivElement | null;
+const introTitleEl = document.getElementById('intro-title') as HTMLDivElement | null;
+const introSkipEl = document.getElementById('intro-skip') as HTMLButtonElement | null;
+// Command palette (Ctrl/Cmd+K or `?`): a searchable list of every command +
+// jump-to-body. `palette` holds its live filter query.
+const paletteEl = document.getElementById('palette') as HTMLDivElement | null;
+const paletteInputEl = document.getElementById('palette-input') as HTMLInputElement | null;
+const paletteListEl = document.getElementById('palette-list') as HTMLDivElement | null;
+let paletteOpen = false;
+let paletteQuery = '';
+let paletteSel = 0;
+let paletteItems: { id: string; label: string; keys: string[]; hint: string }[] = [];
+// F5 toggles not backed by an existing checkbox: atmospheres (fresnel shells)
+// + Milky Way + zodiacal light (deep-sky sub-layers).
+let atmosOn = true;
+let milkyWayOn = true;
+let zodiacalOn = true;
+// Camera preset cycle target for the `c` key (top → side → back to follow).
+let cameraPresetIdx = 0;
 const glReloadBtn = document.getElementById('gl-reload') as HTMLButtonElement;
 // Plan 022 F3: always-visible mini date/speed strip (top-right). Written by
 // the same fmtDate()/fmtSpeed() as the panel, so the strip can never
@@ -325,6 +358,7 @@ const infoNameEl = document.getElementById('info-name') as HTMLDivElement;
 const infoPeriodEl = document.getElementById('info-period') as HTMLSpanElement;
 const infoDistanceEl = document.getElementById('info-distance') as HTMLSpanElement;
 const infoRangeEl = document.getElementById('info-range') as HTMLSpanElement;
+const infoFactsEl = document.getElementById('info-facts') as HTMLDivElement | null;
 const infoLabel1El = document.getElementById('info-label-1') as HTMLSpanElement;
 const infoLabel2El = document.getElementById('info-label-2') as HTMLSpanElement;
 const infoLabel3El = document.getElementById('info-label-3') as HTMLSpanElement;
@@ -1005,6 +1039,7 @@ function updateInfo(): void {
       const c = idx >= 0 ? CONSTELLATIONS[idx] : undefined;
       if (!c) {
         infoEl.hidden = true;
+        setInfoFacts(null);
         return;
       }
       const [dx, dy, dz] = CONSTELLATION_CENTER_DIRS[idx];
@@ -1019,15 +1054,18 @@ function updateInfo(): void {
       infoPeriodEl.textContent = `${raH.toFixed(1)}h`;
       infoDistanceEl.textContent = `${decDeg >= 0 ? '+' : ''}${decDeg.toFixed(1)}°`;
       infoRangeEl.textContent = `${c.stars.length} stars`;
+      setInfoFacts(null); // a constellation shows no body facts — clear any stale rows
       return;
     }
     infoEl.hidden = true;
+    setInfoFacts(null);
     return;
   }
   const def = byId.get(followId);
   const r = def ? orbitReadout(def, clock.t) : null;
   if (!def || !r) {
     infoEl.hidden = true;
+    setInfoFacts(null);
     return;
   }
   infoEl.hidden = false;
@@ -1041,6 +1079,29 @@ function updateInfo(): void {
       ? `${formatDistanceKm(r.distanceKm)} from ${byId.get(def.parent ?? '')?.name ?? 'parent'}`
       : `${formatDistanceKm(r.distanceKm)} from Sun`;
   infoRangeEl.textContent = `${formatDistanceKm(r.perihelionKm)} / ${formatDistanceKm(r.aphelionKm)}`;
+  setInfoFacts(def);
+}
+
+/**
+ * F5: render (or clear) the static "facts" block under the live readout.
+ * Called from every `updateInfo()` branch so the card never carries a body's
+ * facts while showing a constellation (or nothing). Display-only.
+ */
+function setInfoFacts(def: BodyDefinition | null): void {
+  if (!infoFactsEl) return;
+  infoFactsEl.replaceChildren();
+  if (!def) return;
+  for (const row of bodyFacts(def)) {
+    const el = document.createElement('div');
+    el.className = 'info-row';
+    const label = document.createElement('span');
+    label.textContent = row.label;
+    const value = document.createElement('span');
+    value.className = 'value';
+    value.textContent = row.value;
+    el.append(label, value);
+    infoFactsEl.appendChild(el);
+  }
 }
 
 // --- UI wiring -------------------------------------------------------------
@@ -1371,6 +1432,490 @@ figuresEl.addEventListener('change', () => {
   syncUrl();
 });
 
+// --- Plan 035 F5: commands, cinematic intro, palette, info facts -----------
+// The pure math lives in src/render/{commands,intro,bodyFacts}.ts (unit-tested).
+// This block wires those to the live scene + DOM. Every keyboard/palette action
+// funnels through runCommand(id) so the key handler, the palette, and a future
+// ?cmd= URL param all share one dispatch.
+
+/** Toggle the fresnel atmosphere shells (the `a` key). */
+function toggleAtmospheres(): void {
+  atmosOn = !atmosOn;
+  for (const entry of built.bodies.values()) {
+    if (entry.atmosphereMesh) entry.atmosphereMesh.visible = atmosOn;
+  }
+}
+
+/** Show/hide the deep-sky sub-layers (Milky-Way + starfield = `m`, zodiacal = `z`). */
+function applySkyVisibility(): void {
+  const g = built.skybox.group;
+  const mw = g.getObjectByName('milkyway-skybox');
+  const stars = g.getObjectByName('starfield');
+  const zodi = g.getObjectByName('zodiacal-light');
+  if (mw) mw.visible = milkyWayOn;
+  if (stars) stars.visible = milkyWayOn; // the starfield is part of the deep sky
+  if (zodi) zodi.visible = zodiacalOn;
+}
+
+/**
+ * Cycle the camera preset (the `c` key): top-down → side-on → back to the
+ * default 3/4 framing of the followed body. Works on the followed body (or the
+ * Sun if none) by building a fresh anchor from its live position + extent.
+ */
+function cycleCameraPreset(): void {
+  cameraPresetIdx = (cameraPresetIdx + 1) % 3;
+  const fid = followId || 'sun';
+  const entry = built.bodies.get(fid);
+  if (!entry) return;
+  const aspect = built.camera.aspect;
+  // Default framing (idx 2) reuses the body anchor (a clean 3/4 reframe).
+  if (cameraPresetIdx === 2) {
+    const dest = camAnchorForBody(fid);
+    if (dest) flyTo(dest, 0.9, fid);
+    return;
+  }
+  // extent: the body's rendered radius (scaled to scene units).
+  const r = (entry as unknown as { radius: number }).radius ?? 1;
+  const extent = Math.max(r * 2, 0.5);
+  const base = frameBody(
+    [entry.worldPos.x, entry.worldPos.y, entry.worldPos.z],
+    extent,
+    FOV_DEG,
+    aspect,
+  );
+  // top-down: straight up; side-on: in the ecliptic plane.
+  const dist = Math.hypot(
+    base.pos[0] - base.target[0],
+    base.pos[1] - base.target[1],
+    base.pos[2] - base.target[2],
+  );
+  const dest: CamAnchor =
+    cameraPresetIdx === 0
+      ? { pos: [base.target[0], base.target[1] + dist, base.target[2]], target: base.target }
+      : { pos: [base.target[0], base.target[1], base.target[2] + dist], target: base.target };
+  flyTo(dest, 0.9, fid);
+}
+
+/** Jump the camera to a body id (palette `jump-<id>` / digit keys). */
+function jumpToBody(id: string): void {
+  const dest = camAnchorForBody(id);
+  if (dest) flyTo(dest, 1.4, id);
+}
+
+/** Stop the follow (the `Esc` key) — the camera parks free at the origin. */
+function releaseFollow(): void {
+  followId = '';
+  selectedBodyId = '';
+  selectedConstellation = '';
+  lastHighlightPoseKey = '';
+  setFindValue('');
+  updateInfo();
+  syncUrl();
+}
+
+/**
+ * The single command dispatcher. `id` is a stable command id from the registry
+ * (or `jump-<bodyId>` / `jump-digit-<d>`). Unknown ids are a silent no-op so a
+ * stale palette entry can never throw.
+ */
+function runCommand(id: string): void {
+  if (id.startsWith('jump-digit-')) {
+    const d = id.slice('jump-digit-'.length);
+    const pid = digitToPlanet(d, PLANETS, 'sun');
+    if (pid) jumpToBody(pid);
+    return;
+  }
+  if (id.startsWith('jump-')) {
+    jumpToBody(id.slice('jump-'.length));
+    return;
+  }
+  switch (id) {
+    case 'pause':
+      clock.setPaused(!clock.isPaused);
+      pauseBtn.textContent = clock.isPaused ? 'Resume' : 'Pause';
+      syncUrl();
+      break;
+    case 'speed-up':
+    case 'speed-down': {
+      const delta = id === 'speed-up' ? 0.25 : -0.25;
+      const next = Math.max(-3, Math.min(2.5, parseFloat(speedEl.value) + delta));
+      applySliderSpeed(next);
+      break;
+    }
+    case 'now':
+      clock.setDate(new Date());
+      resampleMoonNow();
+      syncUrl();
+      break;
+    case 'reverse':
+      clock.setReversed(!clock.isReversed);
+      reverseBtn.textContent = clock.isReversed ? 'Reverse ←' : 'Reverse →';
+      reverseBtn.classList.toggle('active', clock.isReversed);
+      fmtSpeed();
+      syncUrl();
+      break;
+    case 'orbits':
+      orbitsEl.checked = !orbitsEl.checked;
+      applyToggles();
+      syncUrl();
+      break;
+    case 'labels':
+      labelsEl.checked = !labelsEl.checked;
+      applyToggles();
+      syncUrl();
+      break;
+    case 'belts':
+      beltsEl.checked = !beltsEl.checked;
+      applyToggles();
+      syncUrl();
+      break;
+    case 'figures':
+      figuresEl.checked = !figuresEl.checked;
+      figuresOn = figuresEl.checked;
+      applyToggles();
+      syncUrl();
+      break;
+    case 'milkyway':
+      milkyWayOn = !milkyWayOn;
+      applySkyVisibility();
+      break;
+    case 'zodiacal':
+      zodiacalOn = !zodiacalOn;
+      applySkyVisibility();
+      break;
+    case 'atmospheres':
+      toggleAtmospheres();
+      break;
+    case 'post':
+      postOn = !postOn;
+      built.sunGlow.visible = postOn;
+      break;
+    case 'scale':
+      requestScale(scale === TRUE_SCALE ? 'visible' : 'real');
+      break;
+    case 'camera-preset':
+      cycleCameraPreset();
+      break;
+    case 'release':
+      releaseFollow();
+      break;
+    case 'screenshot':
+      screenshotBtn.click();
+      break;
+    case 'palette':
+      if (paletteOpen) closePalette();
+      else openPalette();
+      break;
+  }
+}
+
+// --- Cinematic intro --------------------------------------------------------
+// A one-shot, skippable dolly: far-out establishing pull → settle on the Sun →
+// push to Earth. Each leg is a normal flight; we arm `followId` on each so the
+// render loop tracks the live body (no whirling on the moving Earth). The
+// title fades in over the first legs and out near the end. Any user input
+// (drag / wheel / key / click a body) skips to the final Earth leg.
+function startIntro(): void {
+  if (intro || !introTitleEl || !introWrapEl) return;
+  introWrapEl.hidden = false;
+  introWrapEl.setAttribute('aria-hidden', 'false');
+  introTitleEl.hidden = false;
+  introTitleEl.style.opacity = '0';
+  // Leg 1 starts from a far-out system anchor (3× the system fit) so the pull
+  // reads as "we're deep in space". We park the camera there, then arm the
+  // first leg (a flight to the Sun) so the dolly begins moving immediately.
+  const sys = camAnchorFor('system');
+  const far: CamAnchor = {
+    pos: [sys.pos[0] * 3, sys.pos[1] * 3, sys.pos[2] * 3],
+    target: [0, 0, 0],
+  };
+  built.camera.position.set(far.pos[0], far.pos[1], far.pos[2]);
+  built.controls.target.set(0, 0, 0);
+  intro = { leg: 0, titleEl: introTitleEl };
+  built.controls.enabled = false;
+  lastIntroTotal = 0; // the title clock spans the WHOLE intro (0..INTRO_DURATION)
+  beginIntroLeg(0);
+}
+
+/** Start a specific intro leg as a flight (armed to its body). */
+function beginIntroLeg(i: number): void {
+  if (!intro) return;
+  const leg = INTRO_LEGS[i];
+  const dest = camAnchorForBody(leg.bodyId) ?? camAnchorFor('system');
+  // Leg 0 is the far-out establishing pull: start from 3× and pull IN to the
+  // Sun (zoom multiplier applied to the destination so the camera closes in).
+  if (i === 0) {
+    dest.pos = [dest.pos[0] * leg.zoom, dest.pos[1] * leg.zoom, dest.pos[2] * leg.zoom];
+  }
+  followId = leg.bodyId;
+  setFindValue(leg.bodyId);
+  selectedBodyId = leg.bodyId;
+  selectedConstellation = '';
+  intro.leg = i;
+  built.controls.enabled = false;
+  flight = makeFlight(
+    [built.camera.position.x, built.camera.position.y, built.camera.position.z],
+    [built.controls.target.x, built.controls.target.y, built.controls.target.z],
+    dest,
+    leg.duration,
+    leg.bodyId,
+    built.camera.fov,
+    FOV_DEG,
+  );
+}
+
+let lastIntroTotal = 0;
+
+/**
+ * Per-frame intro title-fade tick (called from the render loop while `intro`
+ * is active). `dtReal` is the real elapsed seconds.
+ */
+function tickIntroTitle(dtReal: number): void {
+  if (!intro?.titleEl) return;
+  lastIntroTotal += dtReal;
+  intro.titleEl.style.opacity = String(titleOpacity(lastIntroTotal));
+  // Safety: if a leg's flight never reports "done" (e.g. a stalled device),
+  // end the intro once the title has faded out rather than locking the
+  // controls forever. INTRO_DURATION is the sum of all leg durations, so this
+  // only fires well after the planned dolly should be over.
+  if (lastIntroTotal > INTRO_DURATION + 1.5) {
+    finishIntro(false);
+  }
+}
+
+/**
+ * A leg's flight just completed (the render loop's flight-done branch calls
+ * this while `intro` is active). Advance to the next leg, or finish the intro
+ * and hand the camera back to the normal follow on the final leg.
+ */
+function onIntroLegDone(): void {
+  if (!intro) return;
+  if (intro.leg < INTRO_LEGS.length - 1) {
+    beginIntroLeg(intro.leg + 1);
+  } else {
+    finishIntro(false); // landed on Earth — normal follow takes over
+  }
+}
+
+/** End the intro, optionally immediately (skipped). Lands on Earth + arms follow. */
+function finishIntro(skipped: boolean): void {
+  if (!intro) return;
+  const el = intro.titleEl;
+  intro = null;
+  if (introWrapEl) {
+    introWrapEl.hidden = true;
+    introWrapEl.setAttribute('aria-hidden', 'true');
+  }
+  // If the last leg already landed us on Earth (natural completion), there is
+  // nothing left to fly — just arm the follow and hand back the controls. A
+  // SKIP from an earlier leg (Sun) still needs the short Earth fly.
+  const alreadyEarth = followId === 'earth';
+  if (!alreadyEarth) {
+    const dest = camAnchorForBody('earth');
+    if (dest) {
+      followId = 'earth';
+      setFindValue('earth');
+      selectedBodyId = 'earth';
+      selectedConstellation = '';
+      flight = makeFlight(
+        [built.camera.position.x, built.camera.position.y, built.camera.position.z],
+        [built.controls.target.x, built.controls.target.y, built.controls.target.z],
+        dest,
+        skipped ? 0.6 : 1.0,
+        'earth',
+        built.camera.fov,
+        FOV_DEG,
+      );
+      built.controls.enabled = false;
+      if (el) {
+        el.style.opacity = '0';
+        el.hidden = true;
+      }
+      if (introSkipEl) introSkipEl.hidden = true;
+      syncUrl();
+      return;
+    }
+  }
+  // Already on Earth (natural end) or no Earth anchor: hand back to the free
+  // follow immediately.
+  built.controls.enabled = true;
+  built.controls.update();
+  const e = built.bodies.get(followId);
+  if (e) built.controls.target.copy(e.worldPos);
+  if (el) {
+    el.style.opacity = '0';
+    el.hidden = true;
+  }
+  if (introSkipEl) introSkipEl.hidden = true;
+  syncUrl();
+}
+
+// Any manual input on the 3D view (not the UI panel / palette) skips the
+// intro to the final Earth leg — the user has spoken. The skip button itself
+// and the palette input are excluded so they can do their own thing.
+for (const ev of ['pointerdown', 'wheel', 'touchstart'] as const) {
+  canvas.addEventListener(ev, () => {
+    if (intro) finishIntro(true);
+  });
+}
+// A keypress that the command palette intercepts (typing / or ?) must NOT
+// also skip the intro — that keydown belongs to the palette.
+window.addEventListener('keydown', (ev) => {
+  if (!intro || ev.key === '/' || ev.key === '?' || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  // Ignore keys aimed at a text input (the find box) — those are typing, not
+  // a command.
+  const tag = (ev.target as HTMLElement | null)?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  finishIntro(true);
+});
+// The skip button ends the intro cleanly (no fly-from-current; just park on
+// Earth like a normal skip).
+if (introSkipEl) introSkipEl.addEventListener('click', () => finishIntro(true));
+
+// --- Keyboard command dispatch (F5) ----------------------------------------
+// One global handler routes printable command keys to runCommand (see the
+// registry in render/commands.ts). `/` and `?` open the palette (not a
+// command). Escape closes the palette first, else releases the follow. We only
+// act on a bare keypress (no modifier) so Cmd/Ctrl/Alt browser shortcuts are
+// never hijacked, and we ignore events aimed at a text input (the find box).
+window.addEventListener('keydown', (ev) => {
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  const tag = (ev.target as HTMLElement | null)?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (ev.key === '/' || ev.key === '?') {
+    ev.preventDefault();
+    if (paletteOpen) closePalette();
+    else openPalette();
+    return;
+  }
+  if (ev.key === 'Escape') {
+    if (paletteOpen) closePalette();
+    else releaseFollow();
+    return;
+  }
+  const key = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+  const id = commandForKey(key);
+  if (id) {
+    ev.preventDefault();
+    runCommand(id);
+  }
+});
+
+// --- Command palette --------------------------------------------------------
+function paletteMatches(id: string, label: string, hint: string, q: string): boolean {
+  if (!q) return true;
+  const needle = q.toLowerCase();
+  return (
+    id.includes(needle) ||
+    label.toLowerCase().includes(needle) ||
+    hint.toLowerCase().includes(needle)
+  );
+}
+
+function renderPaletteList(): void {
+  if (!paletteListEl) return;
+  paletteListEl.replaceChildren();
+  const q = paletteQuery.trim();
+  let count = 0;
+  for (let i = 0; i < paletteItems.length; i++) {
+    const item = paletteItems[i];
+    if (!paletteMatches(item.id, item.label, item.hint, q)) continue;
+    const row = document.createElement('div');
+    row.className = 'pal-item' + (i === paletteSel ? ' active' : '');
+    const keys = document.createElement('span');
+    keys.className = 'pal-keys';
+    keys.textContent = item.keys.join(' ') || '•';
+    const label = document.createElement('span');
+    label.className = 'pal-label';
+    label.textContent = item.label;
+    const hint = document.createElement('span');
+    hint.className = 'pal-hint';
+    hint.textContent = item.hint;
+    row.append(keys, label, hint);
+    row.addEventListener('click', () => {
+      runCommand(item.id);
+      closePalette();
+    });
+    paletteListEl.appendChild(row);
+    count++;
+  }
+  if (count === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'pal-empty';
+    empty.textContent = 'No matching commands';
+    paletteListEl.appendChild(empty);
+  }
+}
+
+function openPalette(): void {
+  if (!paletteEl || !paletteInputEl || !paletteListEl) return;
+  paletteOpen = true;
+  paletteQuery = '';
+  paletteSel = 0;
+  paletteEl.hidden = false;
+  paletteInputEl.value = '';
+  // Build the item list once per open (commands + jump-to-planet entries).
+  paletteItems = paletteEntries(PLANETS.map((p) => ({ id: p.id, name: p.name }))).map((e) => ({
+    id: e.id,
+    label: e.label,
+    keys: e.keys,
+    hint: e.hint,
+  }));
+  // Also expose the digit-jump mapping in the list labels is implicit; the
+  // command list already covers the toggles. Render + focus.
+  renderPaletteList();
+  requestAnimationFrame(() => paletteInputEl.focus());
+}
+
+function closePalette(): void {
+  if (!paletteEl) return;
+  paletteOpen = false;
+  paletteEl.hidden = true;
+}
+
+// Palette input: type-to-filter + arrow/enter/esc. A keydown here must NOT
+// re-enter the global command handler (it's the active text input).
+if (paletteInputEl) {
+  paletteInputEl.addEventListener('input', () => {
+    paletteQuery = paletteInputEl.value;
+    paletteSel = 0;
+    renderPaletteList();
+  });
+  paletteInputEl.addEventListener('keydown', (ev) => {
+    ev.stopPropagation();
+    if (ev.key === 'Escape') {
+      closePalette();
+    } else if (ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      paletteSel = Math.min(paletteItems.length - 1, paletteSel + 1);
+      renderPaletteList();
+    } else if (ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      paletteSel = Math.max(0, paletteSel - 1);
+      renderPaletteList();
+    } else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      // Find the Nth visible (matching) item and run it.
+      const q = paletteQuery.trim();
+      let visible = 0;
+      for (const item of paletteItems) {
+        if (!paletteMatches(item.id, item.label, item.hint, q)) continue;
+        if (visible === paletteSel) {
+          runCommand(item.id);
+          closePalette();
+          break;
+        }
+        visible++;
+      }
+    }
+  });
+}
+// Click outside the palette closes it.
+document.addEventListener('pointerdown', (ev) => {
+  if (paletteOpen && paletteEl && !(ev.target as Element | null)?.closest('#palette'))
+    closePalette();
+});
+
 window.addEventListener('resize', () => {
   built.camera.aspect = window.innerWidth / window.innerHeight;
   built.camera.updateProjectionMatrix();
@@ -1572,6 +2117,38 @@ if (urlState.cam) {
 }
 fmtSpeed();
 fmtDate();
+
+// --- Plan 035 F5: `?cmd=` + cinematic intro ---------------------------------
+// `?cmd=<id>` runs a single command on load (deep-linkable state, e.g.
+// `?cmd=post` for HDR, `?cmd=earth` to fly to Earth). Digit params (`?cmd=1`…`?cmd=9`,
+// `?cmd=0`) map to `jump-digit-<d>`. Runs BEFORE the intro so a pinned command
+// that lands on a body suppresses it via urlPinsView.
+const cmdParam = new URLSearchParams(window.location.search).get('cmd')?.toLowerCase() ?? null;
+const cmdIds = new Set(COMMANDS.map((c) => c.id));
+// `palette` is a dispatcher id (not in COMMANDS — the palette is the palette's
+// launcher, not an entry inside it) but is still deep-linkable via ?cmd=palette.
+cmdIds.add('palette');
+const cmdIsDigit = cmdParam != null && /^[0-9]$/.test(cmdParam);
+const cmdIsKnown = cmdParam != null && (cmdIsDigit || cmdIds.has(cmdParam));
+if (cmdParam && cmdIsKnown) {
+  runCommand(cmdIsDigit ? `jump-digit-${cmdParam}` : cmdParam);
+}
+// The intro plays once on a plain first load: no reduced-motion, no
+// `?intro=0`, and the URL did NOT pin a view (follow/constellation/camera,
+// or a known `?cmd=` that lands on a body). A pinned link must land exactly
+// where the link says, so it never gets overridden by the dolly.
+{
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const introParam = new URLSearchParams(window.location.search).get('intro');
+  const urlPinsView =
+    Boolean(urlState.follow) ||
+    Boolean(urlState.constellation) ||
+    Boolean(urlState.cam) ||
+    Boolean(cmdParam && cmdIsKnown);
+  if (introShouldPlay(reduced, introParam, urlPinsView)) {
+    startIntro();
+  }
+}
 
 // Debug/test handle: lets scripts (and e2e checks) inspect the live scene
 // without coupling to module internals. Intentionally minimal.
@@ -2517,6 +3094,10 @@ function frame(): void {
   const dtReal = Math.min(0.1, (nowMs - lastMs) / 1000);
   lastMs = nowMs;
 
+  // F5: the cinematic intro's title fades in/out on its own real-time clock
+  // (independent of the sim, so it reads the same at any speed / paused).
+  if (intro) tickIntroTitle(dtReal);
+
   clock.tick(dtReal);
   const dtDays = clock.t - lastDays;
   lastDays = clock.t;
@@ -2625,7 +3206,16 @@ function frame(): void {
     built.camera.lookAt(target[0], target[1], target[2]);
     if (sample.done) {
       flight = null;
-      if (pendingSkyTour) {
+      if (intro) {
+        // A leg of the cinematic intro just finished: advance to the next leg
+        // (or end the intro on the last one). Do NOT hand back to the free
+        // controls — the intro is still driving the camera.
+        onIntroLegDone();
+        // onIntroLegDone either started the next leg's flight or ended the
+        // intro (which started its own Earth flight). Either way a NEW flight
+        // is now active (or we just re-enabled controls on finish), so let
+        // this frame fall through to the render — no controls re-sync.
+      } else if (pendingSkyTour) {
         // Sky anchor landed: start the panoramic sweep from this pose. The
         // tour drives the camera directly (controls stay disabled) and runs
         // until the user grabs it (pointerdown/wheel/keydown, see above).
