@@ -57,3 +57,21 @@ deterministic, and carries no photo attribution.
 Do NOT delete it — the skybox silently falls back to a flat dark sky
 if the load fails, which looks like a regression. To regenerate, re-run
 the bake and overwrite this file (see plan 035 F2 notes).
+
+## Planets (plan 035 F3)
+
+`public/textures/planets/` holds real surface maps (public-domain NASA/JPL):
+
+| file                                                   | source                               | notes                          |
+| ------------------------------------------------------ | ------------------------------------ | ------------------------------ |
+| `earth_day.jpg`                                        | NASA Blue Marble (three.js examples) | 2048×1024, sRGB                |
+| `earth_normal.jpg`                                     | NASA                                 | 2048×1024, linear              |
+| `earth_roughness.jpg`                                  | inverted from `earth_spec.jpg`       | ocean=smooth, land=rough       |
+| `earth_clouds.png`                                     | NASA (three.js examples)             | 1024×512 alpha, animated shell |
+| `moon_day.jpg`                                         | NASA (three.js examples)             | 1024×512                       |
+| `{mercury,mars,jupiter,saturn,uranus,neptune}_day.jpg` | Solar System Scope (NASA/JPL)        | 2048×1024, sRGB                |
+
+`realTextures.ts` probes `planets/<id>_day.jpg` (and optional `normal`,
+`roughness`, `clouds` channels) and swaps the real maps over the procedural
+ones. Bodies without a day map (Venus, dwarf planets, moons other than the
+Moon) keep their procedural look.
