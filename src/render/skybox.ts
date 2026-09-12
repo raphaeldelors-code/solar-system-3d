@@ -263,7 +263,9 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
       // the galaxy texture: it glows brightest toward the Sun (one side) and
       // falls to zero opposite (the other side) — exactly the one-sided
       // asymmetry reported. 0.015 keeps only a whisper of afterglow hugging
-      // the Sun; at any other view the sky reads clean black.
+      // the Sun; at any other view the sky reads clean black. (Kept in the
+      // pass-5 "fewer stars" build too — the user's follow-up was only about
+      // the Milky Way band, not this layer.)
       uPeak: { value: 0.015 },
       uR: { value: ZODIACAL_RADIUS },
       uCamPos: { value: new THREE.Vector3(0, 16, 30) },

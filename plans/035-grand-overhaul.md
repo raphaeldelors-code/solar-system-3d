@@ -474,6 +474,25 @@ LOD_NEAR_DIST`) the LOD keeps the FULL lit-rock representation at opacity
 > immediately after verification — do not ship unverified-locally values AND
 > forget the deploy step.
 >
+> **Implementation record (pass 5, `0032651`, 2026-09-13) — "same brightness,
+> much fewer stars."** User rejected the dimming: "It looks ugly I don't want
+> this less lighty ugly milky way — I want the same brightness as before but
+> much less stars." Key insight: the band's perceived brightness is _mostly
+> the dense 234k-star speckle, not the smooth glow_, so dimming the tint just
+> made it a dim smear. The right lever is the **texture itself**. Root-caused
+> the bake (the one-off `/tmp/f2-bake-final.py` was lost), reconstructed it as
+> a committed, deterministic generator `scripts/bake_milkyway.py` (same
+> seeds/transform chain; a `--star-scale 1.0` re-bake reproduced the shipped
+> texture to 0.01% — 5.10% vs 5.11% star-ish px). Re-baked with `--star-scale
+0.10` (234k → ~23k stars, 91% fewer bright px) + `--band-scale 0.55`
+> (smooth glow ×3.4) to relay the lost star luminance into the band so it
+> **keeps its brightness but reads smooth with far fewer specks** (texture also
+> 2.2 MB → 1.4 MB). `MILKYWAY_TINT` restored 0.05 → 0.3 (pre-dimming value).
+> Live A/B at the MW pose: band-mid mean 0.103 → 0.104, p95 0.651 → 0.659
+> (brightness identical); texture star-cores 404k → 106k px (3.8× fewer).
+> Vision side-by-side: original = dense pin-point carpet, new = smooth glow
+> with fewer isolated stars. 381 tests + tsc + eslint + prettier + build green.
+>
 > **Implementation record (`4ceb4bc`, 2026-09-12):** Two user-reported visual
 > bugs fixed on `main` after F1–F6 shipped, gated before commit, live-verified
 > headless before deploy.
