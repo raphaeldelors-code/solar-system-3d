@@ -357,6 +357,60 @@ outerR)` rewrites `RingGeometry`'s 2D position-mapped UVs so `u` = radial
 - **Acceptance:** measured fps (in-page rAF sampler) ≥ 55 with all toggles on,
   both 1080p-equivalent and a 4K-ish RT; no GC spikes. Gate set green.
 
+> **Implementation record (`3286ff8`, 2026-09-12):** Built in the main
+> worktree (direct on main, gated before commit). Two new pure modules
+> (unit-tested in `tests/beltLod.test.ts` + `tests/idle.test.ts`, 15 tests)
+> + `main.ts`/`scene.ts`/`belts.ts` wiring.
+>
+> **Belt LOD — `src/render/beltLod.ts` + `src/render/belts.ts`.** Each belt
+> field now carries BOTH a full instanced-mesh of icosahedron rocks (crisp
+> when zoomed in) AND a cheap `THREE.Points` cloud (one draw call, no
+> per-instance transform) that reads as a soft dust ring from afar.
+> `beltLod(camDist, beltDist)` is a pure decision: `LOD_NEAR_DIST=120`
+> (scene units from the belt) flips near→far over a `LOD_BLEND_WIDTH=40`
+> smoothstep cross-fade, so the two representations are shown additively
+> during the transition and the belt never pops. `applyBeltLod` sets the
+> mesh opacity to the blend and the points' visibility when the blend
+> drops below 0.98. At true scale (`beltSizeFactor < 0.25`) it forces the
+> far representation (rocks would be sub-pixel). The belt mean radius is
+> cached per-def in `scene.ts` (`beltMeanRadius`) so the per-frame pass is
+> allocation-free. `updateBeltFields` re-solves Kepler + applies LOD in one
+> pass when running; `applyBeltLodOnly` re-applies LOD only (no re-solve)
+> for the paused + camera-moved case.
+>
+> **Pixel-ratio cap.** Renderer + composer RT stay at
+> `min(devicePixelRatio, 2)` (already in place; `clampPixelRatio` in
+> `beltLod.ts` makes the bound explicit and unit-testable).
+>
+> **Idle-skip — `src/render/idle.ts` + the `main.ts` frame loop.**
+> `sceneIsStatic({paused, cameraMoving, scrubbing, flightActive,
+> morphActive, skyTourActive, introActive})` is a pure predicate. In the
+> render tail (after the camera branches have moved the camera) the loop
+> compares this frame's camera+target pose against the last *rendered*
+> pose (a per-frame snapshot; sub-1e-4 counts as moving) and, when the
+> scene is static AND `sceneDirty` is clear, returns early — skipping the
+> WebGL render AND the per-frame DOM/emphasis/pulse passes. A parked,
+> paused view therefore costs ~0 GPU (the battery saving). `controls.update()`
+> still runs so damping settles. `markSceneDirty()` is called on every
+> input that changes the frame without moving the camera (keyboard via
+> `runCommand`, toggles, `applySkyVisibility`, `requestScale`, speed,
+> pause/now/reverse, date picks, resize, WebGL-context restore). The rAF
+> chain stays alive (scheduled at the top of `frame`), so the very next
+> input re-renders immediately. The highlight pulse is a pure wall-clock
+> `sin(now*3.4)` (no accumulation), so freezing it in a parked view causes
+> no jump on resume — hence no selection guard is needed.
+>
+> **Verified:** 378 tests (incl. new `beltLod` + `idle` suites) + tsc
+> strict + eslint + prettier + build green. Headless Chrome live-verified:
+> clean boot (no JS errors), belt-LOD + idle-skip markers confirmed in the
+> built bundle, pause/resume and the Belts toggle work, the canvas renders
+> (58 % lit, Sun glow + planets + star field + constellations; the "dark
+> disc" near the Sun is Venus at new phase, correctly lit, not an
+> artifact). The ≥55 fps rAF-sampler target is for a real GPU; SwiftShader
+> in the LXC is far too slow to measure it meaningfully, so it is
+> recorded here as "code paths in place + no visual regression" rather than
+> a measured number.
+
 ---
 
 ## Cross-cutting verification (every feature)
