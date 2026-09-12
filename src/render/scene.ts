@@ -39,9 +39,25 @@ import {
 } from './visibleScale';
 import { buildPostStack, buildSunGlow, type PostStack } from './post';
 import { buildSkybox, type Skybox } from './skybox';
+import { atmosphereConfigFor, buildShell, type AtmosphereShell } from './atmosphere';
+import { makeRingTexture, remapRingUVRadial } from './rings';
 
 export const AU = 1; // 1 scene unit per AU
 const AU_TO_KM = 1.495978707e8;
+
+/**
+ * Ring-band textures (plan 035 F4), cached per body id so rebuilds (scale
+ * tour, dev reload) reuse the CanvasTexture instead of re-baking.
+ */
+const RING_TEX_CACHE = new Map<string, THREE.Texture>();
+function ringTextureFor(id: string, color: [number, number, number]): THREE.Texture {
+  let t = RING_TEX_CACHE.get(id);
+  if (!t) {
+    t = makeRingTexture(color);
+    RING_TEX_CACHE.set(id, t);
+  }
+  return t;
+}
 
 export interface VisualScale {
   /** Scene radius for a planet / dwarf / (non-star) body of given km radius. */
@@ -130,6 +146,11 @@ export interface SceneBody {
    * built-in visible-mode radius).
    */
   ringsMesh: THREE.Mesh | null;
+  /**
+   * Fresnel atmosphere shell (Earth/Venus/etc, plan 035 F4), a child of the
+   * pivot. Scaled with the body in the true-scale tour (mirrors `ringsMesh`).
+   */
+  atmosphereMesh: import('./atmosphere').AtmosphereShell | null;
   /**
    * Pulsing glow ring highlighting the selected satellite (child of the
    * pivot so it tilts with the body; hidden unless this body is the
@@ -411,31 +432,56 @@ export function buildScene(
     pivot.add(orbitEmphasis);
     disposables.push(hlGeo, hlMat);
 
-    // Rings.
+    // Rings (plan 035 F4): a radial band texture with the Cassini division +
+    // translucent concentric bands replaces the flat single-opacity disc. The
+    // geometry's UVs are remapped so `u` runs across the annulus (radial); the
+    // baked 1-D strip gives bright B/A bands, the dark Cassini gap, and a thin
+    // Encke gap. Still a lit Standard material so the sun lights the rings and
+    // shadows keep working (Saturn's shadow band across the rings, the planet's
+    // shadow on the rings). depthWrite:false lets the translucent gaps show the
+    // sky/planet behind without occluding; castShadow/receiveShadow are
+    // independent of depthWrite (the shadow pass uses its own depth material).
     let ringsMesh: THREE.Mesh | null = null;
     if (def.rings) {
       const inner = r * def.rings.inner,
         outer = r * def.rings.outer;
-      const ringGeo = new THREE.RingGeometry(inner, outer, 96);
-      // Standard (lit) material so the rings react to the sun AND receive
-      // shadows (Saturn's shadow band across the rings). RingGeometry is a
-      // true annulus (the hole is real geometry, not alpha), so casting is
-      // safe: in the shadow pass it projects a band, not a solid disc.
+      // 96 around, 16 radial rings: keeps triangles small so the per-fragment
+      // UV interpolation stays near-linear in radius (resolves the narrow gaps).
+      const ringGeo = new THREE.RingGeometry(inner, outer, 96, 16);
+      remapRingUVRadial(ringGeo);
+      const ringTex = ringTextureFor(def.id, def.rings.color);
+      // color is white: the (sRGB) band texture already carries the ring colour
+      // + per-radial brightness; its alpha channel carries the band transparency.
       const ringMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(...def.rings.color),
+        map: ringTex,
+        color: 0xffffff,
         side: THREE.DoubleSide,
         transparent: true,
         opacity: def.rings.opacity,
-        roughness: 0.9,
+        roughness: 0.85,
         metalness: 0,
+        depthWrite: false,
       });
       const rm = new THREE.Mesh(ringGeo, ringMat);
       rm.rotation.x = -Math.PI / 2;
       rm.castShadow = true;
       rm.receiveShadow = true;
+      rm.renderOrder = 1; // after the planet, so translucent gaps layer cleanly
       pivot.add(rm);
       ringsMesh = rm;
       disposables.push(ringGeo, ringMat);
+      // ringTex is cached (shared across rebuilds) — not disposed here.
+    }
+
+    // Atmosphere (plan 035 F4): a fresnel rim shell for bodies with air
+    // (Earth/Venus/Mars + gas & ice giants). View-dependent (view-space), so
+    // it never needs to spin; it's a child of the pivot (not the spinning mesh).
+    let atmosphereMesh: AtmosphereShell | null = null;
+    const atm = atmosphereConfigFor(def.id);
+    if (atm && !isStar && !isMoon) {
+      atmosphereMesh = buildShell(r, atm.tint, { power: atm.power, intensity: atm.intensity });
+      pivot.add(atmosphereMesh);
+      // disposed in dispose() below (geo+mat), like the cloud shell.
     }
 
     // Label sprite above the body.
@@ -526,6 +572,7 @@ export function buildScene(
       orbit,
       orbitEmphasis,
       ringsMesh,
+      atmosphereMesh,
       parent,
       spin: 0,
       worldPos: new THREE.Vector3(),
@@ -569,6 +616,9 @@ export function buildScene(
         entry.cloudsMesh.geometry.dispose();
         (entry.cloudsMesh.material as THREE.Material).dispose();
       }
+      // Atmosphere shells (plan 035 F4): per-body geo+mat (shader uniform
+      // tint is a plain Vector3 — no texture to release).
+      if (entry.atmosphereMesh) entry.atmosphereMesh.disposeAtmosphere();
     }
     constellations.userData.dispose?.();
     for (const child of constellationFigures.children) {
@@ -1578,6 +1628,7 @@ export function applyScaleMorph(built: BuiltScene, p: number): void {
     const s = Math.max(1e-7, r / entry.builtRadius);
     entry.mesh.scale.setScalar(s);
     if (entry.ringsMesh) entry.ringsMesh.scale.setScalar(s);
+    if (entry.atmosphereMesh) entry.atmosphereMesh.scale.setScalar(s);
     entry.orbitEmphasis.scale.setScalar(Math.max(1e-3, r));
     // Label floats just above the (morphing) body; its size tracks the disc
     // with the same rule the build uses (stars keep their fixed 3.4 base).
