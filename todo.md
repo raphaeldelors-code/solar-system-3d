@@ -30,6 +30,15 @@ order. (Supersedes old open item B4 below.)
 
 **Phase 6 — all six features built, gated and committed (2026-09-12).**
 
+### Phase 6 — post-deploy user fixes (2026-09-12)
+
+Two user-reported visual bugs after F1–F6 shipped; both fixed on `main`, gated,
+live-verified headless. Detail in `plans/035-grand-overhaul.md` → "Post-plan
+fixes".
+
+- [x] fix(view): intro Sun→Earth leg eases (no frame-1 teleport) — `stepFlight` liveTarget easing + Earth leg 1.8s→2.2s — `4ceb4bc`
+- [x] fix(render): dim over-bright sky — Milky Way `MILKYWAY_TINT` 0.5, zodiacal peak 0.16→0.08, belt emissive 0.12→0.05, far-cloud 1.4×→0.55× — `4ceb4bc` (same commit)
+
 ## Phase 4 — Review fixes + features (see `plans/002-review-fixes-and-features.md`)
 
 - [x] Plan 002 written

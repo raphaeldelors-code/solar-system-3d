@@ -360,7 +360,8 @@ outerR)` rewrites `RingGeometry`'s 2D position-mapped UVs so `u` = radial
 > **Implementation record (`3286ff8`, 2026-09-12):** Built in the main
 > worktree (direct on main, gated before commit). Two new pure modules
 > (unit-tested in `tests/beltLod.test.ts` + `tests/idle.test.ts`, 15 tests)
-> + `main.ts`/`scene.ts`/`belts.ts` wiring.
+>
+> - `main.ts`/`scene.ts`/`belts.ts` wiring.
 >
 > **Belt LOD — `src/render/beltLod.ts` + `src/render/belts.ts`.** Each belt
 > field now carries BOTH a full instanced-mesh of icosahedron rocks (crisp
@@ -384,9 +385,9 @@ outerR)` rewrites `RingGeometry`'s 2D position-mapped UVs so `u` = radial
 >
 > **Idle-skip — `src/render/idle.ts` + the `main.ts` frame loop.**
 > `sceneIsStatic({paused, cameraMoving, scrubbing, flightActive,
-> morphActive, skyTourActive, introActive})` is a pure predicate. In the
+morphActive, skyTourActive, introActive})` is a pure predicate. In the
 > render tail (after the camera branches have moved the camera) the loop
-> compares this frame's camera+target pose against the last *rendered*
+> compares this frame's camera+target pose against the last _rendered_
 > pose (a per-frame snapshot; sub-1e-4 counts as moving) and, when the
 > scene is static AND `sceneDirty` is clear, returns early — skipping the
 > WebGL render AND the per-frame DOM/emphasis/pulse passes. A parked,
@@ -410,6 +411,40 @@ outerR)` rewrites `RingGeometry`'s 2D position-mapped UVs so `u` = radial
 > in the LXC is far too slow to measure it meaningfully, so it is
 > recorded here as "code paths in place + no visual regression" rather than
 > a measured number.
+
+### Post-plan fixes (2026-09-12, user feedback after deployment)
+
+> **Implementation record (`4ceb4bc`, 2026-09-12):** Two user-reported visual
+> bugs fixed on `main` after F1–F6 shipped, gated before commit, live-verified
+> headless before deploy.
+>
+> **Intro "jump from sun to earth".** Root cause: the render loop substituted
+> the followed body's LIVE world position for the flight target. When the
+> third intro leg flips `followId` from `sun` to `earth`, the orbit target —
+> and hence the camera — teleported ~21 scene units on the leg's first frame.
+> Fix: `stepFlight(flight, dt, liveTarget?)` now eases the target from the
+> flight-start target to the body's live position (at k = 1 it IS the live
+> position, so the landing framing is byte-identical to the old rigid
+> behavior for a body that didn't move). A follow swap now glides from where
+> the previous leg left the camera; the Earth leg is also lengthened 1.8 s →
+> 2.2 s (total 5.8 s, still ≤ 6 s) so the sweep reads deliberate. New unit
+> test (`tests/cameraFlight.test.ts`) reproduces the jump shape and asserts
+> frame 1 stays near the Sun while the landing lands exactly on the live body.
+> Live check: full intro camera trace is monotonic smoothstep in/out —
+> pull-in decelerates into the Sun settle, then a 2.2 s glide onto Earth;
+> no frame-1 teleport (pre-fix trace showed a 21-unit target snap).
+>
+> **Belts too bright / "the huge one … I think it's the milky way".** Confirmed
+> by vision ranking + pixel means: the Milky-Way skybox band was the single
+> brightest element, then the zodiacal halo, then the belts. Four dials:
+> `MILKYWAY_TINT = 0.5` (skybox material color; the equirect bake is
+> full-strength art — top-third frame mean 125.8 → 93.9, whole frame 64.3 →
+> 51.9), zodiacal peak 0.16 → 0.08 (pure `zodiacalPeakOpacity` default + GLSL
+> `uPeak`, kept in sync), belt rock emissive 0.12 → 0.05 (rocks are sun-lit;
+> the emissive floor made the belt read self-illuminated), and the far
+> point-cloud cross-fade compensation 1.4× → 0.55× (the old factor pushed the
+> zoomed-out belt PAST full brightness). Tests updated for the new constants
+> (3 new: follow-swap glide, global-anchor easing, tint bounds).
 
 ---
 
