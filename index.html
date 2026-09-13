@@ -1077,6 +1077,13 @@
         gap: 14px;
         user-select: none;
       }
+      /* Plan 037: `display:flex` (id, 1-0-0) otherwise outranks the UA
+         [hidden] rule (0-1-0), so the wrapper — and its Skip button — stay
+         visible on pinned-URL loads where the intro never plays. Same
+         override #palette already uses. */
+      #intro[hidden] {
+        display: none;
+      }
       #intro-title {
         opacity: 0; /* driven by tickIntroTitle */
         text-align: center;
@@ -1216,7 +1223,7 @@
         color: #7f93b5;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-DU8BBHEk.js"></script>
+    <script type="module" crossorigin src="./assets/index-DLCAyh5p.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -1242,7 +1249,7 @@
         <div class="intro-title-main">SOLAR SYSTEM 3D</div>
         <div class="intro-title-sub">a real-time, shareable tour of the planets</div>
       </div>
-      <button id="intro-skip" type="button">Skip intro →</button>
+      <button id="intro-skip" type="button" hidden>Skip intro →</button>
     </div>
 
     <div id="palette" hidden>
