@@ -61,10 +61,12 @@ if the load fails, which looks like a regression.
 
 The generator is committed at **`scripts/bake_milkyway.py`** (deterministic,
 seeded; reproduces the exact galactic→equatorial→scene→equirectUV chain of
-the runtime). Re-bake with:
+the runtime). Re-bake with (the shipped texture is the 2026-09-13
+"narrower + purplish" pass, plan 036, commit `5bce13a`):
 
     uv run --with numpy --with pillow python scripts/bake_milkyway.py \
-        --star-scale 0.10 --band-scale 0.55
+        --star-scale 0.10 --band-scale 0.55 \
+        --core-sigma 2.8 --halo-sigma 5.5 --sample-sigma 3.8 --purple
 
 - `--star-scale` (default **0.10**) — multiplier on both baked star
   populations. `1.0` = the original 2026-09-12 bake (~234k stars). `0.10`
@@ -73,11 +75,19 @@ the runtime). Re-bake with:
   luminance. `1.0` = original. `0.55` ≈ 3.4× brighter glow, which relays the
   luminance that used to live in the now-thinner star field so the band
   **keeps the same overall brightness** with far fewer specks.
+- `--core-sigma` / `--halo-sigma` / `--sample-sigma` (defaults 3.2 / 11.0 /
+  6.0 = the original 2026-09-12 widths) — the bright-core width, the outer
+  halo width, and the galactic-latitude sample spread, in degrees. Lower =
+  narrower band. The shipped `2.8 / 5.5 / 3.8` is ~20-28% narrower at the
+  band's arms (1%-peak FWHM) while keeping the galactic-centre bulge broad.
+- `--purple` (off = the original blue-white coefficients) — magenta/white
+  core + violet halo color set (plan 036, matched to the user's purple
+  night-sky photo).
 
-The two knobs trade off exactly: lower `--star-scale` + raise `--band-scale`
-keeps the band as bright but smoother. Verify after a re-bake that the
-band-strip mean is unchanged (~0.10 at the Milky Way pose) while the
-bright-pixel count in the band drops.
+The two brightness knobs trade off exactly: lower `--star-scale` + raise
+`--band-scale` keeps the band as bright but smoother. Verify after a
+re-bake that the band-strip mean is unchanged (~0.10 at the Milky Way pose)
+while the bright-pixel count in the band drops.
 
 ## Planets (plan 035 F3)
 
