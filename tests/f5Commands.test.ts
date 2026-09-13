@@ -67,12 +67,15 @@ describe('intro', () => {
     expect(INTRO_LEGS[INTRO_LEGS.length - 1].bodyId).toBe('earth');
   });
 
-  it('respects reduced-motion, ?intro=0, and a pinned URL', () => {
-    expect(introShouldPlay(true, null, false)).toBe(false);
-    expect(introShouldPlay(false, '0', false)).toBe(false);
-    expect(introShouldPlay(false, null, true)).toBe(false);
-    expect(introShouldPlay(false, null, false)).toBe(true);
-    expect(introShouldPlay(false, '1', false)).toBe(true);
+  it('respects reduced-motion, ?intro=0, a pinned URL, and a prior intro', () => {
+    expect(introShouldPlay(true, null, false, false)).toBe(false);
+    expect(introShouldPlay(false, '0', false, false)).toBe(false);
+    expect(introShouldPlay(false, null, true, false)).toBe(false);
+    // already played in this session (sessionStorage seen-flag) — no replay
+    expect(introShouldPlay(false, null, false, true)).toBe(false);
+    expect(introShouldPlay(false, '1', false, true)).toBe(false);
+    expect(introShouldPlay(false, null, false, false)).toBe(true);
+    expect(introShouldPlay(false, '1', false, false)).toBe(true);
   });
 
   it('fades the title in then out, clamped to [0,1]', () => {

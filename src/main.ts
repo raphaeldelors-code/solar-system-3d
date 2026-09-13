@@ -62,7 +62,13 @@ import { attachRealTextures } from './render/realTextures';
 // Plan 035 F5 — cinematic intro, keyboard/palette commands, and the info-card
 // "facts" rows. All three are pure modules (unit-tested in tests/f5Commands.
 // test.ts); main.ts only wires their results to the DOM + scene.
-import { INTRO_LEGS, INTRO_DURATION, titleOpacity, introShouldPlay } from './render/intro';
+import {
+  INTRO_LEGS,
+  INTRO_DURATION,
+  INTRO_SEEN_KEY,
+  titleOpacity,
+  introShouldPlay,
+} from './render/intro';
 import { commandForKey, digitToPlanet, paletteEntries, COMMANDS } from './render/commands';
 import { bodyFacts } from './render/bodyFacts';
 import { sceneIsStatic } from './render/idle';
@@ -1656,6 +1662,7 @@ function startIntro(): void {
   introWrapEl.setAttribute('aria-hidden', 'false');
   introTitleEl.hidden = false;
   introTitleEl.style.opacity = '0';
+  if (introSkipEl) introSkipEl.hidden = false; // Plan 037: hidden in the DOM now
   // Leg 1 starts from a far-out system anchor (3× the system fit) so the pull
   // reads as "we're deep in space". We park the camera there, then arm the
   // first leg (a flight to the Sun) so the dolly begins moving immediately.
@@ -1737,6 +1744,14 @@ function finishIntro(skipped: boolean): void {
   if (!intro) return;
   const el = intro.titleEl;
   intro = null;
+  // Plan 037: mark the intro seen for this session so a plain reload does not
+  // replay the dolly. Safe to call unconditionally — finishIntro only runs once
+  // per intro (guarded above). sessionStorage may throw (private mode) — ignore.
+  try {
+    sessionStorage.setItem(INTRO_SEEN_KEY, '1');
+  } catch {
+    /* ignore — intro simply replays next load */
+  }
   if (introWrapEl) {
     introWrapEl.hidden = true;
     introWrapEl.setAttribute('aria-hidden', 'true');
@@ -2181,7 +2196,15 @@ if (cmdParam && cmdIsKnown) {
     Boolean(urlState.constellation) ||
     Boolean(urlState.cam) ||
     Boolean(cmdParam && cmdIsKnown);
-  if (introShouldPlay(reduced, introParam, urlPinsView)) {
+  // Plan 037: an intro that already finished in this session (sessionStorage)
+  // must not replay on a plain reload.
+  let introSeen = false;
+  try {
+    introSeen = sessionStorage.getItem(INTRO_SEEN_KEY) === '1';
+  } catch {
+    /* private mode / storage disabled — treat as unseen */
+  }
+  if (introShouldPlay(reduced, introParam, urlPinsView, introSeen)) {
     startIntro();
   }
 }

@@ -48,17 +48,31 @@ export const TITLE_FADE_OUT_END = INTRO_DURATION - 0.6;
  * @param introParam     the `?intro=` URL value (`'0'` = opt out), or null.
  * @param urlPinsView    true when a shared URL already pins a camera/follow —
  *                       a restore must not be overridden by the fly-around.
+ * @param alreadySeen    true when an intro already finished in THIS browser
+ *                       session (`sessionStorage` flag set by finishIntro) —
+ *                       a plain reload must not replay the dolly.
  */
 export function introShouldPlay(
   reducedMotion: boolean,
   introParam: string | null,
   urlPinsView: boolean,
+  alreadySeen: boolean,
 ): boolean {
   if (reducedMotion) return false;
   if (introParam === '0') return false;
   if (urlPinsView) return false;
+  if (alreadySeen) return false;
   return true;
 }
+
+/**
+ * `sessionStorage` key marking that the intro already played in this session.
+ * Set by `finishIntro` (main.ts); read once at boot. `sessionStorage` (not
+ * `localStorage`) on purpose: the intro replays in a NEW session/tab, but not
+ * on a refresh within the same tab — the standard "don't replay this intro"
+ * semantics.
+ */
+export const INTRO_SEEN_KEY = 'solar_intro_seen';
 
 /**
  * Title opacity at a given intro time (0..INTRO_DURATION). Ramps in over
