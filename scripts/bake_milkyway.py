@@ -90,12 +90,14 @@ def splat_dots(canvas, u, v, val, radius_px):
             jj = (u0 + dj) % OW
             np.add.at(canvas, (ii, jj), val * w)
 
-def bake(star_scale: float, out: str, band_scale: float = 0.16):
+def bake(star_scale: float, out: str, band_scale: float = 0.16,
+         core_sigma: float = 3.2, halo_sigma: float = 11.0,
+         sample_sigma: float = 6.0, purple: bool = False):
     # ============================ BAND (forward splat) =========================
     N = 420000
     rng = np.random.default_rng(5)
     l = rng.random(N) * 360.0
-    b = rng.standard_normal(N) * 6.0
+    b = rng.standard_normal(N) * sample_sigma
     b = np.clip(b, -45, 45)
 
     ra, dec = lb_to_radeclb(l, b)
@@ -132,7 +134,7 @@ def bake(star_scale: float, out: str, band_scale: float = 0.16):
          vnoise(l, b, 36, 10, 29) * 0.3 +
          vnoise(l, b, 72, 5, 47) * 0.2)
 
-    core = gauss(b, 3.2); halo = gauss(b, 11.0)
+    core = gauss(b, core_sigma); halo = gauss(b, halo_sigma)
     band = 0.55 * core + 0.45 * halo
     band /= band.max()
     band = band * (1.0 + 1.6 * np.clip(m, -0.8, 0.9))
@@ -142,9 +144,16 @@ def bake(star_scale: float, out: str, band_scale: float = 0.16):
 
     bulge = 0.9 * np.exp(-0.5 * ((angdist(l, 0.0) / 10.0) ** 2 + (b / 5.0) ** 2))
 
-    base_r = band * (0.62 + 0.55 * bulge) + bulge * 0.5
-    base_g = band * (0.66 + 0.42 * bulge) + bulge * 0.36
-    base_b = band * (0.78 - 0.14 * bulge) + bulge * 0.08
+    if purple:
+        # Plan 036: user photo reference — magenta/white core, violet halo.
+        # R up, G down, B up vs the original blue-white (0.62/0.66/0.78).
+        base_r = band * (0.74 + 0.50 * bulge) + bulge * 0.55
+        base_g = band * (0.50 + 0.22 * bulge) + bulge * 0.30
+        base_b = band * (0.88 - 0.10 * bulge) + bulge * 0.12
+    else:
+        base_r = band * (0.62 + 0.55 * bulge) + bulge * 0.5
+        base_g = band * (0.66 + 0.42 * bulge) + bulge * 0.36
+        base_b = band * (0.78 - 0.14 * bulge) + bulge * 0.08
 
     canvas_r = np.zeros((OH, OW), np.float32)
     canvas_g = np.zeros((OH, OW), np.float32)
@@ -241,6 +250,16 @@ if __name__ == "__main__":
                     help="star population size multiplier (1.0 = original bake)")
     ap.add_argument("--band-scale", type=float, default=0.16,
                     help="smooth band-glow luminance multiplier (1.0 = original bake)")
+    ap.add_argument("--core-sigma", type=float, default=3.2,
+                    help="bright core width in degrees (default 3.2 = original bake)")
+    ap.add_argument("--halo-sigma", type=float, default=11.0,
+                    help="halo width in degrees (default 11.0 = original bake)")
+    ap.add_argument("--sample-sigma", type=float, default=6.0,
+                    help="galactic-latitude sample width in degrees (default 6.0 = original)")
+    ap.add_argument("--purple", action="store_true",
+                    help="purple/magenta band color set (plan 036) instead of blue-white")
     ap.add_argument("--out", default="/home/hermes/projects/solar-system-3d/public/textures/milkyway_equirect.png")
     a = ap.parse_args()
-    bake(a.star_scale, a.out, a.band_scale)
+    bake(a.star_scale, a.out, a.band_scale,
+         core_sigma=a.core_sigma, halo_sigma=a.halo_sigma,
+         sample_sigma=a.sample_sigma, purple=a.purple)

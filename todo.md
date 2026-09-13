@@ -42,6 +42,7 @@ fixes".
 - [x] fix(render): inner asteroid belt + Milky Way still bright at oblique zooms — root cause was the FAR point cloud (LOD flips at camDist 149), asteroid `farPointSize` 1.5→0.75, rock LOD baseSize 0.05→0.027 / color 0xcfc2ac→0xb0a289 / count 1800→1100, `MILKYWAY_TINT` 0.5→0.3 — `6a43253`
 - [x] fix(render): "foggy north / black south" = zodiacal dome (A/B-proven), `uPeak` 0.08→0.015; `MILKYWAY_TINT` 0.3→0.05 for Kuiper-level band — `365efe8`
 - [x] fix(render): Milky Way "same brightness, much fewer stars" — dimming read as ugly/dim; real fix is the **texture**. Reconstructed the lost bake as committed generator `scripts/bake_milkyway.py` (deterministic, verified to reproduce the shipped map to 0.01%). Re-baked `--star-scale 0.10 --band-scale 0.55`: 234k→~23k stars (91% fewer bright px), smooth glow ×3.4 to hold brightness; `MILKYWAY_TINT` 0.05→0.3. Live A/B: band-mid 0.103→0.104 (identical), star-cores 404k→106k px (3.8× fewer). — `0032651`
+- [ ] fix(render): Milky Way narrower + purplish (user photo ref) — plan `plans/036-mw-narrow-purple.md`. Parameterize `bake_milkyway.py` (`--core-sigma/--halo-sigma/--sample-sigma/--purple`); re-bake `--core-sigma 2.8 --halo-sigma 5.5 --sample-sigma 3.8 --purple --star-scale 0.10 --band-scale 0.55`. 1% halo FWHM 12.6→10.2° (19%) / 12.9→9.3° (28%) at gal-long 90°/135°; hue blue-white→violet/magenta. `MILKYWAY_TINT` unchanged (0.3).
 
 ## Phase 4 — Review fixes + features (see `plans/002-review-fixes-and-features.md`)
 
