@@ -12,6 +12,9 @@
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAtInto, sampleOrbit, type Vec3 } from '../sim/kepler';
 import { moonGeocentricJ2000 } from '../sim/moon';
@@ -879,6 +882,43 @@ export function constellationLabelOpacity(emph: number): number {
 export const CONSTELLATION_BASE_LINE_COLOR = 0x8fb0ff;
 /** Light apple green: the picked figure's line/star/label color (vs base 0x8fb0ff blue). */
 export const CONSTELLATION_EMPHASIS_COLOR = 0x7cfc5a;
+/**
+ * Plan 042: the dark UNDER-STROKE behind the blue constellation lines. WebGL
+ * `LineBasicMaterial` lines are a fixed 1 device px, so on the bright cream
+ * figure plates (plan 007 art) the 1px blue line loses contrast and the
+ * asterism "disappears" where it crosses its own figure. A fat-line
+ * (`Line2`/`LineMaterial`) black stroke, a few world units WIDER than the
+ * visible blue line, cuts a dark groove through the art: blue line /
+ * black halo / cream fill → high contrast on the cream plates.
+ *
+ * The halo is PURE black (0x000000), not a dark blue-grey: over the (near-)
+ * black sky, black-on-black is invisible, so the halo produces NO "fat grey
+ * line" side effect on open sky (A/B-verified). It only appears where there
+ * is a lighter fill (the cream plates) — exactly where contrast is needed.
+ * The blue line itself is also re-drawn as a fat line
+ * (CONSTELLATION_LINE_FAT_WIDTH) so the edges are no longer a hairline 1px
+ * stroke.
+ */
+/** Pure black halo — invisible on the black sky, a dark rim on the cream plates. */
+export const CONSTELLATION_LINE_HALO_COLOR = 0x000000;
+/** Halo opacity at the view edge (D4 base). */
+export const CONSTELLATION_LINE_HALO_BASE_OPACITY = 0.45;
+/** Halo opacity dead center (D4 peak). */
+export const CONSTELLATION_LINE_HALO_PEAK_OPACITY = 0.7;
+/**
+ * Line widths in WORLD units (three's LineMaterial with `worldUnits: true`
+ * projects the width at the line's depth, so it scales with zoom exactly
+ * like everything else in the scene). At the default sky view (camera at
+ * (0,16,30) → ~4834 units from the dome, 50° vertical FOV, 800 CSS px tall
+ * viewport → 1 world unit ≈ 0.18 CSS px):
+ *   fat blue line  8 units ≈ 1.4 CSS px,
+ *   black halo    11 units ≈ 2.0 CSS px  (~0.3 px rim each side).
+ * The halo must be strictly wider than the fat blue line so a dark rim
+ * remains on both sides, but only just — a wide halo reads as a fat grey
+ * line on the sky (A/B feedback).
+ */
+export const CONSTELLATION_LINE_FAT_WIDTH = 8;
+export const CONSTELLATION_LINE_HALO_WIDTH = 11;
 /** Pulse amplitude: the selected line's opacity swings 1.0 ± this. */
 export const CONSTELLATION_EMPHASIS_PULSE = 0.15;
 /** Pulse period (seconds) — a slow, calm breathe, not a strobe. */
@@ -1273,6 +1313,13 @@ export function buildConstellations(): THREE.Group {
   // Plan 016 P2: per-constellation emphasis stars (kept for disposal).
   const emphGeos: THREE.BufferGeometry[] = [];
   const emphMats: THREE.PointsMaterial[] = [];
+  // Plan 042: the fat blue line + dark halo are `Line2` objects (a plain
+  // LineBasicMaterial line is fixed at 1 device px and loses contrast on the
+  // cream figure plates). Kept for disposal + the per-frame picked pulse.
+  const fatLineGeos: THREE.BufferGeometry[] = [];
+  const fatLineMats: LineMaterial[] = [];
+  const haloGeos: THREE.BufferGeometry[] = [];
+  const haloMats: LineMaterial[] = [];
   for (let i = 0; i < CONSTELLATIONS.length; i++) {
     labelDirs.push(placements[i].dir);
     const c = CONSTELLATIONS[i];
@@ -1297,15 +1344,71 @@ export function buildConstellations(): THREE.Group {
     // exactly when the selection is cleared.
     lineMat.userData.baseColor = CONSTELLATION_BASE_LINE_COLOR;
     const lines = new THREE.LineSegments(lineGeo, lineMat);
-    lines.name = `constellation-lines:${c.name}`;
+    lines.name = `constellation-lines-core:${c.name}`;
     // Plan 040: draw ABOVE the figure plates (renderOrder 0). The plates are
     // added to the scene after the line group, so in three.js's transparent
     // pass they would otherwise paint over these thin edges wherever they
-    // overlap, burying the asterism. Forcing renderOrder 1 keeps the lines
-    // (and the name-label layer, see screen-space labels) the primary, always
-    // visible layer — the fix the user asked for.
-    lines.renderOrder = 1;
+    // overlap, burying the asterism. Plan 042: the fat blue line (Line2) is
+    // the primary visible stroke at renderOrder 2; this crisp 1px core stays
+    // just above it (renderOrder 3) so the line's center is always a clean
+    // hairline over the fat body. The star DOTS render on top of all of these
+    // (renderOrder 4) so the asterism's vertices read as crisp points.
+    lines.renderOrder = 3;
     group.add(lines);
+
+    // Plan 042: a fat blue line (Line2) as the PRIMARY visible stroke — a 1px
+    // WebGL line is a hairline on the cream plates. Same vertex pairs as the
+    // core, a true world-unit width (scales with zoom like everything else in
+    // the scene), renderOrder 2: above the dark halo (renderOrder 1, inserted
+    // before it) and below the crisp 1px core (renderOrder 3) so the line's
+    // center stays a clean hairline over the fat body.
+    const fatGeo = new LineGeometry();
+    fatGeo.setPositions(lineVerts);
+    const fatMat = new LineMaterial({
+      color: CONSTELLATION_BASE_LINE_COLOR,
+      transparent: true,
+      opacity: CONSTELLATION_BASE_OPACITY,
+      depthWrite: false,
+      linewidth: CONSTELLATION_LINE_FAT_WIDTH,
+      worldUnits: true,
+    });
+    // worldUnits: true → width is in world units; the resolution uniform is
+    // ignored (only used in screen-pixel mode). A placeholder keeps the
+    // node-env unit tests happy (no window in the vitest environment).
+    fatMat.resolution.set(1, 1);
+    const fatLine = new Line2(fatGeo, fatMat);
+    fatLine.name = `constellation-lines:${c.name}`;
+    fatLine.renderOrder = 2;
+    fatLine.computeLineDistances();
+    group.add(fatLine);
+    fatLineGeos.push(fatGeo);
+    fatLineMats.push(fatMat);
+
+    // Plan 042: the dark under-stroke — same vertex pairs, WIDER than the
+    // fat blue line, near-black. renderOrder 1 puts it in the pass ABOVE the
+    // figure plates (renderOrder 0, separate group added after this one) so
+    // the groove is never painted over by the art, but BELOW the blue lines
+    // (renderOrder 2) so the stroke stays the primary visible layer. Over
+    // cream art it cuts a dark groove the blue line sits in; over the black
+    // sky the #0a0f18 stroke is effectively invisible.
+    const haloGeo = new LineGeometry();
+    haloGeo.setPositions(lineVerts);
+    const haloMat = new LineMaterial({
+      color: CONSTELLATION_LINE_HALO_COLOR,
+      transparent: true,
+      opacity: CONSTELLATION_LINE_HALO_BASE_OPACITY,
+      depthWrite: false,
+      linewidth: CONSTELLATION_LINE_HALO_WIDTH,
+      worldUnits: true,
+    });
+    haloMat.resolution.set(1, 1); // worldUnits: true → resolution is unused
+    const halo = new Line2(haloGeo, haloMat);
+    halo.name = `constellation-lines-halo:${c.name}`;
+    halo.renderOrder = 1;
+    halo.computeLineDistances();
+    group.add(halo);
+    haloGeos.push(haloGeo);
+    haloMats.push(haloMat);
 
     // Plan 016 P2: the shared `dots` Points carries ONE opacity for all 88
     // figures, so it cannot highlight one. Each figure therefore gets its
@@ -1328,7 +1431,7 @@ export function buildConstellations(): THREE.Group {
     const emphDots = new THREE.Points(emphGeo, emphMat);
     emphDots.name = `constellation-stars-emph:${c.name}`;
     emphDots.visible = false;
-    emphDots.renderOrder = 1; // plan 040: above the figure plates
+    emphDots.renderOrder = 4; // plan 042: the picked figure's stars sit on top of the lines
     group.add(emphDots);
     emphGeos.push(emphGeo);
     emphMats.push(emphMat);
@@ -1340,7 +1443,7 @@ export function buildConstellations(): THREE.Group {
   dotGeo.setAttribute('position', new THREE.Float32BufferAttribute(dotVerts, 3));
   const dots = new THREE.Points(dotGeo, dotMat);
   dots.name = 'constellation-stars';
-  dots.renderOrder = 1; // plan 040: above the figure plates
+  dots.renderOrder = 4; // plan 042: crisp star points on top of the lines/halo
   group.add(dots);
 
   // Plan 016 P1: expose the solver anchor directions so main.ts can feed
@@ -1351,13 +1454,17 @@ export function buildConstellations(): THREE.Group {
   group.userData.dispose = () => {
     for (const child of group.children) {
       const o = child as THREE.Object3D;
-      if (o instanceof THREE.LineSegments) {
+      if (o instanceof THREE.LineSegments || o instanceof Line2) {
         o.geometry.dispose();
         (o.material as THREE.Material).dispose();
       }
     }
     for (const g of emphGeos) g.dispose();
     for (const m of emphMats) m.dispose();
+    for (const g of fatLineGeos) g.dispose();
+    for (const m of fatLineMats) m.dispose();
+    for (const g of haloGeos) g.dispose();
+    for (const m of haloMats) m.dispose();
     dotGeo.dispose();
     dotMat.dispose();
   };
@@ -1542,35 +1649,85 @@ export function updateConstellationHighlight(
       child.visible = emphMat.opacity > 0.005;
       continue;
     }
-    // Resolve the constellation index from the child's NAME rather than its
-    // position in the group: labels interleave after their line meshes
-    // (lines0, label0, lines1, label1, …), so a running counter would fade
-    // label k with constellation k+1's emphasis — and the last label would
-    // never brighten at all.
-    const idx = name.startsWith('constellation-')
-      ? CONSTELLATION_NAME_INDEX.get(name.slice('constellation-'.length).split(':')[1])
-      : undefined;
+    // Plan 042: three line objects per constellation, all driven by the SAME
+    // D4/pick math (the per-figure index is resolved from the name below and
+    // the math computed once):
+    //   constellation-lines-core:<n>  — 1px LineBasicMaterial hairline (on top)
+    //   constellation-lines:<n>       — fat blue Line2 (primary visible stroke)
+    //   constellation-lines-halo:<n>  — wider near-black Line2 under-stroke
+    // The core + fat share color/opacity (LO is always ≤ the fat line's);
+    // the halo runs its OWN curve (base 0.5 → peak 0.85, plan 042) so a dark
+    // groove is always present on the cream plates, and takes the picked
+    // figure's full emphasis pulse (no ×0.8 — the picked halo must stay as
+    // prominent as the line, or the groove vanishes exactly where it is
+    // needed most: over the brightest art).
+    //
+    // NOTE on classification: 'constellation-lines-halo:<n>' ALSO starts with
+    // 'constellation-lines:', so the halo must be tested FIRST and short-
+    // circuited — otherwise the fat branch (which does a `continue`) would
+    // swallow it and the halo would never get its own curve.
+    const haloName = name.startsWith('constellation-lines-halo:')
+      ? name.slice('constellation-lines-halo:'.length)
+      : null;
+    if (haloName !== null) {
+      const idx = CONSTELLATION_NAME_INDEX.get(haloName);
+      if (idx === undefined) continue;
+      const emph = emphases[idx] ?? 0;
+      const isPicked = selectedName != null && selectedName !== '' && haloName === selectedName;
+      const haloMat = (child as Line2).material as LineMaterial;
+      if (isPicked) {
+        haloMat.opacity = constellationEmphasisOpacity(tSec);
+      } else {
+        haloMat.opacity =
+          (CONSTELLATION_LINE_HALO_BASE_OPACITY +
+            (CONSTELLATION_LINE_HALO_PEAK_OPACITY - CONSTELLATION_LINE_HALO_BASE_OPACITY) * emph) *
+          presence;
+      }
+      continue;
+    }
+    const coreName = name.startsWith('constellation-lines-core:')
+      ? name.slice('constellation-lines-core:'.length)
+      : null;
+    const fatName =
+      coreName === null && name.startsWith('constellation-lines:')
+        ? name.slice('constellation-lines:'.length)
+        : null;
+    const figName = coreName ?? fatName;
+    if (figName === null) continue;
+    const idx = CONSTELLATION_NAME_INDEX.get(figName);
     if (idx === undefined) continue;
     const emph = emphases[idx] ?? 0;
-    // Line segments: D4 base curve, then the pick emphasis overrides — the
-    // selected figure's lines take the light apple-green color + a breathing
-    // pulse (plan 010, recolor plan 016 P2); everyone else returns to the
-    // base color + D4 opacity (plan 017 F1: no nearest-figure tint).
-    const mat = (child as THREE.LineSegments).material as THREE.LineBasicMaterial;
-    const isPicked =
-      selectedName != null && selectedName !== '' && name === `constellation-lines:${selectedName}`;
-    if (isPicked) {
-      mat.color.setHex(CONSTELLATION_EMPHASIS_COLOR);
-      // Full-opacity pulse: the picked figure ignores the sky presence — it
-      // is what the user asked to see (the S4 sky-dome view sits at ~600
-      // units where presence ≈ 0.55 and would half-dim the emphasis).
-      mat.opacity = constellationEmphasisOpacity(tSec);
-    } else {
-      mat.color.setHex(CONSTELLATION_BASE_LINE_COLOR);
-      mat.opacity =
-        (CONSTELLATION_BASE_OPACITY +
-          (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph) *
-        presence;
+    const isPicked = selectedName != null && selectedName !== '' && figName === selectedName;
+    if (coreName !== null) {
+      const mat = (child as THREE.LineSegments).material as THREE.LineBasicMaterial;
+      if (isPicked) {
+        mat.color.setHex(CONSTELLATION_EMPHASIS_COLOR);
+        mat.opacity = constellationEmphasisOpacity(tSec);
+      } else {
+        mat.color.setHex(CONSTELLATION_BASE_LINE_COLOR);
+        mat.opacity =
+          (CONSTELLATION_BASE_OPACITY +
+            (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph) *
+          presence;
+      }
+      continue;
+    }
+    // fatName !== null
+    {
+      const mat = (child as Line2).material as LineMaterial;
+      if (isPicked) {
+        mat.color.setHex(CONSTELLATION_EMPHASIS_COLOR);
+        // Full-opacity pulse: the picked figure ignores the sky presence — it
+        // is what the user asked to see (the S4 sky-dome view sits at ~600
+        // units where presence ≈ 0.55 and would half-dim the emphasis).
+        mat.opacity = constellationEmphasisOpacity(tSec);
+      } else {
+        mat.color.setHex(CONSTELLATION_BASE_LINE_COLOR);
+        mat.opacity =
+          (CONSTELLATION_BASE_OPACITY +
+            (CONSTELLATION_PEAK_OPACITY - CONSTELLATION_BASE_OPACITY) * emph) *
+          presence;
+      }
     }
   }
 }

@@ -7,6 +7,12 @@ import {
   CONSTELLATION_EMPHASIS_PULSE,
   CONSTELLATION_EMPHASIS_PERIOD,
   CONSTELLATION_EMPHASIS_COLOR,
+  CONSTELLATION_BASE_LINE_COLOR,
+  CONSTELLATION_LINE_HALO_COLOR,
+  CONSTELLATION_LINE_HALO_WIDTH,
+  CONSTELLATION_LINE_FAT_WIDTH,
+  CONSTELLATION_LINE_HALO_BASE_OPACITY,
+  CONSTELLATION_LINE_HALO_PEAK_OPACITY,
   buildConstellations,
 } from '../src/render/scene';
 import * as sceneModule from '../src/render/scene';
@@ -389,5 +395,68 @@ describe('plan 016 P2: apple-green emphasis', () => {
       expect(p.material.opacity).toBe(0);
       expect(p.material.color.getHex()).toBe(CONSTELLATION_EMPHASIS_COLOR);
     }
+  });
+});
+
+describe('plan 042: dark under-stroke keeps lines readable over the cream plates', () => {
+  it('pins the halo to PURE black (invisible on the black sky, a rim on cream)', () => {
+    // A dark blue-grey halo (e.g. 0x0a0f18) read as a visible "fat grey line"
+    // on the open sky in A/B verification. Pure black is black-on-black there
+    // (invisible) yet still cuts a dark rim over the light cream art.
+    expect(CONSTELLATION_LINE_HALO_COLOR).toBe(0x000000);
+  });
+
+  it('keeps the halo wider than the fat blue line, but only just', () => {
+    // The halo must be strictly wider so a dark rim remains on both sides of
+    // the blue line; a much wider halo reintroduces the fat-line artifact.
+    expect(CONSTELLATION_LINE_HALO_WIDTH).toBeGreaterThan(CONSTELLATION_LINE_FAT_WIDTH);
+    expect(CONSTELLATION_LINE_HALO_WIDTH).toBeLessThanOrEqual(CONSTELLATION_LINE_FAT_WIDTH + 4);
+    expect(CONSTELLATION_LINE_FAT_WIDTH).toBeGreaterThan(0);
+  });
+
+  it('keeps the halo opacity in a subtle band (a rim, not a smudge)', () => {
+    expect(CONSTELLATION_LINE_HALO_BASE_OPACITY).toBeGreaterThan(0);
+    expect(CONSTELLATION_LINE_HALO_BASE_OPACITY).toBeLessThanOrEqual(
+      CONSTELLATION_LINE_HALO_PEAK_OPACITY,
+    );
+    expect(CONSTELLATION_LINE_HALO_PEAK_OPACITY).toBeLessThan(0.85);
+  });
+
+  it('builds 3 line objects per constellation (core + fat + halo), correctly stacked', () => {
+    const group = buildConstellations();
+    const find = (prefix: string, name: string) =>
+      group.children.find((c) => c.name === `${prefix}${name}`);
+    const name = 'Ursa Major';
+    const core = find('constellation-lines-core:', name) as unknown as {
+      renderOrder: number;
+      material: { color: { getHex(): number }; transparent: boolean };
+    };
+    const fat = find('constellation-lines:', name) as unknown as {
+      renderOrder: number;
+      material: { worldUnits: boolean; linewidth: number; color: { getHex(): number } };
+    };
+    const halo = find('constellation-lines-halo:', name) as unknown as {
+      renderOrder: number;
+      material: { worldUnits: boolean; linewidth: number; color: { getHex(): number } };
+    };
+    expect(core, 'core line missing').toBeTruthy();
+    expect(fat, 'fat line missing').toBeTruthy();
+    expect(halo, 'halo missing').toBeTruthy();
+
+    // The halo paints first (over the plates), then the fat blue line, then
+    // the 1px core sits crisply on top.
+    expect(halo.renderOrder).toBe(1);
+    expect(fat.renderOrder).toBe(2);
+    expect(core.renderOrder).toBe(3);
+
+    // Both fat and halo are world-unit fat lines (scale with zoom); the halo
+    // is wider and pure black; the fat line carries the base blue.
+    expect(fat.material.worldUnits).toBe(true);
+    expect(halo.material.worldUnits).toBe(true);
+    expect(fat.material.linewidth).toBe(CONSTELLATION_LINE_FAT_WIDTH);
+    expect(halo.material.linewidth).toBe(CONSTELLATION_LINE_HALO_WIDTH);
+    expect(fat.material.color.getHex()).toBe(CONSTELLATION_BASE_LINE_COLOR);
+    expect(halo.material.color.getHex()).toBe(CONSTELLATION_LINE_HALO_COLOR);
+    expect(core.material.color.getHex()).toBe(CONSTELLATION_BASE_LINE_COLOR);
   });
 });
