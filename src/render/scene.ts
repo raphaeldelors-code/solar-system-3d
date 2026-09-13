@@ -31,6 +31,7 @@ import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows'
 import {
   SUN_R,
   planetRadiusKm,
+  dwarfRadiusKm,
   moonRadiusKm,
   planetDistance,
   moonDistance,
@@ -60,8 +61,14 @@ function ringTextureFor(id: string, color: [number, number, number]): THREE.Text
 }
 
 export interface VisualScale {
-  /** Scene radius for a planet / dwarf / (non-star) body of given km radius. */
+  /** Scene radius for a planet (non-star, non-dwarf, non-moon) body of given km radius. */
   bodyRadiusKm: (km: number) => number;
+  /**
+   * Scene radius for a dwarf planet of given km radius (plan 038).
+   * `VISIBLE_SCALE` compresses dwarfs below the planets; `TRUE_SCALE` keeps
+   * them physical, so dwarfs morph correctly during the true-scale tour.
+   */
+  dwarfRadiusKm: (km: number) => number;
   /** Scene radius for a moon of given km radius (much smaller than planets). */
   moonRadiusKm: (km: number) => number;
   /** Scene distance multiplier applied to heliocentric AU positions. */
@@ -72,8 +79,12 @@ export interface VisualScale {
    * `TRUE_SCALE` ignores it.
    */
   moonDistance: (km: number, moonId?: string) => number;
-  /** Suggested camera distance when following a body of this km radius. */
-  followDistanceKm: (km: number) => number;
+  /**
+   * Suggested camera distance when following a body of this km radius.
+   * `dwarf` selects the dwarf tier (plan 038) so a dwarf's follow frame
+   * matches its smaller disc; ignored by `TRUE_SCALE`.
+   */
+  followDistanceKm: (km: number, dwarf?: boolean) => number;
   /**
    * Multiplier applied to belt rock instance sizes (1 = visible-mode dots,
    * ~0 at true scale where km-sized asteroids are sub-pixel). Used by the
@@ -90,6 +101,7 @@ export interface VisualScale {
  */
 export const VISIBLE_SCALE: VisualScale = {
   bodyRadiusKm: planetRadiusKm,
+  dwarfRadiusKm,
   moonRadiusKm: moonRadiusKm,
   planetDistance,
   moonDistance: (km, moonId) => (moonId ? moonDistance(moonId, km) : null) ?? baseMoonDistance(km),
@@ -100,6 +112,7 @@ export const VISIBLE_SCALE: VisualScale = {
 /** True physical scale (distances and sizes to the same ratio). */
 export const TRUE_SCALE: VisualScale = {
   bodyRadiusKm: (km) => (km / AU_TO_KM) * AU,
+  dwarfRadiusKm: (km) => (km / AU_TO_KM) * AU,
   moonRadiusKm: (km) => (km / AU_TO_KM) * AU,
   planetDistance: (au) => au,
   moonDistance: (km) => (km / AU_TO_KM) * AU,
@@ -122,10 +135,12 @@ export function lerpScale(from: VisualScale, to: VisualScale, p: number): Visual
   const L = (a: number, b: number): number => a + (b - a) * p;
   return {
     bodyRadiusKm: (km) => L(from.bodyRadiusKm(km), to.bodyRadiusKm(km)),
+    dwarfRadiusKm: (km) => L(from.dwarfRadiusKm(km), to.dwarfRadiusKm(km)),
     moonRadiusKm: (km) => L(from.moonRadiusKm(km), to.moonRadiusKm(km)),
     planetDistance: (au) => L(from.planetDistance(au), to.planetDistance(au)),
     moonDistance: (km, moonId) => L(from.moonDistance(km, moonId), to.moonDistance(km, moonId)),
-    followDistanceKm: (km) => L(from.followDistanceKm(km), to.followDistanceKm(km)),
+    followDistanceKm: (km, dwarf) =>
+      L(from.followDistanceKm(km, dwarf), to.followDistanceKm(km, dwarf)),
     beltSizeFactor: L(from.beltSizeFactor ?? 1, to.beltSizeFactor ?? 0),
   };
 }
@@ -369,16 +384,21 @@ export function buildScene(
   for (const def of ordered) {
     const isStar = def.kind === 'star';
     const isMoon = def.kind === 'moon';
+    const isDwarf = def.kind === 'dwarf';
 
     // Radius in scene units (stars get a special size; moons are much
-    // smaller than planets so satellites read as satellites).
+    // smaller than planets so satellites read as satellites; dwarfs get
+    // their own compressed tier — plan 038 — so Ceres & co stop reading as
+    // planet-sized discs).
     const r = isStar
       ? scale === TRUE_SCALE
         ? (def.radiusKm / AU_TO_KM) * 1.15
         : SUN_R
       : isMoon
         ? scale.moonRadiusKm(def.radiusKm)
-        : scale.bodyRadiusKm(def.radiusKm);
+        : isDwarf
+          ? scale.dwarfRadiusKm(def.radiusKm)
+          : scale.bodyRadiusKm(def.radiusKm);
     // Scale-independent radii for the true-scale tour (B3): the tour blends
     // between the visible-mode and true-mode layouts live, so each body
     // needs BOTH radii (the baked mesh radius is `r`, the build scale).
@@ -386,12 +406,16 @@ export function buildScene(
       ? (def.radiusKm / AU_TO_KM) * 1.15
       : isMoon
         ? TRUE_SCALE.moonRadiusKm(def.radiusKm)
-        : TRUE_SCALE.bodyRadiusKm(def.radiusKm);
+        : isDwarf
+          ? TRUE_SCALE.dwarfRadiusKm(def.radiusKm)
+          : TRUE_SCALE.bodyRadiusKm(def.radiusKm);
     const visibleRadius = isStar
       ? SUN_R
       : isMoon
         ? VISIBLE_SCALE.moonRadiusKm(def.radiusKm)
-        : VISIBLE_SCALE.bodyRadiusKm(def.radiusKm);
+        : isDwarf
+          ? VISIBLE_SCALE.dwarfRadiusKm(def.radiusKm)
+          : VISIBLE_SCALE.bodyRadiusKm(def.radiusKm);
 
     const geo = new THREE.SphereGeometry(r, 48, 32);
     const surfaceTex = makeSurfaceTexture(def);

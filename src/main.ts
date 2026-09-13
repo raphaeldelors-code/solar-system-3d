@@ -601,7 +601,7 @@ function rebuildScene(newScale: VisualScale): BuiltScene {
   if (followId) {
     const entry = built.bodies.get(followId);
     if (entry) {
-      const d = scale.followDistanceKm(entry.def.radiusKm);
+      const d = scale.followDistanceKm(entry.def.radiusKm, entry.def.kind === 'dwarf');
       built.controls.target.copy(entry.worldPos);
       built.camera.position.copy(entry.worldPos).add(new THREE.Vector3(d, d * 0.6, d));
     }

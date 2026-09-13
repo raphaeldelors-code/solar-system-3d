@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   SUN_R,
   planetRadiusKm,
+  dwarfRadiusKm,
   moonRadiusKm,
   baseMoonDistance,
   planetDistance,
   moonDistance,
+  followDistanceKm,
 } from '../src/render/visibleScale';
 import { SUN_SHADOWS } from '../src/render/shadows';
 import { SUN, PLANETS, DWARF_PLANETS, MOONS } from '../src/data/bodies';
@@ -49,7 +51,8 @@ const P = (b: (typeof ALL)[number]): Planet => ({
   id: b.id,
   a: b.elements!.a,
   e: b.elements!.e,
-  r: planetRadiusKm(b.radiusKm),
+  // Dwarfs use the dwarf-radius tier (plan 038) — mirrors solve_scale.py.
+  r: b.kind === 'dwarf' ? dwarfRadiusKm(b.radiusKm) : planetRadiusKm(b.radiusKm),
   ringOuter: b.rings?.outer ?? 0,
 });
 const planets: Planet[] = ALL.map(P).sort((x, y) => x.a - y.a);
@@ -275,5 +278,90 @@ describe('visibleScale — solver floor/envelope invariants', () => {
     const maxrad = planetDistance(eris.a * (1 + eris.e));
     expect(maxrad, 'far extent <= shadow far').toBeLessThan(SUN_SHADOWS.far);
     expect(SUN.radiusKm).toBeGreaterThan(0);
+  });
+});
+
+// ===========================================================================
+// Dwarf-planet radius tier (plan 038).
+//
+// `planetRadiusKm`'s 0.8 floor put every dwarf (km 470–1188) at 44–81% of
+// Earth's rendered disc — they read as planets. `dwarfRadiusKm` compresses
+// the floor to 0.15 so dwarfs land well below Mercury. These tests pin the
+// tier's invariants so the solver (solve_scale.py) and the TS formulas stay
+// in agreement.
+describe('visibleScale — dwarf radius tier (plan 038)', () => {
+  const EARTH = planetRadiusKm(6371.0);
+  const MERCURY = planetRadiusKm(2439.7);
+
+  it('every dwarf is smaller than Mercury (the smallest planet)', () => {
+    for (const d of DWARF_PLANETS) {
+      expect(dwarfRadiusKm(d.radiusKm), d.id).toBeLessThan(MERCURY);
+    }
+  });
+
+  it('dwarfs are a minority fraction of Earth (no longer planet-sized)', () => {
+    // Ceres is the smallest dwarf; even the largest (Pluto) must stay
+    // comfortably below Earth, and far below the old 70%+ planet-tier value.
+    const pluto = DWARF_PLANETS.find((d) => d.id === 'pluto')!;
+    expect(dwarfRadiusKm(pluto.radiusKm) / EARTH).toBeLessThan(0.35);
+    for (const d of DWARF_PLANETS) {
+      // dwarf tier must sit well under the old planet-tier reading for the
+      // same body (this is the whole point of the separate tier).
+      expect(dwarfRadiusKm(d.radiusKm), d.id).toBeLessThan(planetRadiusKm(d.radiusKm) * 0.45);
+    }
+  });
+
+  it('is monotonic non-decreasing across the dwarf km range', () => {
+    let prev = 0;
+    for (let km = 400; km <= 1500; km += 10) {
+      const v = dwarfRadiusKm(km);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      prev = v;
+    }
+  });
+
+  it('keeps the dwarf tier below the planet tier at every dwarf km', () => {
+    for (const d of DWARF_PLANETS) {
+      expect(dwarfRadiusKm(d.radiusKm), d.id).toBeLessThan(planetRadiusKm(d.radiusKm));
+    }
+  });
+
+  it('followDistanceKm uses the dwarf tier for dwarf bodies (closer framing)', () => {
+    // A dwarf's follow frame should sit at the 3.0 floor — not the
+    // ~6.8 planet-tier distance that framed Ceres at ~8% of the viewport.
+    for (const d of DWARF_PLANETS) {
+      expect(followDistanceKm(d.radiusKm, true), d.id).toBeLessThanOrEqual(
+        followDistanceKm(d.radiusKm, false),
+      );
+    }
+    // Ceres specifically: dwarf framing at the floor, well inside the old value.
+    const ceres = DWARF_PLANETS.find((d) => d.id === 'ceres')!;
+    expect(followDistanceKm(ceres.radiusKm, true)).toBeCloseTo(3.0, 6);
+    expect(followDistanceKm(ceres.radiusKm, false)).toBeGreaterThan(
+      followDistanceKm(ceres.radiusKm, true),
+    );
+  });
+
+  it('scene wiring: VISIBLE_SCALE.dwarfRadiusKm matches dwarfRadiusKm', async () => {
+    // Import the built scale objects and assert the wiring (dwarfs must
+    // resolve through dwarfRadiusKm, not bodyRadiusKm, in the scene).
+    const { VISIBLE_SCALE, TRUE_SCALE, lerpScale } = await import('../src/render/scene');
+    for (const d of DWARF_PLANETS) {
+      expect(VISIBLE_SCALE.dwarfRadiusKm(d.radiusKm), d.id).toBeCloseTo(
+        dwarfRadiusKm(d.radiusKm),
+        6,
+      );
+      // true scale keeps dwarfs physical (km→AU), same as planets.
+      expect(
+        TRUE_SCALE.dwarfRadiusKm(d.radiusKm) === TRUE_SCALE.bodyRadiusKm(d.radiusKm),
+        `${d.id} physical`,
+      ).toBe(true);
+    }
+    // lerpScale carries the dwarf tier between scales.
+    const mid = lerpScale(VISIBLE_SCALE, TRUE_SCALE, 0.5);
+    const ceres = DWARF_PLANETS.find((d) => d.id === 'ceres')!;
+    const expected =
+      (VISIBLE_SCALE.dwarfRadiusKm(ceres.radiusKm) + TRUE_SCALE.dwarfRadiusKm(ceres.radiusKm)) / 2;
+    expect(mid.dwarfRadiusKm(ceres.radiusKm)).toBeCloseTo(expected, 6);
   });
 });

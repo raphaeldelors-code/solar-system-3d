@@ -84,9 +84,24 @@ export function planetDistance(au: number): number {
 // Body radii
 // --------------------------------------------------------------------------
 
-/** Scene radius for a planet / dwarf (visible mode). */
+/** Scene radius for a planet (visible mode). */
 export function planetRadiusKm(km: number): number {
   return 0.8 + 0.45 * Math.log10(km / 100 + 1);
+}
+
+/**
+ * Scene radius for a dwarf planet (visible mode) — plan 038.
+ *
+ * The planet formula's 0.8 floor put every dwarf (km 470–1188) at
+ * 44–81% of Earth's rendered size, i.e. planet-sized discs. This tier keeps
+ * the same log shape but compresses the floor to 0.15, so dwarfs read as
+ * smaller bodies: Pluto 0.483 vs Earth 1.615 (29.9% rendered / 18.6% real).
+ * All five dwarfs land below Mercury (1.432). See `plans/038-ceres-dwarf-radius.md`;
+ * the orbit anchors stay valid because smaller radii only loosen every
+ * clearance constraint (`solve_scale.py --dwarf` re-proves it).
+ */
+export function dwarfRadiusKm(km: number): number {
+  return 0.15 + 0.3 * Math.log10(km / 100 + 1);
 }
 
 /** Scene radius for a moon (visible mode) — small enough to read as a
@@ -171,7 +186,11 @@ export function moonDistance(moonId: string, km: number): number | null {
   return d;
 }
 
-/** Suggested follow-camera distance for a body of the given km radius. */
-export function followDistanceKm(km: number): number {
-  return Math.max(3, planetRadiusKm(km) * 6);
+/** Suggested follow-camera distance for a body of the given km radius.
+ *  `dwarf` selects the dwarf-radius tier (plan 038) so a dwarf's follow
+ *  frame matches its smaller disc (r≈0.38–0.48 → the 3.0 floor, not the
+ *  planet-tier 6.6–7.0 that would frame Ceres at 8% of the viewport). */
+export function followDistanceKm(km: number, dwarf = false): number {
+  const r = dwarf ? dwarfRadiusKm(km) : planetRadiusKm(km);
+  return Math.max(3, r * 6);
 }

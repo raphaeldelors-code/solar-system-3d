@@ -36,6 +36,7 @@ function makeFakeLine(radii: number[], unitDirs: number[][]): THREE.Line {
 
 const fakePlanetScale = (factor: number): VisualScale => ({
   bodyRadiusKm: (km) => km,
+  dwarfRadiusKm: (km) => km,
   moonRadiusKm: (km) => km,
   planetDistance: (au) => au * factor,
   moonDistance: (km, id) => (id ? 3 + km * 0.001 : 1 + km * 0.001),
