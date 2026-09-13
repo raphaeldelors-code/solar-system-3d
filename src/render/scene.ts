@@ -437,11 +437,19 @@ export function buildScene(
     pivot.add(mesh);
     scene.add(pivot);
 
-    // Selection highlight: a flat glow ring in the body's equatorial plane
-    // (same plane its satellites orbit in). Child of the pivot so it tilts
-    // with the body; invisible until `setSatelliteHighlight` marks this body
-    // as the selected satellite.
-    const hlGeo = new THREE.RingGeometry(1.55, 2.35, 64);
+    // Selection highlight: a thin hugging collar in the body's equatorial
+    // plane (the same plane its satellites orbit in). Child of the pivot so it
+    // tilts with the body; invisible until `setSatelliteHighlight` marks this
+    // body as the selected satellite.
+    //
+    // Plan 039: was a broad annulus (1.55–2.35×) that sat *inside* Saturn's
+    // natural ring band (1.24–2.27×) and reached the Moon/Amalthea orbits on
+    // Earth/Jupiter, so satellites read as sitting on the disc. Now a 0.05×-wide
+    // collar hugging the limb: inner 1.03, outer 1.08, and at the breathing peak
+    // (×1.12 in bodyHighlightTargets) the outer edge is 1.2096× — just inside
+    // the two binding constraints, Jupiter/Amalthea (floor 1.242×) and Saturn's
+    // natural-ring inner edge (1.24×), so it clears every moon orbit.
+    const hlGeo = new THREE.RingGeometry(1.03, 1.08, 64);
     const hlMat = new THREE.MeshBasicMaterial({
       color: 0x7fd8ff,
       side: THREE.DoubleSide,
