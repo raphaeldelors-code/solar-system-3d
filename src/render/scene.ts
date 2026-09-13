@@ -836,6 +836,16 @@ export const CONSTELLATION_BASE_OPACITY = 0.28;
 /** Peak line opacity when a constellation is dead center in the view (D4). */
 export const CONSTELLATION_PEAK_OPACITY = 1.0;
 /**
+ * Maximum opacity of the constellation FIGURE plates (plan 007 / 040). The
+ * plates are a SOFT UNDERLAY: they must never outshine the star lines or the
+ * name labels, which stay primary. The dense Stellarium art reads as a solid
+ * wash at high opacity, so the cap is kept well below the line peak (1.0) —
+ * 0.5 — so the thin edge lines stay clearly traceable even when a figure
+ * plate overlaps them. (Plan 040: was a magic 0.85, only 15% under the line
+ * peak, so the art still swamped the edges.)
+ */
+export const FIGURE_PLATE_MAX_OPACITY = 0.5;
+/**
  * Name-label opacity curve (plan 006): labels get their OWN, steeper fade
  * than the lines — peripheral names drop to ~invisible (they clutter the
  * 120° sky view) while center names reach full opacity, so the view center
@@ -1288,6 +1298,13 @@ export function buildConstellations(): THREE.Group {
     lineMat.userData.baseColor = CONSTELLATION_BASE_LINE_COLOR;
     const lines = new THREE.LineSegments(lineGeo, lineMat);
     lines.name = `constellation-lines:${c.name}`;
+    // Plan 040: draw ABOVE the figure plates (renderOrder 0). The plates are
+    // added to the scene after the line group, so in three.js's transparent
+    // pass they would otherwise paint over these thin edges wherever they
+    // overlap, burying the asterism. Forcing renderOrder 1 keeps the lines
+    // (and the name-label layer, see screen-space labels) the primary, always
+    // visible layer — the fix the user asked for.
+    lines.renderOrder = 1;
     group.add(lines);
 
     // Plan 016 P2: the shared `dots` Points carries ONE opacity for all 88
@@ -1311,6 +1328,7 @@ export function buildConstellations(): THREE.Group {
     const emphDots = new THREE.Points(emphGeo, emphMat);
     emphDots.name = `constellation-stars-emph:${c.name}`;
     emphDots.visible = false;
+    emphDots.renderOrder = 1; // plan 040: above the figure plates
     group.add(emphDots);
     emphGeos.push(emphGeo);
     emphMats.push(emphMat);
@@ -1322,6 +1340,7 @@ export function buildConstellations(): THREE.Group {
   dotGeo.setAttribute('position', new THREE.Float32BufferAttribute(dotVerts, 3));
   const dots = new THREE.Points(dotGeo, dotMat);
   dots.name = 'constellation-stars';
+  dots.renderOrder = 1; // plan 040: above the figure plates
   group.add(dots);
 
   // Plan 016 P1: expose the solver anchor directions so main.ts can feed
@@ -1455,10 +1474,12 @@ export function updateConstellationFigureHighlights(
     if (idx === undefined) continue;
     const emph = emphases[idx] ?? 0;
     // Plate opacity follows the LABEL curve (steeper, 0.28 base → 1.0
-    // peak) but capped at 0.85 so the art never outshines the lines.
-    // Opacity-only (no per-plate visible toggling): fading is smooth,
-    // the group's own visibility is the toggle's job.
-    const t = Math.min(0.85, constellationLabelOpacity(emph)) * presence;
+    // peak) but is capped at FIGURE_PLATE_MAX_OPACITY (0.5, plan 040) so the
+    // dense art stays a soft underlay — the star lines and name labels remain
+    // the primary layer and the thin edges stay traceable. Opacity-only (no
+    // per-plate visible toggling): fading is smooth, the group's own
+    // visibility is the toggle's job.
+    const t = Math.min(FIGURE_PLATE_MAX_OPACITY, constellationLabelOpacity(emph)) * presence;
     (child as THREE.Mesh).visible = t > 0.005;
     ((child as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = t;
   }

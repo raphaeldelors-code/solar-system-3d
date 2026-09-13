@@ -33,6 +33,8 @@ import {
   CONSTELLATION_LABEL_HEIGHT_RAD,
   CONSTELLATION_LABEL_MINOR_HEIGHT_RAD,
   CONSTELLATION_LABEL_PEAK_OPACITY,
+  CONSTELLATION_PEAK_OPACITY,
+  FIGURE_PLATE_MAX_OPACITY,
   labelCoversOwnFigure,
   resolveConstellationLabels,
 } from '../src/render/scene';
@@ -170,6 +172,18 @@ describe('constellationLabelOpacity (plan 006 label fade curve)', () => {
       expect(v).toBeGreaterThanOrEqual(prev);
       prev = v;
     }
+  });
+});
+
+describe('FIGURE_PLATE_MAX_OPACITY (plan 040 — figures are a soft underlay)', () => {
+  it('is strictly below the line peak so edges stay primary', () => {
+    // The star LINES reach CONSTELLATION_PEAK_OPACITY (1.0) at view center.
+    // The figure plates must never reach that — at full emphasis the dense
+    // Stellarium art would swamp the thin edges if the cap were >= the line
+    // peak (plan 040 regression guard: the old magic 0.85 was only 15% under
+    // the peak, so the art still won). A visible soft underlay is > 0.
+    expect(FIGURE_PLATE_MAX_OPACITY).toBeGreaterThan(0);
+    expect(FIGURE_PLATE_MAX_OPACITY).toBeLessThan(CONSTELLATION_PEAK_OPACITY);
   });
 });
 
