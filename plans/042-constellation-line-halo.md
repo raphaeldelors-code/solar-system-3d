@@ -23,8 +23,20 @@ The first design draft assumed a wider halo line could be made by scaling the
 line's endpoints radially in 3D — that only _moves_ a 1px line, it does not
 thicken it (WebGL `Line`/`LineSegments` are a fixed 1 device px on every
 platform). The correct primitive is three's fat-line addon
-(`Line2` + `LineGeometry` + `LineMaterial` from `three/examples/jsm/lines/*`),
-which renders a true 2-D-width line.
+**`LineSegments2` + `LineSegmentsGeometry` + `LineMaterial`** from
+`three/examples/jsm/lines/*`, which renders a true 2-D-width line.
+
+**Why the SEGMENTS variant and NOT `Line2` + `LineGeometry`:** `c.lines` is a
+list of **disconnected** `[a,b]` index pairs. The flat vertex array built from
+it (`[A0,B0, A1,B1, A2,B2, …]`) is exactly what `THREE.LineSegments` (the 1px
+core) reads as independent pairs. `Line2` + `LineGeometry` reads the same
+array as **one connected polyline** (A0→B0→A1→B1→…), stitching a spurious line
+from each segment's end to the next segment's start — the "more connections"
+regression the user reported on the first deployed build. `LineSegments2` +
+`LineSegmentsGeometry` (the segments variants of the same addon) take the
+identical flat pair list and draw each segment independently, matching the
+original topology one-for-one. The first deployed build (commit `b53255c`)
+used `Line2`/`LineGeometry` by mistake; fixed in commit `7c39162`.
 
 ## Design (as built)
 
@@ -32,13 +44,13 @@ Per constellation, THREE line objects are drawn in the same transparent pass,
 stacked by an explicit `renderOrder` split (three sorts by renderOrder before
 insertion order, so the stack is deterministic):
 
-| object                  | type / material                         | width          | renderOrder | name                              |
-| ----------------------- | --------------------------------------- | -------------- | ----------- | --------------------------------- |
-| figure plates           | `Mesh` / `MeshBasicMaterial` (plan 007) | —              | 0           | `constellation-figure:<name>`     |
-| dark halo under-stroke  | `Line2` / `LineMaterial` (plan 042)     | 11 world units | 1           | `constellation-lines-halo:<name>` |
-| fat blue line (primary) | `Line2` / `LineMaterial` (plan 042)     | 8 world units  | 2           | `constellation-lines:<name>`      |
-| 1px core line (crisp)   | `LineSegments` / `LineBasicMaterial`    | 1 device px    | 3           | `constellation-lines-core:<name>` |
-| star dots + emphasis    | `Points` (existing)                     | —              | 4           | `constellation-stars*`            |
+| object                  | type / material                             | width          | renderOrder | name                              |
+| ----------------------- | ------------------------------------------- | -------------- | ----------- | --------------------------------- |
+| figure plates           | `Mesh` / `MeshBasicMaterial` (plan 007)     | —              | 0           | `constellation-figure:<name>`     |
+| dark halo under-stroke  | `LineSegments2` / `LineMaterial` (plan 042) | 11 world units | 1           | `constellation-lines-halo:<name>` |
+| fat blue line (primary) | `LineSegments2` / `LineMaterial` (plan 042) | 8 world units  | 2           | `constellation-lines:<name>`      |
+| 1px core line (crisp)   | `LineSegments` / `LineBasicMaterial`        | 1 device px    | 3           | `constellation-lines-core:<name>` |
+| star dots + emphasis    | `Points` (existing)                         | —              | 4           | `constellation-stars*`            |
 
 - **Widths are WORLD units** (`LineMaterial` `worldUnits: true`). The dome is
   at a fixed radius (`CONSTELLATION_RADIUS`) and the sky-view camera sits ~4800
@@ -82,25 +94,31 @@ bands, and the 3-object renderOrder stack.
 ## Change surface
 
 1. `src/render/scene.ts`
-   - imports: `Line2`, `LineGeometry`, `LineMaterial` from
-     `three/examples/jsm/lines/*`.
+   - imports: `LineSegments2`, `LineSegmentsGeometry`, `LineMaterial` from
+     `three/examples/jsm/lines/*` (the **segments** variants — see "Root
+     cause" above for why not `Line2`/`LineGeometry`).
    - new exports: `CONSTELLATION_LINE_HALO_COLOR = 0x000000`,
      `CONSTELLATION_LINE_HALO_BASE_OPACITY = 0.45`,
      `CONSTELLATION_LINE_HALO_PEAK_OPACITY = 0.7`,
      `CONSTELLATION_LINE_FAT_WIDTH = 8`, `CONSTELLATION_LINE_HALO_WIDTH = 11`.
-   - `buildConstellations()`: per constellation — a fat `Line2` (blue,
-     `constellation-lines:<name>`, renderOrder 2) and a halo `Line2` (black,
-     `constellation-lines-halo:<name>`, renderOrder 1) added alongside the
-     existing 1px core `LineSegments` (renamed `constellation-lines-core:<name>`,
-     renderOrder 3). Star dots + emphasis dots bumped to renderOrder 4. All
-     geometry/materials tracked for disposal; halo `worldUnits: true`,
-     `resolution (1,1)`.
+   - `buildConstellations()`: per constellation — a fat `LineSegments2` (blue,
+     `constellation-lines:<name>`, renderOrder 2) and a halo `LineSegments2`
+     (black, `constellation-lines-halo:<name>`, renderOrder 1) added alongside
+     the existing 1px core `LineSegments` (renamed
+     `constellation-lines-core:<name>`, renderOrder 3). Star dots + emphasis
+     dots bumped to renderOrder 4. All geometry/materials tracked for disposal;
+     halo `worldUnits: true`, `resolution (1,1)`.
    - `updateConstellationHighlight()`: per-child loop extended — halo branch
      (tested first) + fat branch + core branch, all on the shared emph/presence
      math; picked figures take the full emphasis pulse on all three.
 2. `tests/constellations.test.ts` — new `describe('plan 042 …')`: halo is pure
-   black, halo width just-wider-than-fat, halo opacity in a subtle band, and the
-   3 line objects exist with the correct renderOrder/width/worldUnits/colors.
+   black, halo width just-wider-than-fat, halo opacity in a subtle band, the
+   3 line objects exist with the correct renderOrder/width/worldUnits/colors,
+   **and a topology lock** asserting the fat line + halo geometries are
+   `LineSegmentsGeometry` (an `instanceStart` attribute present) whose
+   `instanceStart.count` equals the constellation's link count (21 for Ursa
+   Major) — so each segment maps 1:1 to an asterism link and a regression to
+   `Line2`/`LineGeometry` (connected polyline, no `instanceStart`) fails.
 
 ## Verification (live headless Chrome, plan 040 framing)
 
@@ -112,9 +130,12 @@ bands, and the 3-object renderOrder stack.
   cap. To isolate the "lines over BRIGHT cream" worst case, the capture forces
   all 87 plates to opacity 1 via a temporary `window.__debugBuilt` scene handle
   (removed before commit) — the deployed opacity system is untouched.
-- A/B in the SAME scene: BEFORE hides the fat+halo `Line2`s (leaves only the
-  1px core = today's task-7 look); AFTER shows all three. `visible` is toggled
-  (the per-frame loop does not reset it), so the two frames genuinely differ.
+- A/B in the SAME scene: BEFORE hides the fat+halo `LineSegments2`s (leaves
+  only the 1px core = today's task-7 look); AFTER shows all three. `visible`
+  is toggled (the per-frame loop does not reset it), so the two frames
+  genuinely differ. The post-fix A/B (core-only vs core+fat+halo) confirms
+  **identical star-to-star connections** in both — the fat/halo strokes are
+  only wider, no stitched "extra connections" (the original `Line2` bug).
 - Result (vision A/B, cream + black-sky both assessed):
   - **Line readability over the cream figure: 3/10 → 8/10.** The black halo
     creates a dark rim that keeps the blue line legible over the brightest
@@ -132,6 +153,16 @@ bands, and the 3-object renderOrder stack.
 contrast (plan 042)` — `src/render/scene.ts` + `tests/constellations.test.ts`
    - `plans/042-…md`.
 2. Docs: `docs(plan-042): task index — constellation line halo (commit <sha>)`.
-3. Push → CI auto-deploy → verify the live bundle contains the new markers
-   (the minified `0x000000` literal, `constellation-lines-halo`, the fat-line
-   `worldUnits`) and that the halo + fat `Line2` objects are present.
+3. Push → CI auto-deploy → verify the live bundle is byte-identical to local
+   `dist/` and contains the segments-variant markers (`instanceStart`,
+   `constellation-lines-halo`, the fat-line `worldUnits`) and that no
+   `__debugBuilt` capture handle remains in the source/bundle.
+
+## Post-fix note (2026-09-13)
+
+The first deployed build (`b53255c`) used `Line2` + `LineGeometry`, which
+stitched a spurious line between every unrelated asterism segment — the user
+reported "more connections." Fixed in `7c39162` by switching to
+`LineSegments2` + `LineSegmentsGeometry` (segments variant, identical flat
+input, disconnected segments). A topology regression test now locks the
+segment count to the data's link count.
