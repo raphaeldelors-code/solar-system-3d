@@ -459,4 +459,57 @@ describe('plan 042: dark under-stroke keeps lines readable over the cream plates
     expect(halo.material.color.getHex()).toBe(CONSTELLATION_LINE_HALO_COLOR);
     expect(core.material.color.getHex()).toBe(CONSTELLATION_BASE_LINE_COLOR);
   });
+
+  it('draws the EXACT asterism links — no stitched "extra connections" (segments, not a connected polyline)', () => {
+    // Regression lock for the Line2/LineGeometry bug: `c.lines` is a list of
+    // DISCONNECTED [a,b] pairs. `LineSegments2`/`LineSegmentsGeometry` reads
+    // the flat vertex array as N independent segments — each segment is one
+    // instanced pair, so `geometry.attributes.instanceStart.count` ===
+    // c.lines.length (one start-end pair per link). `Line2`/`LineGeometry`
+    // would read it as ONE connected polyline (A0→B0→A1→B1→…) and stitch a
+    // spurious line from each segment's end to the next segment's start — the
+    // "more connections" the user saw. A `LineGeometry` has NO instanceStart
+    // attribute (it is not an instanced segment geometry), so asserting it is
+    // present AND count-matched is a hard lock on the segments topology.
+    const group = buildConstellations();
+    const c = CONSTELLATIONS.find((x) => x.name === 'Ursa Major')!;
+    const expectedLinks = c.lines.length;
+    expect(expectedLinks, 'sanity: Ursa Major must have asterism links').toBeGreaterThan(0);
+
+    const find = (prefix: string) => group.children.find((ch) => ch.name === `${prefix}Ursa Major`);
+    const core = find('constellation-lines-core:') as unknown as {
+      geometry: { attributes: { position: { count: number } } };
+    };
+    const fat = find('constellation-lines:') as unknown as {
+      geometry: { attributes: { instanceStart?: { count: number } } };
+    };
+    const halo = find('constellation-lines-halo:') as unknown as {
+      geometry: { attributes: { instanceStart?: { count: number } } };
+    };
+
+    // The 1px core is a classic LineSegments: one vertex per endpoint, so
+    // position.count === 2 × links (it never stitches, by definition).
+    expect(core.geometry.attributes.position.count).toBe(expectedLinks * 2);
+
+    // The fat line + halo are the fat-line SEGMENTS variant: an instanced
+    // start/end pair per drawn segment. The start-attribute count MUST equal
+    // the data's link count, one-for-one — proving they draw exactly the
+    // asterism links and nothing stitched between them.
+    expect(
+      fat.geometry.attributes.instanceStart,
+      'fat line must be a segments geometry (instanceStart present)',
+    ).toBeTruthy();
+    expect(
+      fat.geometry.attributes.instanceStart!.count,
+      'fat line must draw one segment per asterism link',
+    ).toBe(expectedLinks);
+    expect(
+      halo.geometry.attributes.instanceStart,
+      'halo must be a segments geometry (instanceStart present)',
+    ).toBeTruthy();
+    expect(
+      halo.geometry.attributes.instanceStart!.count,
+      'halo must draw one segment per asterism link (no stitching)',
+    ).toBe(expectedLinks);
+  });
 });

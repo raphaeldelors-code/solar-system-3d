@@ -12,9 +12,9 @@
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Line2 } from 'three/examples/jsm/lines/Line2.js';
-import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAtInto, sampleOrbit, type Vec3 } from '../sim/kepler';
 import { moonGeocentricJ2000 } from '../sim/moon';
@@ -887,9 +887,14 @@ export const CONSTELLATION_EMPHASIS_COLOR = 0x7cfc5a;
  * `LineBasicMaterial` lines are a fixed 1 device px, so on the bright cream
  * figure plates (plan 007 art) the 1px blue line loses contrast and the
  * asterism "disappears" where it crosses its own figure. A fat-line
- * (`Line2`/`LineMaterial`) black stroke, a few world units WIDER than the
- * visible blue line, cuts a dark groove through the art: blue line /
+ * (`LineSegments2`/`LineMaterial`) black stroke, a few world units WIDER than
+ * the visible blue line, cuts a dark groove through the art: blue line /
  * black halo / cream fill → high contrast on the cream plates.
+ *
+ * `LineSegments2` (NOT `Line2`): `c.lines` are DISCONNECTED [a,b] pairs, so
+ * the segments variant must be used — `Line2`/`LineGeometry` would treat the
+ * flat vertex list as one connected polyline and stitch a spurious line
+ * between every unrelated segment (the "extra connections" bug).
  *
  * The halo is PURE black (0x000000), not a dark blue-grey: over the (near-)
  * black sky, black-on-black is invisible, so the halo produces NO "fat grey
@@ -1313,9 +1318,13 @@ export function buildConstellations(): THREE.Group {
   // Plan 016 P2: per-constellation emphasis stars (kept for disposal).
   const emphGeos: THREE.BufferGeometry[] = [];
   const emphMats: THREE.PointsMaterial[] = [];
-  // Plan 042: the fat blue line + dark halo are `Line2` objects (a plain
-  // LineBasicMaterial line is fixed at 1 device px and loses contrast on the
-  // cream figure plates). Kept for disposal + the per-frame picked pulse.
+  // Plan 042: the fat blue line + dark halo are `LineSegments2` objects (a
+  // plain LineBasicMaterial line is fixed at 1 device px and loses contrast
+  // on the cream figure plates). Kept for disposal + the per-frame picked
+  // pulse. `LineSegments2` (not `Line2`): the asterism links are DISCONNECTED
+  // [a,b] pairs, so the segments variant draws each link independently — a
+  // `Line2`/`LineGeometry` would read the flat vertex list as one connected
+  // polyline and stitch a spurious line between unrelated segments.
   const fatLineGeos: THREE.BufferGeometry[] = [];
   const fatLineMats: LineMaterial[] = [];
   const haloGeos: THREE.BufferGeometry[] = [];
@@ -1348,21 +1357,29 @@ export function buildConstellations(): THREE.Group {
     // Plan 040: draw ABOVE the figure plates (renderOrder 0). The plates are
     // added to the scene after the line group, so in three.js's transparent
     // pass they would otherwise paint over these thin edges wherever they
-    // overlap, burying the asterism. Plan 042: the fat blue line (Line2) is
-    // the primary visible stroke at renderOrder 2; this crisp 1px core stays
+    // overlap, burying the asterism. Plan 042: the fat blue line (LineSegments2)
+    // is the primary visible stroke at renderOrder 2; this crisp 1px core stays
     // just above it (renderOrder 3) so the line's center is always a clean
     // hairline over the fat body. The star DOTS render on top of all of these
     // (renderOrder 4) so the asterism's vertices read as crisp points.
     lines.renderOrder = 3;
     group.add(lines);
 
-    // Plan 042: a fat blue line (Line2) as the PRIMARY visible stroke — a 1px
-    // WebGL line is a hairline on the cream plates. Same vertex pairs as the
-    // core, a true world-unit width (scales with zoom like everything else in
-    // the scene), renderOrder 2: above the dark halo (renderOrder 1, inserted
+    // Plan 042: a fat blue line as the PRIMARY visible stroke — a 1px WebGL
+    // line is a hairline on the cream plates. Same vertex PAIRS as the core,
+    // a true world-unit width (scales with zoom like everything else in the
+    // scene), renderOrder 2: above the dark halo (renderOrder 1, inserted
     // before it) and below the crisp 1px core (renderOrder 3) so the line's
     // center stays a clean hairline over the fat body.
-    const fatGeo = new LineGeometry();
+    //
+    // IMPORTANT: `LineSegments2` + `LineSegmentsGeometry`, NOT `Line2` +
+    // `LineGeometry`. `c.lines` is a list of DISCONNECTED [a,b] pairs; the
+    // flat array below is [A0,B0, A1,B1, A2,B2, …]. `LineSegmentsGeometry`
+    // reads it as independent segments (matching the original 1px core
+    // topology). `LineGeometry` would read it as ONE connected polyline
+    // (A0→B0→A1→B1→…), stitching a spurious line from each segment's end to
+    // the next segment's start — the "extra connections" the user saw.
+    const fatGeo = new LineSegmentsGeometry();
     fatGeo.setPositions(lineVerts);
     const fatMat = new LineMaterial({
       color: CONSTELLATION_BASE_LINE_COLOR,
@@ -1376,7 +1393,7 @@ export function buildConstellations(): THREE.Group {
     // ignored (only used in screen-pixel mode). A placeholder keeps the
     // node-env unit tests happy (no window in the vitest environment).
     fatMat.resolution.set(1, 1);
-    const fatLine = new Line2(fatGeo, fatMat);
+    const fatLine = new LineSegments2(fatGeo, fatMat);
     fatLine.name = `constellation-lines:${c.name}`;
     fatLine.renderOrder = 2;
     fatLine.computeLineDistances();
@@ -1384,14 +1401,14 @@ export function buildConstellations(): THREE.Group {
     fatLineGeos.push(fatGeo);
     fatLineMats.push(fatMat);
 
-    // Plan 042: the dark under-stroke — same vertex pairs, WIDER than the
-    // fat blue line, near-black. renderOrder 1 puts it in the pass ABOVE the
+    // Plan 042: the dark under-stroke — same vertex PAIRS, WIDER than the
+    // fat blue line, pure black. renderOrder 1 puts it in the pass ABOVE the
     // figure plates (renderOrder 0, separate group added after this one) so
     // the groove is never painted over by the art, but BELOW the blue lines
     // (renderOrder 2) so the stroke stays the primary visible layer. Over
     // cream art it cuts a dark groove the blue line sits in; over the black
-    // sky the #0a0f18 stroke is effectively invisible.
-    const haloGeo = new LineGeometry();
+    // sky the pure-black stroke is invisible (black-on-black).
+    const haloGeo = new LineSegmentsGeometry();
     haloGeo.setPositions(lineVerts);
     const haloMat = new LineMaterial({
       color: CONSTELLATION_LINE_HALO_COLOR,
@@ -1402,7 +1419,7 @@ export function buildConstellations(): THREE.Group {
       worldUnits: true,
     });
     haloMat.resolution.set(1, 1); // worldUnits: true → resolution is unused
-    const halo = new Line2(haloGeo, haloMat);
+    const halo = new LineSegments2(haloGeo, haloMat);
     halo.name = `constellation-lines-halo:${c.name}`;
     halo.renderOrder = 1;
     halo.computeLineDistances();
@@ -1454,7 +1471,7 @@ export function buildConstellations(): THREE.Group {
   group.userData.dispose = () => {
     for (const child of group.children) {
       const o = child as THREE.Object3D;
-      if (o instanceof THREE.LineSegments || o instanceof Line2) {
+      if (o instanceof THREE.LineSegments || o instanceof LineSegments2) {
         o.geometry.dispose();
         (o.material as THREE.Material).dispose();
       }
@@ -1653,8 +1670,8 @@ export function updateConstellationHighlight(
     // D4/pick math (the per-figure index is resolved from the name below and
     // the math computed once):
     //   constellation-lines-core:<n>  — 1px LineBasicMaterial hairline (on top)
-    //   constellation-lines:<n>       — fat blue Line2 (primary visible stroke)
-    //   constellation-lines-halo:<n>  — wider near-black Line2 under-stroke
+    //   constellation-lines:<n>       — fat blue LineSegments2 (primary stroke)
+    //   constellation-lines-halo:<n>  — wider pure-black LineSegments2 under-stroke
     // The core + fat share color/opacity (LO is always ≤ the fat line's);
     // the halo runs its OWN curve (base 0.5 → peak 0.85, plan 042) so a dark
     // groove is always present on the cream plates, and takes the picked
@@ -1674,7 +1691,7 @@ export function updateConstellationHighlight(
       if (idx === undefined) continue;
       const emph = emphases[idx] ?? 0;
       const isPicked = selectedName != null && selectedName !== '' && haloName === selectedName;
-      const haloMat = (child as Line2).material as LineMaterial;
+      const haloMat = (child as LineSegments2).material as LineMaterial;
       if (isPicked) {
         haloMat.opacity = constellationEmphasisOpacity(tSec);
       } else {
@@ -1714,7 +1731,7 @@ export function updateConstellationHighlight(
     }
     // fatName !== null
     {
-      const mat = (child as Line2).material as LineMaterial;
+      const mat = (child as LineSegments2).material as LineMaterial;
       if (isPicked) {
         mat.color.setHex(CONSTELLATION_EMPHASIS_COLOR);
         // Full-opacity pulse: the picked figure ignores the sky presence — it
