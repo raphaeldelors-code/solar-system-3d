@@ -83,6 +83,28 @@
           0 1px 4px rgba(0, 0, 0, 0.25);
         min-width: 220px;
         user-select: none;
+        /* Plan 043 F1: cap the panel to the viewport so a picked body's info
+           card can't push the bottom (hint + credit) off-screen. border-box so
+           max-height caps the FULL box (padding+border included). The panel is
+           a flex column: the h1 header stays pinned, .panel-body scrolls. */
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 44px - 12px - env(safe-area-inset-top));
+      }
+      #panel .panel-body {
+        flex: 1 1 auto;
+        min-height: 0; /* allow the flex child to shrink + scroll */
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(120, 150, 200, 0.3) transparent;
+      }
+      #panel .panel-body::-webkit-scrollbar {
+        width: 8px;
+      }
+      #panel .panel-body::-webkit-scrollbar-thumb {
+        background: rgba(120, 150, 200, 0.28);
+        border-radius: 4px;
       }
       /* Plan 020 F2: shrink-to-fit made this 677px wide (widest text line) at
          13px/1.5, covering 38% of a 1280px viewport with the view center
@@ -142,7 +164,7 @@
       /* Small-caps micro-labels: quieter than the values they sit beside,
          fixed width so the value column lines up across rows. */
       #panel .row > label {
-        flex: 0 0 54px;
+        flex: 0 0 64px;
         font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.05em;
@@ -1046,6 +1068,31 @@
         outline: none;
         border-color: #6ea8ff;
       }
+      /* Plan 043 F3: theme the native form controls that plan 041 left as OS
+         defaults (the main "cheap" tell). The ±5 yr <select> and the display
+         checkboxes now match the #date-pick dark field + the panel accent. */
+      #events-range {
+        flex: 0 0 auto;
+        background: #1a2334;
+        color: #cfd8e3;
+        border: 1px solid #33415e;
+        border-radius: 6px;
+        padding: 3px 6px;
+        font: inherit;
+        color-scheme: dark;
+        cursor: pointer;
+      }
+      #events-range:focus {
+        outline: none;
+        border-color: #6ea8ff;
+      }
+      #panel input[type='checkbox'] {
+        accent-color: #6ea8ff;
+        width: 15px;
+        height: 15px;
+        margin: 0 5px 0 0;
+        cursor: pointer;
+      }
       /* Plan 041: the picked-body info card is its own inset panel (tinted
          fill, rounded, top margin) instead of a flat rule + bare rows. */
       #panel .info {
@@ -1495,7 +1542,7 @@
     <div id="panel">
       <h1 id="panel-toggle">Solar System</h1>
       <div class="panel-body">
-        <div class="row"><label>Date</label><span id="date" class="value">—</span></div>
+        <div class="row"><label>Now</label><span id="date" class="value">—</span></div>
         <div class="row">
           <label>Speed</label>
           <input
@@ -1510,7 +1557,7 @@
           <span id="speed-value" class="value">1.0 d/s</span>
         </div>
         <div class="row">
-          <label for="date-pick">Date</label>
+          <label for="date-pick">Jump to</label>
           <input
             id="date-pick"
             type="date"
