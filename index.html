@@ -1068,6 +1068,31 @@
         outline: none;
         border-color: #6ea8ff;
       }
+      /* Plan 043 F3: theme the native form controls that plan 041 left as OS
+         defaults (the main "cheap" tell). The ±5 yr <select> and the display
+         checkboxes now match the #date-pick dark field + the panel accent. */
+      #events-range {
+        flex: 0 0 auto;
+        background: #1a2334;
+        color: #cfd8e3;
+        border: 1px solid #33415e;
+        border-radius: 6px;
+        padding: 3px 6px;
+        font: inherit;
+        color-scheme: dark;
+        cursor: pointer;
+      }
+      #events-range:focus {
+        outline: none;
+        border-color: #6ea8ff;
+      }
+      #panel input[type='checkbox'] {
+        accent-color: #6ea8ff;
+        width: 15px;
+        height: 15px;
+        margin: 0 5px 0 0;
+        cursor: pointer;
+      }
       /* Plan 041: the picked-body info card is its own inset panel (tinted
          fill, rounded, top margin) instead of a flat rule + bare rows. */
       #panel .info {
