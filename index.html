@@ -106,6 +106,21 @@
         background: rgba(120, 150, 200, 0.28);
         border-radius: 4px;
       }
+      /* Plan 043 F4: section headers — a quiet uppercase micro-label that
+         names each group (Time / View / Display) so the 12-row panel reads as
+         organized sections instead of a flat list. Sits above the first row
+         of its group; the divider rules (below) still separate the groups. */
+      #panel .section-head {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #6f83a6;
+        margin: 14px 0 6px;
+      }
+      #panel .section-head:first-child {
+        margin-top: 0;
+      }
       /* Plan 020 F2: shrink-to-fit made this 677px wide (widest text line) at
          13px/1.5, covering 38% of a 1280px viewport with the view center
          behind it (the Sun on boot, every pick's figure + label). Capped at
@@ -117,11 +132,14 @@
         }
       }
       #panel h1 {
-        font-size: 13px;
-        margin: 0 0 8px;
-        letter-spacing: 0.06em;
+        /* Plan 043 F4: real title presence — was 13px, barely above the 12.5px
+           values, so it didn't read as a heading. 15px/700 + wider tracking. */
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0 0 10px;
+        letter-spacing: 0.09em;
         text-transform: uppercase;
-        color: #8fb4e8;
+        color: #9cc0f0;
         cursor: pointer;
         display: flex;
         justify-content: space-between;
@@ -148,19 +166,10 @@
         margin: 8px 0; /* plan 041: 8px base-grid rhythm (was 6px) */
       }
       /* ---- Plan 041: control-panel design rework ----
-         The flat wall of identical rows is split into logical groups with a
-         faint divider + extra top space. Dividers are anchored with :has() on
-         STABLE landmarks (the anchor-row, the Scale row, the share row) so
-         they survive hidden rows (#events-row, #scale-caption) shifting the
-         nth-child count. Groups: Time (default) | Navigate | Display |
-         Actions, with the Info card as its own panel below. */
-      #panel .row:has(#anchors),
-      #panel .row:has(#scale-switch),
-      #panel .row:has(#share) {
-        border-top: 1px solid rgba(120, 150, 200, 0.16);
-        padding-top: 11px;
-        margin-top: 13px;
-      }
+         The flat wall of identical rows is split into logical groups. Plan 043
+         F4 replaced the :has()-anchored divider rules with explicit
+         .section-head labels (Time / View / Display / Share) — the header is
+         the boundary now, so no separate rule is needed. */
       /* Small-caps micro-labels: quieter than the values they sit beside,
          fixed width so the value column lines up across rows. */
       #panel .row > label {
@@ -190,13 +199,22 @@
         color: #eaf1ff;
       }
       /* ---- Events panel (B1) ---- */
+      /* Plan 043 F5: the events row is a COLUMN, not the default horizontal
+         .row flex — so the list spans the full panel width and the note sits
+         below it as a footer (previously the note floated to the right of a
+         half-width list, leaving an unbalanced gap). */
+      #panel #events-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+      }
       #panel #events-list {
         max-height: 300px;
         overflow-y: auto;
         font-family: var(--mono);
         font-size: 11px;
         line-height: 1.45;
-        margin: 4px -8px 0;
+        margin: 4px 0 0;
         padding: 0 4px;
       }
       #panel #events-list.computing {
@@ -979,17 +997,33 @@
       }
       /* #panel .value restyled in the Plan 041 block above (brighter,
          12.5px/600, tabular) — single source of truth there. */
+      /* Plan 043 F5: tier disambiguation. The generic .active (Reverse,
+         Events toggle, find rows) was a BRIGHTER fill (#2b4a7a) than the
+         primary Sky/System buttons (#20304f), so the "on" state read as MORE
+         prominent than the primary action — backwards. Now it's the SAME dark
+         fill as the primary but with an ACCENT border as the "on" signal, so
+         it clearly reads as a toggled state, not a competing action. */
       #panel button.active {
-        background: #2b4a7a;
+        background: #20304f;
         border-color: #6ea8ff;
-        color: #eaf2ff;
+        color: #eaf1ff;
       }
       /* Real/Visible scale switch: BOTH options always visible; the active
          one is lit so the current state reads at a glance. */
+      /* Plan 043 F5: render it as a true segmented control — a dark track with
+         a 1px gap between the two segments (the gap shows the track), and the
+         active segment a LIGHTER fill + accent border. That "selected" look
+         is distinct from the primary Sky/System buttons' heavier fill, so
+         "active" no longer reads as "primary". */
       #scale-switch {
         flex: 1;
         display: flex;
+        gap: 1px;
         min-width: 0;
+        padding: 1px;
+        background: #141b29;
+        border: 1px solid #2b3a55;
+        border-radius: 8px;
       }
       #scale-switch .seg {
         flex: 1 1 0;
@@ -999,6 +1033,8 @@
         letter-spacing: 0.02em;
         border-radius: 0;
         opacity: 0.6;
+        background: transparent;
+        border-color: transparent;
         transition:
           opacity 120ms ease,
           background 120ms ease;
@@ -1542,6 +1578,7 @@
     <div id="panel">
       <h1 id="panel-toggle">Solar System</h1>
       <div class="panel-body">
+        <div class="section-head">Time</div>
         <div class="row"><label>Now</label><span id="date" class="value">—</span></div>
         <div class="row">
           <label>Speed</label>
@@ -1569,6 +1606,7 @@
           <button id="reverse">Reverse →</button>
           <button id="now">Now</button>
         </div>
+        <div class="section-head">View</div>
         <div class="row anchor-row" id="anchors">
           <button
             data-fly="constellations"
@@ -1603,6 +1641,7 @@
             <div id="find-list" hidden></div>
           </div>
         </div>
+        <div class="section-head">Display</div>
         <div class="row">
           <label>Scale</label>
           <div id="scale-switch" role="radiogroup" aria-label="Scale">
@@ -1635,6 +1674,7 @@
           <label><input id="belts" type="checkbox" checked /> Belts</label>
           <label><input id="figures" type="checkbox" /> Figures</label>
         </div>
+        <div class="section-head">Share</div>
         <div class="row"><button id="share">Copy share link</button></div>
         <div class="row"><button id="screenshot">Save screenshot</button></div>
         <div id="info" class="info" hidden>
