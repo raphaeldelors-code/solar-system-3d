@@ -83,6 +83,28 @@
           0 1px 4px rgba(0, 0, 0, 0.25);
         min-width: 220px;
         user-select: none;
+        /* Plan 043 F1: cap the panel to the viewport so a picked body's info
+           card can't push the bottom (hint + credit) off-screen. border-box so
+           max-height caps the FULL box (padding+border included). The panel is
+           a flex column: the h1 header stays pinned, .panel-body scrolls. */
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 44px - 12px - env(safe-area-inset-top));
+      }
+      #panel .panel-body {
+        flex: 1 1 auto;
+        min-height: 0; /* allow the flex child to shrink + scroll */
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(120, 150, 200, 0.3) transparent;
+      }
+      #panel .panel-body::-webkit-scrollbar {
+        width: 8px;
+      }
+      #panel .panel-body::-webkit-scrollbar-thumb {
+        background: rgba(120, 150, 200, 0.28);
+        border-radius: 4px;
       }
       /* Plan 020 F2: shrink-to-fit made this 677px wide (widest text line) at
          13px/1.5, covering 38% of a 1280px viewport with the view center
