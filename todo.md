@@ -54,6 +54,45 @@ fixes".
 - [x] F3 style(ui): theme the native form controls (select + checkboxes) — plan 043. The ±5 yr `<select>` + display checkboxes were OS-default (the main "cheap" tell). Now match the `#date-pick` dark field + `#6ea8ff` accent, `color-scheme: dark`. — `c75e2fa`
 - [x] F4+F5 style(ui): section headers, title scale, segmented control, full-width events — plan 043. F4: `.section-head` labels (Time/View/Display/Share) replace the plan-041 `:has()` dividers; h1 13→15px/700. F5: generic `.active` was a BRIGHTER fill than the primary buttons (backwards) → same dark fill + accent border; Scale switch is a true segmented control (track + gap); events row is a column so the list is full-width with the note as a footer. Gates green (393 tests + tsc + lint + format + build); live-verified all states. — `6de2835`
 
+## Phase 7 — PROD-READINESS + WOW (2026-09-17) — see `plans/044-prod-readiness-wow.md`
+
+3-judge grill review (engineering 72 / features+data+render 68 / design+UX+market
+64 → composite ≈68/100). Convergent finding: the **3D scene is the weak link**
+(sun is a billboard, stars are fake, no cinematic layer); the ephemeris+events+
+scrub core is the moat; legal (Stellarium GPL art, ESA Milky Way) is the
+commercial blocker. Full findings in `.judge/{engineering,features,design}.md`.
+One feature per commit, gates green before each. Start at A1.
+
+- [ ] A1 feat(render): Sun shader — animated FBM photosphere + limb darkening + HDR corona (plan 044)
+- [ ] A2 feat(render): Earth night lights (Black Marble) + animated clouds (plan 044)
+- [ ] A3 feat(render): lens flare + subtle DOF post passes (plan 044)
+- [ ] A4 feat(render): real Saturn ring texture (Cassini map) (plan 044)
+- [ ] A5 fix(ui): planet label redesign — leader lines, distance fade, de-collide (plan 044)
+- [ ] A6 feat(web): cinematic camera easing + intro ends on the time-scrub (plan 044)
+- [ ] B1 feat(data): live ISS + satellite tracking (SGP4 + CelesTrak TLEs) (plan 044)
+- [ ] B2 feat(data): JPL Horizons live mode (plan 044)
+- [ ] B3 feat(data): real starfield from Gaia 1M-star extract (plan 044)
+- [ ] B4 feat(data): SBDB body-facts panel (plan 044)
+- [ ] B5 feat(data): space weather + aurora shader (NOAA Kp) (plan 044)
+- [ ] B6 feat(data): Exoplanet Archive scene (plan 044)
+- [ ] B7 feat(data): named asteroids + comets (SBDB/MPC) (plan 044)
+- [ ] B8 feat(web): photo mode + APOD daily panel (plan 044)
+- [ ] C1 style(ui): real type system + documented color palette (plan 044)
+- [ ] C2 feat(web): 3-step first-run onboarding (plan 044)
+- [ ] C3 feat(web): timeline discoverability + speed-slider tick labels (plan 044)
+- [ ] C4 fix(a11y): contrast, prefers-reduced-motion, keyboard time-scrub (plan 044)
+- [ ] C5 feat(brand): name + logo + icon (drop the horse) (plan 044)
+- [ ] D1 docs(legal): asset licensing ledger (Stellarium GPL / ESA) — sale blocker (plan 044)
+- [ ] D2 refactor: split main.ts god-file (frameLoop/scrub/searchUi/eventsPanel/contextLoss) (plan 044)
+- [ ] D3 test: browser E2E (Playwright) smoke spec in CI (plan 044)
+- [ ] D4 fix(pwa): service worker — hashed filename, cache cap, error handler, offline page (plan 044)
+- [ ] D5 perf: bundle diet + CI size budget (plan 044)
+- [ ] D6 fix(web): WebGL-availability guard + low-end quality tier (plan 044)
+- [ ] D7 feat(ops): privacy-first telemetry (plan 044)
+- [ ] D8 ci: PR gate + post-deploy smoke check (plan 044)
+- [ ] D9 feat(i18n): string catalog foundation (plan 044)
+- [ ] D10 perf: pause-on-visibilitychange + listener audit (plan 044)
+
 ## Phase 4 — Review fixes + features (see `plans/002-review-fixes-and-features.md`)
 
 - [x] Plan 002 written

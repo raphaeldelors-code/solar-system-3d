@@ -41,7 +41,13 @@ import {
   baseMoonDistance,
   followDistanceKm,
 } from './visibleScale';
-import { buildPostStack, buildSunGlow, type PostStack } from './post';
+import {
+  buildPostStack,
+  buildSunGlow,
+  buildSunShaderMaterial,
+  type PostStack,
+  type SunShader,
+} from './post';
 import { buildSkybox, type Skybox } from './skybox';
 import { atmosphereConfigFor, buildShell, type AtmosphereShell } from './atmosphere';
 import { makeRingTexture, remapRingUVRadial } from './rings';
@@ -229,6 +235,8 @@ export interface BuiltScene {
   post: PostStack;
   /** Sun corona sprite (plan 035 F1); positioned at the sun, ~10× its radius. */
   sunGlow: THREE.Sprite;
+  /** Animated sun-surface shader (plan 044 A1); setTime() per frame. */
+  sunShader: SunShader;
   /** Per-frame scratch state (sorted body order for updatePositions). */
   userData: { updateOrder?: SceneBody[] };
   dispose: () => void;
@@ -375,7 +383,13 @@ export function buildScene(
   const sunGlow = buildSunGlow(SUN_R * 4.5);
   scene.add(sunGlow.sprite);
 
-  const disposables: { dispose: () => void }[] = [skybox, post, sunGlow];
+  // Sun surface shader (plan 044 A1): animated FBM granulation + limb
+  // darkening + HDR core. Replaces the flat MeshBasicMaterial disc; the bright
+  // core/limb feed the bloom pass. Built once, assigned to the star in the
+  // loop below; setTime() is driven per-frame from main.ts.
+  const sunShader = buildSunShaderMaterial();
+
+  const disposables: { dispose: () => void }[] = [skybox, post, sunGlow, sunShader];
   const map = new Map<string, SceneBody>();
 
   // Planets and Sun first so moons can resolve their parents.
@@ -421,11 +435,13 @@ export function buildScene(
           : VISIBLE_SCALE.bodyRadiusKm(def.radiusKm);
 
     const geo = new THREE.SphereGeometry(r, 48, 32);
-    const surfaceTex = makeSurfaceTexture(def);
+    // The sun's surface is a shader (plan 044 A1), not a texture — skip the
+    // canvas bake entirely (saves a 512×256 texture + upload).
+    const surfaceTex = isStar ? null : makeSurfaceTexture(def);
     const mat = isStar
-      ? new THREE.MeshBasicMaterial({ map: surfaceTex })
+      ? sunShader.material
       : new THREE.MeshStandardMaterial({ map: surfaceTex, roughness: 0.92, metalness: 0 });
-    disposables.push(geo, mat, surfaceTex);
+    disposables.push(geo, mat, ...(surfaceTex ? [surfaceTex] : []));
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = def.name;
     // Stable id for raycast picking (main.ts tooltip); name is display-only.
@@ -680,6 +696,7 @@ export function buildScene(
     constellationFigures,
     post,
     sunGlow: sunGlow.sprite,
+    sunShader,
     userData: {},
     dispose,
   };

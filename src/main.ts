@@ -3413,6 +3413,11 @@ function frame(): void {
   // sim speed / direction.
   updateBodyHighlight(built, selectedBodyId, nowMs / 1000);
 
+  // Sun surface shader (plan 044 A1): advance the granulation animation with
+  // wall-clock time (smooth, independent of sim speed/direction). One uniform
+  // write per frame.
+  built.sunShader.setTime(nowMs / 1000);
+
   // Shadow culling: the Sun is a point light, so its shadow is a 6-face
   // cube map (2048² each) re-rendered every frame — the heaviest single GPU
   // cost. The shadow cube's far plane is 140 units (SUN_SHADOWS.far), so once

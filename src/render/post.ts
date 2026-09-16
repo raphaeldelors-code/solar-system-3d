@@ -150,7 +150,10 @@ export function buildSunGlow(radius: number): SunGlow {
     depthWrite: false,
     depthTest: true,
     transparent: true,
-    opacity: 1.0,
+    // The sun shader (buildSunShaderMaterial) now carries the bright core +
+    // granulation; the sprite is the wide halo only. 0.6 keeps the halo from
+    // washing the sky (the shader's HDR core + bloom do the "bright" work).
+    opacity: 0.6,
   });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(radius * 4.5, radius * 4.5, 1);
@@ -165,5 +168,131 @@ export function buildSunGlow(radius: number): SunGlow {
         cachedGlowTex = null;
       }
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Sun surface shader (plan 044 A1)
+// ---------------------------------------------------------------------------
+//
+// Replaces the flat MeshBasicMaterial sun disc with a real photosphere:
+//   * animated FBM granulation (the churning surface),
+//   * limb darkening (the disc is dimmer + redder at the edge, like the real
+//     Sun — the single biggest "it's a flat disc" tell),
+//   * an HDR-hot core (values > 1.0) that feeds the existing UnrealBloomPass,
+//     so the limb glows through the post stack instead of a hard edge.
+//
+// The material is `toneMapped: false` (a ShaderMaterial is not auto-tonemapped
+// by the renderer) and `fog: false`. It is NOT transparent — it is an opaque
+// disc, so it occludes correctly and the additive corona sprite (renderOrder 2)
+// paints over it. `uTime` is driven per-frame from main.ts (wall-clock seconds)
+// so the granulation is smooth and independent of sim speed/direction.
+
+const SUN_VERT = /* glsl */ `
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vViewDir = normalize(-mv.xyz);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const SUN_FRAG = /* glsl */ `
+  precision highp float;
+  uniform float uTime;
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+
+  // --- value noise + FBM (cheap, no texture fetch) -------------------------
+  float hash(vec3 p) {
+    p = fract(p * 0.3183099 + 0.1);
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+  float vnoise(vec3 x) {
+    vec3 i = floor(x);
+    vec3 f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i + vec3(0.0, 0.0, 0.0)), hash(i + vec3(1.0, 0.0, 0.0)), f.x),
+          mix(hash(i + vec3(0.0, 1.0, 0.0)), hash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0.0, 0.0, 1.0)), hash(i + vec3(1.0, 0.0, 1.0)), f.x),
+          mix(hash(i + vec3(0.0, 1.0, 1.0)), hash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y),
+      f.z);
+  }
+  float fbm(vec3 p) {
+    float a = 0.5;
+    float s = 0.0;
+    for (int i = 0; i < 5; i++) {
+      s += a * vnoise(p);
+      p *= 2.02;
+      a *= 0.5;
+    }
+    return s;
+  }
+
+  void main() {
+    vec3 n = normalize(vNormal);
+    vec3 v = normalize(vViewDir);
+    float mu = clamp(dot(n, v), 0.0, 1.0); // 1 at disc centre, 0 at limb
+
+    // Churning granulation: 3D noise over the surface, drifting slowly in
+    // time. Two octaves of the FBM give the mottled cell structure.
+    float g = fbm(n * 4.0 + vec3(0.0, uTime * 0.03, uTime * 0.02));
+    g += 0.5 * fbm(n * 9.0 - vec3(uTime * 0.05, 0.0, uTime * 0.04));
+    g = clamp(g, 0.0, 1.0);
+
+    // Photosphere colour ramp: deep orange in the granulation troughs to a
+    // near-white hot peak. Values exceed 1.0 so the core blooms.
+    vec3 deep = vec3(1.0, 0.42, 0.06);
+    vec3 mid  = vec3(1.0, 0.72, 0.28);
+    vec3 hot  = vec3(1.0, 0.96, 0.82) * 1.7;
+    vec3 col = mix(deep, mid, smoothstep(0.35, 0.65, g));
+    col = mix(col, hot, smoothstep(0.65, 0.95, g));
+
+    // Limb darkening: a real star is dimmest at the edge. mu^0.6 gives a
+    // gentle falloff; the limb also shifts cooler (toward orange).
+    float ld = pow(mu, 0.6);
+    col *= mix(0.55, 1.0, ld);
+    col = mix(col * vec3(1.0, 0.82, 0.6), col, ld);
+
+    // Hot limb rim: a thin bright ring right at the edge (the chromosphere)
+    // that blooms into the halo.
+    float rim = smoothstep(0.0, 0.12, 1.0 - mu) * (1.0 - smoothstep(0.12, 0.3, 1.0 - mu));
+    col += vec3(1.0, 0.55, 0.2) * rim * 1.3;
+
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+export interface SunShader {
+  /** The opaque sun-surface material — assign it to the sun mesh. */
+  material: THREE.ShaderMaterial;
+  /** Advance the granulation animation (wall-clock seconds). */
+  setTime: (tSeconds: number) => void;
+  dispose: () => void;
+}
+
+/**
+ * Build the animated sun-surface material. Assign the returned `material` to
+ * the sun mesh (replacing the MeshBasicMaterial) and call `setTime` once per
+ * frame. The bright core + limb feed the existing bloom pass.
+ */
+export function buildSunShaderMaterial(): SunShader {
+  const material = new THREE.ShaderMaterial({
+    vertexShader: SUN_VERT,
+    fragmentShader: SUN_FRAG,
+    uniforms: { uTime: { value: 0 } },
+    fog: false,
+    toneMapped: false,
+  });
+  return {
+    material,
+    setTime: (tSeconds: number) => {
+      material.uniforms.uTime.value = tSeconds;
+    },
+    dispose: () => material.dispose(),
   };
 }
