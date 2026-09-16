@@ -6,6 +6,7 @@
  *   <id>_normal.jpg     normal map (linear)
  *   <id>_roughness.jpg  roughness map (linear) — Earth only
  *   <id>_clouds.png     animated cloud shell (sRGB alpha) — Earth only
+ *   <id>_night.png      night-lights map (sRGB) — Earth only (plan 044 A2)
  *
  * At startup the app probes each channel with a HEAD request; any that
  * exist are loaded and swap over the matching material's procedural
@@ -28,9 +29,10 @@ const CHANNEL_SUFFIX: Record<string, string> = {
   normal: '_normal.jpg',
   roughness: '_roughness.jpg',
   clouds: '_clouds.png',
+  night: '_night.png',
 };
 
-export type TextureChannel = 'day' | 'normal' | 'roughness' | 'clouds';
+export type TextureChannel = 'day' | 'normal' | 'roughness' | 'clouds' | 'night';
 
 /** Deterministic URL for a body's texture channel. */
 export function textureUrlFor(id: string, channel: TextureChannel = 'day'): string {
@@ -105,6 +107,7 @@ export interface BodyTextures {
   normal: THREE.Texture | null;
   roughness: THREE.Texture | null;
   clouds: THREE.Texture | null;
+  night: THREE.Texture | null;
 }
 
 /**
@@ -120,12 +123,13 @@ export async function loadBodyTextures(
 ): Promise<BodyTextures | null> {
   const day = await loadChannel(id, 'day', loader, fetchImpl);
   if (!day) return null;
-  const [normal, roughness, clouds] = await Promise.all([
+  const [normal, roughness, clouds, night] = await Promise.all([
     loadChannel(id, 'normal', loader, fetchImpl),
     loadChannel(id, 'roughness', loader, fetchImpl),
     loadChannel(id, 'clouds', loader, fetchImpl),
+    loadChannel(id, 'night', loader, fetchImpl),
   ]);
-  return { day, normal, roughness, clouds };
+  return { day, normal, roughness, clouds, night };
 }
 
 /**
@@ -188,6 +192,12 @@ export async function attachRealTextures(
         mat.roughnessMap = texs.roughness;
         mat.roughness = 1.0; // let the map drive per-pixel roughness
       }
+      // Night-lights terminator (Earth only, plan 044 A2): inject a day/night
+      // blend + city-lights emissive into the standard material. Needs the day
+      // map (texs.day, set above) so the vMapUv varying exists for the night UV.
+      if (texs.night) {
+        applyNightLights(mat, texs.night);
+      }
     }
     mat.needsUpdate = true;
     applied += 1;
@@ -198,6 +208,71 @@ export async function attachRealTextures(
     }
   }
   return applied;
+}
+
+/**
+ * Inject a day/night terminator + night-lights emissive into a body's
+ * MeshStandardMaterial (plan 044 A2).
+ *
+ * The sun is a PointLight at the scene origin, so for any surface point the
+ * sun direction is `normalize(-worldPos)` and the world normal is
+ * `mat3(modelMatrix) * objectNormal`. Both are derived from `modelMatrix`,
+ * which three.js updates every frame as the body orbits and spins — so the
+ * terminator costs ZERO per-frame CPU work (no uniform updates, no JS).
+ *
+ * Night-lights are gated by the surface's facing to the sun via a soft
+ * terminator (`smoothstep`), so city lights glow on the dark side and fade
+ * out across the terminator into the lit side. The night map shares the day
+ * map's equirect UV (`vMapUv`), so it is always registered to the same
+ * longitude/latitude as the surface beneath it.
+ *
+ * @param mat   The body's MeshStandardMaterial. Must already have a day map
+ *              (`mat.map`) so the `vMapUv` varying exists for the night UV.
+ * @param night The night-lights texture (sRGB, same equirect UV as the day map).
+ */
+export function applyNightLights(mat: THREE.MeshStandardMaterial, night: THREE.Texture): void {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uNightMap = { value: night };
+    shader.uniforms.uNightIntensity = { value: 1.8 };
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+varying vec3 vNLWorldPos;
+varying vec3 vNLWorldNormal;`,
+      )
+      .replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+vNLWorldPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
+vNLWorldNormal = normalize( mat3( modelMatrix ) * objectNormal );`,
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+varying vec3 vNLWorldPos;
+varying vec3 vNLWorldNormal;
+uniform sampler2D uNightMap;
+uniform float uNightIntensity;`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+{
+  vec3 nlNormal = normalize( vNLWorldNormal );
+  vec3 nlSunDir = normalize( -vNLWorldPos );
+  float nlDay = smoothstep( -0.15, 0.15, dot( nlNormal, nlSunDir ) );
+  vec4 nlNight = texture2D( uNightMap, vMapUv );
+  totalEmissiveRadiance += nlNight.rgb * ( 1.0 - nlDay ) * uNightIntensity;
+}`,
+      );
+  };
+  // Distinct program so this material's injected shader never collides with
+  // the plain standard materials of the other bodies.
+  mat.customProgramCacheKey = () => 'earth-night-lights';
 }
 
 /**

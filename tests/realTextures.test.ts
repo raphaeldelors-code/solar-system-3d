@@ -14,6 +14,7 @@ import {
   loadRealTexture,
   attachRealTextures,
   createCloudShell,
+  applyNightLights,
   resetProbeCache,
   resetRealTextureCache,
 } from '../src/render/realTextures';
@@ -79,6 +80,7 @@ describe('textureUrlFor', () => {
     expect(textureUrlFor('earth', 'normal')).toBe('textures/planets/earth_normal.jpg');
     expect(textureUrlFor('earth', 'roughness')).toBe('textures/planets/earth_roughness.jpg');
     expect(textureUrlFor('earth', 'clouds')).toBe('textures/planets/earth_clouds.png');
+    expect(textureUrlFor('earth', 'night')).toBe('textures/planets/earth_night.png');
     expect(textureUrlFor('sun')).toBe('textures/planets/sun_day.jpg');
   });
 });
@@ -179,6 +181,57 @@ describe('loadBodyTextures', () => {
     // All four channels loaded.
     expect(calls.length).toBe(4);
   });
+
+  it('loads the night channel when present (plan 044 A2)', async () => {
+    const existing = new Set([
+      'textures/planets/earth_day.jpg',
+      'textures/planets/earth_night.png',
+    ]);
+    const loader = fakeLoader(existing, []);
+    const f = okFetch(existing);
+    const t = await loadBodyTextures('earth', loader, f);
+    expect(t).not.toBeNull();
+    expect(t!.night).not.toBeNull();
+    // Night is a colour channel → sRGB (like the day map), not linear.
+    expect(t!.night!.colorSpace).toBe(THREE.SRGBColorSpace);
+  });
+});
+
+describe('applyNightLights', () => {
+  it('injects a day/night terminator + night-lights emissive into the shader', () => {
+    const mat = new THREE.MeshStandardMaterial();
+    const night = new THREE.Texture();
+    applyNightLights(mat, night);
+
+    // A distinct program cache key so this material never collides with the
+    // plain standard materials of the other bodies.
+    expect(mat.customProgramCacheKey()).toBe('earth-night-lights');
+    expect(typeof mat.onBeforeCompile).toBe('function');
+
+    // Drive the callback with a fake shader and assert the injection landed.
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader:
+        '#include <common>\n#include <beginnormal_vertex>\n#include <begin_vertex>\n#include <worldpos_vertex>',
+      fragmentShader: '#include <common>\n#include <emissivemap_fragment>',
+    };
+    mat.onBeforeCompile!(shader as never, {} as never);
+
+    // Uniforms registered.
+    expect(shader.uniforms.uNightMap.value).toBe(night);
+    expect(shader.uniforms.uNightIntensity.value).toBeGreaterThan(0);
+
+    // Vertex: world pos + world normal varyings computed from modelMatrix.
+    expect(shader.vertexShader).toContain('varying vec3 vNLWorldPos;');
+    expect(shader.vertexShader).toContain('varying vec3 vNLWorldNormal;');
+    expect(shader.vertexShader).toContain('mat3( modelMatrix ) * objectNormal');
+
+    // Fragment: night-lights gated by the sun-facing terminator.
+    expect(shader.fragmentShader).toContain('uniform sampler2D uNightMap;');
+    expect(shader.fragmentShader).toContain('normalize( -vNLWorldPos )');
+    expect(shader.fragmentShader).toContain('smoothstep( -0.15, 0.15, dot( nlNormal, nlSunDir ) )');
+    expect(shader.fragmentShader).toContain('totalEmissiveRadiance += nlNight.rgb');
+  });
 });
 
 describe('createCloudShell', () => {
@@ -232,6 +285,20 @@ describe('attachRealTextures', () => {
     expect(mat.normalMap).not.toBeNull();
     expect(mat.roughnessMap).not.toBeNull();
     expect(mat.roughness).toBe(1.0);
+  });
+
+  it('wires the night-lights terminator when a night map is present (plan 044 A2)', async () => {
+    const existing = new Set([
+      'textures/planets/earth_day.jpg',
+      'textures/planets/earth_night.png',
+    ]);
+    const f = okFetch(existing);
+    const loader = fakeLoader(existing, []);
+    const { entry, mat } = stubBody('earth');
+    await attachRealTextures([entry], loader, f);
+    // The night map is attached and the terminator shader is injected.
+    expect(mat.onBeforeCompile).not.toBeNull();
+    expect(mat.customProgramCacheKey()).toBe('earth-night-lights');
   });
 
   it('creates the Earth cloud shell once (idempotent on rebuild)', async () => {
