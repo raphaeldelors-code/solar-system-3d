@@ -63,7 +63,7 @@ scrub core is the moat; legal (Stellarium GPL art, ESA Milky Way) is the
 commercial blocker. Full findings in `.judge/{engineering,features,design}.md`.
 One feature per commit, gates green before each. Start at A1.
 
-- [ ] A1 feat(render): Sun shader — animated FBM photosphere + limb darkening + HDR corona (plan 044)
+- [x] A1 feat(render): Sun shader — animated FBM photosphere + limb darkening + HDR corona (plan 044) — `b10c432`
 - [ ] A2 feat(render): Earth night lights (Black Marble) + animated clouds (plan 044)
 - [ ] A3 feat(render): lens flare + subtle DOF post passes (plan 044)
 - [ ] A4 feat(render): real Saturn ring texture (Cassini map) (plan 044)
