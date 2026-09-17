@@ -233,7 +233,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] C1 Real type system + documented color palette — 18389b5 (:root tokens, fixed 5 undefined vars, killed green date, display face)
 - [x] C2 3-step first-run onboarding — 43cbfca (coach overlay after intro, once per browser)
 - [x] C3 Timeline discoverability + speed-slider tick labels — ca4ee39 (one-time nudge + 1 hr/s·1 d/s·1 mo/s ticks)
-- [ ] C4 Accessibility (contrast, reduced-motion, keyboard scrub)
+- [x] C4 Accessibility (contrast, reduced-motion, keyboard scrub) — 9eb2b2a (apod-copy contrast, instant flights/morph/pulse under reduced-motion, `,`/`.` time-scrub)
 - [ ] C5 Name + logo + icon (drop the horse)
 - [ ] D1 Asset licensing ledger (legal blocker)
 - [ ] D2 Split main.ts god-file
