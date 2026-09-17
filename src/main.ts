@@ -90,6 +90,7 @@ import { commandForKey, digitToPlanet, paletteEntries, COMMANDS } from './render
 import { bodyFacts } from './render/bodyFacts';
 import { sbdbFacts } from './sim/sbdb';
 import { smallBodyFacts } from './sim/smallBodies';
+import { fetchApod } from './sim/apod';
 import { parseKpJson, latestKp, gScale, gScaleLabel, type KpSample } from './sim/spaceWeather';
 import { sceneIsStatic } from './render/idle';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
@@ -2459,20 +2460,36 @@ screenshotBtn.addEventListener('click', async () => {
   // temporary canvas at pixel size and export that, so saved PNGs keep
   // their labels (the base-variant lettering, exactly as on screen).
   // Plan 044 A5: the planet/body name overlay is composited too.
+  // Plan 044 B8 (photo mode): ALWAYS composite through a temp canvas so the
+  // branded watermark (app name + sim date + share URL) can be drawn on top
+  // — saved PNGs are the shareability engine.
+  const out = document.createElement('canvas');
+  out.width = canvas.width;
+  out.height = canvas.height;
+  const octx = out.getContext('2d')!;
+  octx.drawImage(canvas, 0, 0);
   const overlays = [labelLayer, planetLabelLayer].filter(
     (l): l is NonNullable<typeof l> => !!l && labelsEl.checked,
   );
-  let out: HTMLCanvasElement = canvas;
-  if (overlays.length > 0) {
-    out = document.createElement('canvas');
-    out.width = canvas.width;
-    out.height = canvas.height;
-    const octx = out.getContext('2d')!;
-    octx.drawImage(canvas, 0, 0);
-    for (const l of overlays) {
-      octx.drawImage(l.canvas, 0, 0, canvas.width, canvas.height);
-    }
+  for (const l of overlays) {
+    octx.drawImage(l.canvas, 0, 0, canvas.width, canvas.height);
   }
+  // Watermark: two right-aligned lines in the bottom corner.
+  const fs = Math.max(14, Math.round(out.width / 90));
+  octx.font = `600 ${fs}px system-ui, -apple-system, sans-serif`;
+  octx.textAlign = 'right';
+  octx.textBaseline = 'bottom';
+  octx.shadowColor = 'rgba(0,0,0,0.85)';
+  octx.shadowBlur = fs / 2;
+  octx.fillStyle = 'rgba(235, 240, 250, 0.92)';
+  const dateLine = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  octx.fillText(`Solar System 3D · ${dateLine}`, out.width - fs, out.height - fs * 2.2);
+  // Short canonical domain (not the full param URL — that's what "Copy share
+  // link" is for). Keeps the export clean and brandable.
+  octx.font = `400 ${Math.round(fs * 0.82)}px system-ui, -apple-system, sans-serif`;
+  octx.fillStyle = 'rgba(235, 240, 250, 0.6)';
+  octx.fillText('raphaeldelors-code.github.io/solar-system-3d', out.width - fs, out.height - fs);
+  octx.shadowBlur = 0;
   const blob = await new Promise<Blob | null>((resolve) =>
     out.toBlob((b) => resolve(b), 'image/png'),
   );
@@ -2489,6 +2506,47 @@ screenshotBtn.addEventListener('click', async () => {
   setTimeout(() => {
     screenshotBtn.textContent = 'Save screenshot';
   }, 1500);
+});
+
+// --- APOD (plan 044 B8) ------------------------------------------------------
+// "Today in space" — daily return hook. Live fetch (CORS-open API), 12 h
+// localStorage cache, DEMO_KEY by default (override via ?nasa_key=...).
+const apodBtn = document.getElementById('apod') as HTMLButtonElement;
+const apodCard = document.getElementById('apod-card') as HTMLDivElement;
+const apodImg = document.getElementById('apod-img') as HTMLImageElement;
+const apodTitle = document.getElementById('apod-title') as HTMLDivElement;
+const apodBlurb = document.getElementById('apod-blurb') as HTMLDivElement;
+const apodDate = document.getElementById('apod-date') as HTMLSpanElement;
+const apodLink = document.getElementById('apod-link') as HTMLAnchorElement;
+const apodCopy = document.getElementById('apod-copy') as HTMLDivElement;
+const nasaKey = new URLSearchParams(window.location.search).get('nasa_key') ?? undefined;
+
+apodBtn.addEventListener('click', async () => {
+  apodBtn.textContent = 'Loading…';
+  apodBtn.disabled = true;
+  try {
+    const item = await fetchApod(undefined, { key: nasaKey });
+    apodImg.src = item.url;
+    apodImg.alt = item.title;
+    apodTitle.textContent = item.title;
+    apodBlurb.textContent = item.blurb;
+    apodDate.textContent = item.date;
+    apodLink.href = item.pageUrl;
+    apodCopy.textContent = item.copyright ? `© ${item.copyright}` : '';
+    apodCard.hidden = false;
+    apodBtn.textContent = 'Today in space (APOD)';
+  } catch (err) {
+    apodCard.hidden = true;
+    apodBtn.textContent = 'APOD unavailable';
+    console.warn('APOD fetch failed:', err);
+  } finally {
+    apodBtn.disabled = false;
+    setTimeout(() => {
+      if (apodBtn.textContent === 'APOD unavailable') {
+        apodBtn.textContent = 'Today in space (APOD)';
+      }
+    }, 2500);
+  }
 });
 
 // --- Init ------------------------------------------------------------------

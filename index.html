@@ -1050,18 +1050,74 @@
       }
       /* Plan 041: action buttons (Copy share link / Save screenshot) are
          secondary — a ghost outline so they recede behind the nav + time
-         controls that drive the scene. */
+         controls that drive the scene. Plan 044 B8: APOD joins the group. */
       #panel #share,
-      #panel #screenshot {
+      #panel #screenshot,
+      #panel #apod {
         background: transparent;
         border-color: #2b3a55;
         color: #9fb0c9;
       }
       #panel #share:hover,
-      #panel #screenshot:hover {
+      #panel #screenshot:hover,
+      #panel #apod:hover {
         background: rgba(110, 168, 255, 0.08);
         border-color: #6ea8ff;
         color: #dbe7fb;
+      }
+      /* Plan 044 B8: APOD daily card — image on top, blurb below, inside the
+         panel width. Collapsed by default (hidden). */
+      #panel .apod-card {
+        margin: 6px 0 2px;
+        border: 1px solid #2b3a55;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #0d1526;
+      }
+      #panel .apod-card img {
+        display: block;
+        width: 100%;
+        max-height: 180px;
+        object-fit: cover;
+      }
+      #panel .apod-card .apod-body {
+        padding: 8px 10px 10px;
+      }
+      #panel .apod-card .apod-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #e8eefb;
+        line-height: 1.3;
+      }
+      #panel .apod-card .apod-blurb {
+        margin-top: 4px;
+        font-size: 11.5px;
+        color: #9fb0c9;
+        line-height: 1.45;
+      }
+      #panel .apod-card .apod-meta {
+        margin-top: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+      }
+      #panel .apod-card .apod-meta span {
+        font-size: 10.5px;
+        color: #6d7f9c;
+      }
+      #panel .apod-card .apod-meta a {
+        font-size: 11px;
+        color: #6ea8ff;
+        text-decoration: none;
+      }
+      #panel .apod-card .apod-meta a:hover {
+        text-decoration: underline;
+      }
+      #panel .apod-card .apod-copy {
+        margin-top: 5px;
+        font-size: 10px;
+        color: #5a6b87;
       }
       #panel input[type='range'] {
         flex: 1;
@@ -1769,6 +1825,19 @@
           <div class="section-head">Share</div>
           <div class="row"><button id="share">Copy share link</button></div>
           <div class="row"><button id="screenshot">Save screenshot</button></div>
+          <div class="row"><button id="apod">Today in space (APOD)</button></div>
+          <div id="apod-card" class="apod-card" hidden>
+            <img id="apod-img" alt="" loading="lazy" />
+            <div class="apod-body">
+              <div class="apod-title" id="apod-title">—</div>
+              <div class="apod-blurb" id="apod-blurb">—</div>
+              <div class="apod-meta">
+                <span id="apod-date">—</span>
+                <a id="apod-link" href="#" target="_blank" rel="noopener">Full story ↗</a>
+              </div>
+              <div class="apod-copy" id="apod-copy"></div>
+            </div>
+          </div>
           <div id="info" class="info" hidden>
             <div class="info-title" id="info-name">—</div>
             <div class="info-row">
