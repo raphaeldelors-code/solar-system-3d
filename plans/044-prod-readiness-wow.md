@@ -222,8 +222,8 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] A4 Real Saturn ring texture
 - [x] A5 Planet label redesign (leader lines, de-collide)
 - [x] A6 Cinematic camera easing + intro ends on time-scrub
-- [ ] B1 Live ISS + satellite tracking (SGP4 + CelesTrak)
-- [ ] B2 JPL Horizons live mode
+- [x] B1 Live ISS + satellite tracking (SGP4 + CelesTrak) — e9790c4, deployed 16318b2
+- [x] B2 JPL Horizons live mode — 8b007be (baked DE441 snapshot + Meeus diff in Moon info card)
 - [ ] B3 Real starfield from Gaia (1M-star extract)
 - [ ] B4 SBDB body-facts panel
 - [ ] B5 Space weather + aurora shader (NOAA Kp)
