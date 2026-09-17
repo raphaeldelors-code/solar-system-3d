@@ -41,6 +41,13 @@ import {
 } from './render/scene';
 import { isSunOccluded } from './render/post';
 import {
+  createPlanetLabelLayer,
+  updatePlanetScreenLabels,
+  projectWorldToScreen,
+  type PlanetLabelInput,
+  type PlanetLabelLayer,
+} from './render/planetScreenLabels';
+import {
   createConstellationLabelLayer,
   updateConstellationScreenLabels,
   CONSTELLATION_LABEL_MIN_SCREEN_OPACITY,
@@ -177,6 +184,12 @@ const HIGHLIGHT_FWD = new THREE.Vector3();
 // depth-pop or slice through a figure, and its opacity is recomputed at
 // display rate (no 5 Hz stepping).
 let labelLayer: ScreenLabelLayer | null = null;
+// Plan 044 A5: screen-space planet/body name labels (2D overlay). The 3D
+// sprites moved to a 2D canvas overlay (render/planetScreenLabels.ts): a
+// screen-space label can never sit on the Sun's disc, and it gets leader
+// lines + distance fade + de-collision (the max-8 rule the constellation
+// names already use).
+let planetLabelLayer: PlanetLabelLayer | null = null;
 // The plan-006 solver's per-figure anchor directions — unchanged math; the
 // overlay only renders them in screen space.
 const LABEL_ANCHOR_DIRS = resolveConstellationLabels(CONSTELLATIONS).map((p) => p.dir);
@@ -811,13 +824,17 @@ function applyToggles(): void {
   markSceneDirty(); // F6: orbit/label/belt/figure visibility changed
   for (const entry of built.bodies.values()) {
     if (entry.orbit) (entry.orbit.material as THREE.Material).visible = orbitsEl.checked;
-    entry.label.visible = labelsEl.checked;
+    // Plan 044 A5: the 3D sprite labels stay hidden — the 2D overlay
+    // (planetLabelLayer, below) draws the names instead. The Labels toggle
+    // shows/hides that overlay, not these sprites.
   }
   // Constellation NAME labels follow the Labels toggle (D3). Plan 016 P1:
   // they live on the 2D screen-space overlay, so the toggle just shows or
   // hides the layer. The sky lines and star dots are always present — they
   // are the sky itself.
   labelLayer?.setVisible(labelsEl.checked);
+  // Plan 044 A5: the planet/body name overlay shares the Labels toggle.
+  planetLabelLayer?.setVisible(labelsEl.checked);
   for (const field of built.belts) {
     field.mesh.visible = beltsEl.checked;
   }
@@ -2186,15 +2203,20 @@ screenshotBtn.addEventListener('click', async () => {
   // canvas.toBlob() cannot see. Composite the WebGL frame + overlay onto a
   // temporary canvas at pixel size and export that, so saved PNGs keep
   // their labels (the base-variant lettering, exactly as on screen).
-  const src = labelLayer && labelsEl.checked ? labelLayer.canvas : null;
+  // Plan 044 A5: the planet/body name overlay is composited too.
+  const overlays = [labelLayer, planetLabelLayer].filter(
+    (l): l is NonNullable<typeof l> => !!l && labelsEl.checked,
+  );
   let out: HTMLCanvasElement = canvas;
-  if (src) {
+  if (overlays.length > 0) {
     out = document.createElement('canvas');
     out.width = canvas.width;
     out.height = canvas.height;
     const octx = out.getContext('2d')!;
     octx.drawImage(canvas, 0, 0);
-    octx.drawImage(src, 0, 0, canvas.width, canvas.height);
+    for (const l of overlays) {
+      octx.drawImage(l.canvas, 0, 0, canvas.width, canvas.height);
+    }
   }
   const blob = await new Promise<Blob | null>((resolve) =>
     out.toBlob((b) => resolve(b), 'image/png'),
@@ -2227,6 +2249,11 @@ built.sunGlow.visible = postOn;
 // scene rebuilds (scale morphs).
 labelLayer = createConstellationLabelLayer(canvas);
 labelLayer.setVisible(labelsEl.checked);
+// Plan 044 A5: planet/body name labels on their own 2D overlay (z-index 6,
+// above the constellation overlay at 5). The 3D sprite labels are hidden —
+// the 2D overlay replaces them.
+planetLabelLayer = createPlanetLabelLayer(canvas);
+planetLabelLayer.setVisible(labelsEl.checked);
 wireAnchorButtons();
 // Reflect a URL-restored scale in the toggle (label + active state).
 syncScaleUI();
@@ -3210,6 +3237,54 @@ function updateConstellationScreenLabelFrame(): void {
   );
 }
 
+// --- Plan 044 A5: screen-space planet/body name labels ---------------------
+// The 3D sprite labels (now hidden) are replaced by a 2D overlay: each body's
+// world position is projected to screen, the name is drawn with a thin leader
+// line back to the disc, faded by camera distance, and de-collided (max 8,
+// picked body always shown). Reuses the same architecture as the constellation
+// overlay (render/planetScreenLabels.ts).
+const _PL_W = new THREE.Vector3();
+const _PL_EDGE = new THREE.Vector3();
+function updatePlanetScreenLabelFrame(): void {
+  if (!planetLabelLayer || !labelsEl.checked) return;
+  const camera = built.camera;
+  const camPos = camera.position;
+  const wCss = window.innerWidth;
+  const hCss = window.innerHeight;
+  const inputs: PlanetLabelInput[] = [];
+  for (const entry of built.bodies.values()) {
+    if (!entry.mesh.visible) continue;
+    const wp = entry.worldPos;
+    const dist = camPos.distanceTo(wp);
+    // On-screen disc radius (CSS px): project the body center and a point one
+    // scene-radius toward the camera; the pixel gap is the disc's screen size.
+    // (Compute the direction into _PL_EDGE first — _PL_W must stay the center.)
+    _PL_EDGE.copy(wp).sub(camPos).normalize();
+    _PL_W.copy(wp);
+    const c = projectWorldToScreen(_PL_W, camera, wCss, hCss);
+    if (!c.ok) continue;
+    _PL_EDGE.copy(wp).addScaledVector(_PL_EDGE, -entry.sceneRadius);
+    const e = projectWorldToScreen(_PL_EDGE, camera, wCss, hCss);
+    const discR = e.ok ? Math.hypot(e.x - c.x, e.y - c.y) : 0;
+    // Tier: 0 = picked (always shown), 1 = sun + planets, 2 = moons/dwarfs.
+    const tier: 0 | 1 | 2 =
+      entry.def.id === selectedBodyId
+        ? 0
+        : entry.def.kind === 'star' || entry.def.kind === 'planet'
+          ? 1
+          : 2;
+    inputs.push({
+      id: entry.def.id,
+      name: entry.def.name,
+      world: wp,
+      dist,
+      discRadiusPx: discR,
+      tier,
+    });
+  }
+  updatePlanetScreenLabels(planetLabelLayer, camera, inputs, wCss, hCss);
+}
+
 function frame(): void {
   requestAnimationFrame(frame);
 
@@ -3519,6 +3594,9 @@ function frame(): void {
   // Screen-space constellation name labels (plan 016 P1): the 2D overlay
   // pass after the 3D render, so the names sit crisp above the frame.
   updateConstellationScreenLabelFrame();
+  // Plan 044 A5: screen-space planet/body name labels (leader lines + fade +
+  // de-collision) on their own 2D overlay.
+  updatePlanetScreenLabelFrame();
   fmtDate();
   // Plan 026 F1: while the calendar popover is open, keep the selected-day
   // highlight tracking the running sim clock — but ONLY when the user is

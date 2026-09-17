@@ -542,13 +542,18 @@ export function buildScene(
       // disposed in dispose() below (geo+mat), like the cloud shell.
     }
 
-    // Label sprite above the body.
+    // Label sprite above the body. Plan 044 A5: the 3D sprite is now HIDDEN —
+    // planet/body names moved to a 2D screen-space overlay (main.ts +
+    // render/planetScreenLabels.ts) with leader lines + distance fade +
+    // de-collision. The sprite is kept (and still sized in applyScaleMorph)
+    // so the scene graph is unchanged, but it never renders.
     const labelTex = makeLabelTexture(def.name);
     const labelMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false });
     const label = new THREE.Sprite(labelMat);
     const ls = isStar ? 3.4 : Math.max(1.3, r * 2.4);
     label.scale.set(ls, ls * 0.25, 1);
     label.position.y = r + ls * 0.35;
+    label.visible = false; // A5: the 2D overlay draws the name instead.
     pivot.add(label);
     disposables.push(labelTex, labelMat);
 
