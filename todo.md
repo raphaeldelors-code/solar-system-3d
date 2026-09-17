@@ -65,7 +65,7 @@ One feature per commit, gates green before each. Start at A1.
 
 - [x] A1 feat(render): Sun shader — animated FBM photosphere + limb darkening + HDR corona (plan 044) — `b10c432`
 - [x] A2 feat(render): Earth night lights (Black Marble) + animated clouds (plan 044) — `1e0e4eb`
-- [ ] A3 feat(render): lens flare + subtle DOF post passes (plan 044)
+- [x] A3 feat(render): lens flare + subtle DOF post passes (plan 044) — `42d2fd8`
 - [ ] A4 feat(render): real Saturn ring texture (Cassini map) (plan 044)
 - [ ] A5 fix(ui): planet label redesign — leader lines, distance fade, de-collide (plan 044)
 - [ ] A6 feat(web): cinematic camera easing + intro ends on the time-scrub (plan 044)
