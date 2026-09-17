@@ -2679,6 +2679,30 @@ apodBtn.addEventListener('click', async () => {
   }
 });
 
+// --- Plan 044 D1: About / attribution dialog --------------------------------
+const aboutDialog = document.getElementById('about') as HTMLDivElement;
+const aboutBtn = document.getElementById('about-btn') as HTMLButtonElement;
+const aboutClose = document.getElementById('about-close') as HTMLButtonElement;
+
+function openAbout(): void {
+  aboutDialog.hidden = false;
+  aboutClose.focus();
+}
+function closeAbout(): void {
+  aboutDialog.hidden = true;
+  aboutBtn.focus();
+}
+aboutBtn.addEventListener('click', openAbout);
+aboutClose.addEventListener('click', closeAbout);
+// Click on the dim backdrop (not the card) closes it.
+aboutDialog.addEventListener('click', (e) => {
+  if (e.target === aboutDialog) closeAbout();
+});
+// Esc closes the About dialog (only when it is the topmost overlay).
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !aboutDialog.hidden) closeAbout();
+});
+
 // --- Init ------------------------------------------------------------------
 
 rebuildScene(scale);

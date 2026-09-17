@@ -1714,6 +1714,113 @@
         }
       }
 
+      /* ===== Plan 044 D1: About / attribution dialog ===== */
+      #about {
+        position: fixed;
+        inset: 0;
+        z-index: 48;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(2, 4, 10, 0.6);
+        backdrop-filter: blur(4px);
+      }
+      #about[hidden] {
+        display: none;
+      }
+      #about-card {
+        width: min(520px, calc(100vw - 32px));
+        max-height: min(76vh, 640px);
+        overflow-y: auto;
+        background: var(--surface);
+        border: 1px solid var(--line-strong);
+        border-radius: 14px;
+        padding: 20px 22px 18px;
+        box-shadow:
+          0 8px 40px rgba(0, 0, 0, 0.5),
+          0 1px 4px rgba(0, 0, 0, 0.3);
+        font: 13px/1.55 var(--font-body);
+        color: var(--text);
+      }
+      #about-title {
+        font: 700 18px/1.2 var(--font-display);
+        letter-spacing: 0.02em;
+        margin-bottom: 2px;
+      }
+      #about-tag {
+        color: var(--text-dim);
+        font-size: 12px;
+        margin-bottom: 14px;
+      }
+      #about-card h4 {
+        font: 600 11px/1 var(--font-body);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin: 14px 0 6px;
+      }
+      #about-card p {
+        margin: 0 0 8px;
+        color: var(--text);
+      }
+      #about-card ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      #about-card li {
+        margin-bottom: 4px;
+        color: var(--text);
+      }
+      #about-card a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      #about-card a:hover {
+        text-decoration: underline;
+      }
+      #about-close {
+        margin-top: 16px;
+        width: 100%;
+        font: 600 12px/1 var(--font-body);
+        letter-spacing: 0.03em;
+        padding: 9px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+        background: var(--accent);
+        border: 1px solid var(--accent);
+        color: #04101f;
+      }
+      #about-close:hover {
+        background: var(--accent-soft);
+        border-color: var(--accent-soft);
+      }
+      #about-close:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      #about-btn {
+        font: 12px/1 var(--font-body);
+        letter-spacing: 0.03em;
+        padding: 8px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+        background: transparent;
+        border: 1px solid var(--line-strong);
+        color: var(--text-dim);
+        transition:
+          background 140ms ease,
+          border-color 140ms ease;
+      }
+      #about-btn:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+      #about-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
       /* ===== Plan 035 F5: command palette =====
          Centered modal, below the intro (z 50). Hidden via [hidden]; JS
          focuses the input on open. Click-outside closes (JS pointerdown). */
@@ -1854,6 +1961,52 @@
           <button id="onboard-skip" type="button">Skip tour</button>
           <button id="onboard-next" type="button" class="primary">Next →</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Plan 044 D1: About / attribution dialog. Opened from the panel's
+         "About & credits" button; Esc or the button closes it. -->
+    <div id="about" hidden role="dialog" aria-modal="true" aria-labelledby="about-title">
+      <div id="about-card">
+        <div id="about-title">Orrery</div>
+        <div id="about-tag">travel through 10,000 years of the solar system</div>
+
+        <h4>License</h4>
+        <p>
+          Orrery is free and open-source software, released under the
+          <strong>GNU GPL v3</strong>. You may use, study, modify and redistribute it — including
+          selling copies — under the GPL terms. The full license is in the
+          <a
+            href="https://github.com/raphaeldelors-code/solar-system-3d/blob/main/LICENSE"
+            target="_blank"
+            rel="noopener"
+            >LICENSE</a
+          >
+          in the repository.
+        </p>
+
+        <h4>Credits &amp; data sources</h4>
+        <ul>
+          <li>
+            Constellation figures — the Stellarium project (western sky culture), GPL-2.0-or-later.
+            <a href="https://github.com/Stellarium/stellarium" target="_blank" rel="noopener"
+              >github.com/Stellarium/stellarium</a
+            >
+          </li>
+          <li>
+            Planet surface maps — NASA / JPL (public domain), via Solar System Scope and the
+            three.js examples.
+          </li>
+          <li>Star positions — Yale Bright Star Catalogue 5th ed. (public domain).</li>
+          <li>Orbital elements &amp; moon ephemeris — NASA/JPL Horizons (public domain).</li>
+          <li>Exoplanet systems — NASA Exoplanet Archive (public domain).</li>
+          <li>Satellite propagation (live ISS) — satellite.js (MIT), a port of Vallado's SGP4.</li>
+          <li>
+            Milky Way skybox, app icon and all code — original work by the Orrery authors (GPL-3.0).
+          </li>
+        </ul>
+
+        <button id="about-close" type="button">Close</button>
       </div>
     </div>
 
@@ -2117,6 +2270,7 @@
           <div class="row"><button id="share">Copy share link</button></div>
           <div class="row"><button id="screenshot">Save screenshot</button></div>
           <div class="row"><button id="apod">Today in space (APOD)</button></div>
+          <div class="row"><button id="about-btn" type="button">About &amp; credits</button></div>
           <div id="apod-card" class="apod-card" hidden>
             <img id="apod-img" alt="" loading="lazy" />
             <div class="apod-body">
