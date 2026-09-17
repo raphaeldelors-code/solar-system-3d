@@ -264,7 +264,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] D3 Browser E2E (Playwright) — 667f1ed (5 smoke tests: boot+render, URL round-trip, search pick, context-loss overlay, offline reload via SW; new e2e CI job)
 - [x] D4 Fix the service worker — 2b4af2f (versioned cache via build-time content hash, LRU cap, error handlers, themed offline.html fallback; 6th E2E test)
 - [x] D5 Bundle diet + CI size budget (cf568cf + 0759ca9)
-- [ ] D6 WebGL guard + low-end quality tier
+- [x] D6 WebGL guard + low-end quality tier — a1901ba (D6.1 pure module) + 81070de (D6.2 buildScene tier) + 218c558 (D6.3 boot select + fps watchdog + WebGL guard + __debug) + de6c294 (D6.4 E2E); deployed d5617cd
 - [ ] D7 Telemetry (privacy-first)
 - [ ] D8 CI hardening (PR gate, deploy smoke)
 - [ ] D9 i18n foundation
