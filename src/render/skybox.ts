@@ -25,6 +25,7 @@
  * run in Node and are unit-tested in `tests/skybox.test.ts`.
  */
 import * as THREE from 'three';
+import { STARFIELD, realStarAttributes, spikeIndices } from '../sim/starfield';
 
 /** Radius of the Milky-Way skybox shell (well inside the camera far plane 20000). */
 export const SKYBOX_RADIUS = 9000;
@@ -200,8 +201,11 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
   group.add(skyMesh);
   disposables.push(skyGeo, skyMat, skyTex);
 
-  // ------------------------------------------ (b) colored near-starfield
-  const { position, color, size } = makeStarAttributes(STAR_COUNT, STAR_SHELL_MIN, STAR_SHELL_MAX);
+  // ------------------------------------------ (b) REAL near-starfield (B3)
+  // The actual naked-eye sky (Yale Bright Star Catalogue, 8,999 stars, J2000)
+  // replaces the old procedural speckle. Positions are on the same parallax
+  // shell as before; colors are spectral-type, sizes are magnitude-driven.
+  const { position, color, size } = realStarAttributes(STARFIELD, STAR_SHELL_MIN, STAR_SHELL_MAX);
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute('position', new THREE.BufferAttribute(position, 3));
   starGeo.setAttribute('color', new THREE.BufferAttribute(color, 3));
@@ -244,6 +248,76 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
   stars.renderOrder = -9;
   group.add(stars);
   disposables.push(starGeo, starMat);
+
+  // ------------------------------------- (b2) diffraction spikes (brightest)
+  // The ~200 brightest stars get a 4-point diffraction spike (the telescope
+  // "glint" that makes a night sky read as real). A second Points layer holds
+  // only the spike stars; the fragment shader draws a soft cross instead of a
+  // disc. Additive, so it layers over the disc without darkening it.
+  const spikeIdx = spikeIndices(STARFIELD);
+  if (spikeIdx.length > 0) {
+    const sn = spikeIdx.length;
+    const sPos = new Float32Array(sn * 3);
+    const sCol = new Float32Array(sn * 3);
+    const sSize = new Float32Array(sn);
+    for (let k = 0; k < sn; k++) {
+      const i = spikeIdx[k];
+      sPos[k * 3] = position[i * 3];
+      sPos[k * 3 + 1] = position[i * 3 + 1];
+      sPos[k * 3 + 2] = position[i * 3 + 2];
+      sCol[k * 3] = color[i * 3];
+      sCol[k * 3 + 1] = color[i * 3 + 1];
+      sCol[k * 3 + 2] = color[i * 3 + 2];
+      // Spikes are a few px wider than the disc so the cross extends past it.
+      sSize[k] = size[i] * 4.5;
+    }
+    const spikeGeo = new THREE.BufferGeometry();
+    spikeGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+    spikeGeo.setAttribute('color', new THREE.BufferAttribute(sCol, 3));
+    spikeGeo.setAttribute('aSize', new THREE.BufferAttribute(sSize, 1));
+    const spikeMat = new THREE.ShaderMaterial({
+      uniforms: { uPixelRatio: { value: 1.0 } },
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      blending: THREE.AdditiveBlending,
+      vertexShader: /* glsl */ `
+        attribute float aSize;
+        varying vec3 vColor;
+        uniform float uPixelRatio;
+        void main() {
+          vColor = color;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = aSize * uPixelRatio;
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        varying vec3 vColor;
+        void main() {
+          // Distance from centre in point-space (0 at centre, 0.5 at edge).
+          vec2 p = gl_PointCoord - 0.5;
+          // 4-point cross: thin along the axes, fading with distance.
+          float ax = 1.0 - smoothstep(0.0, 0.5, abs(p.x));
+          float ay = 1.0 - smoothstep(0.0, 0.5, abs(p.y));
+          float cross = max(ax, ay);
+          // Thin the arms: only the narrow core of each axis contributes.
+          float armX = 1.0 - smoothstep(0.0, 0.06, abs(p.y));
+          float armY = 1.0 - smoothstep(0.0, 0.06, abs(p.x));
+          float alpha = cross * max(armX, armY) * 0.5;
+          if (alpha < 0.01) discard;
+          gl_FragColor = vec4(vColor, alpha);
+        }
+      `,
+    });
+    spikeMat.toneMapped = false;
+    const spikes = new THREE.Points(spikeGeo, spikeMat);
+    spikes.name = 'starfield-spikes';
+    spikes.renderOrder = -9;
+    group.add(spikes);
+    disposables.push(spikeGeo, spikeMat);
+  }
 
   // ---------------------------------------------- (c) zodiacal light
   // Large upward hemisphere in the ecliptic plane (scene XZ; north = +Y),
