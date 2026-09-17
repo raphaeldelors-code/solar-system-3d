@@ -1,11 +1,29 @@
-/* Service worker: offline support for the app shell.
+/* Service worker: offline support for the app shell (plan 044 D4).
  *
- * Strategy: precache the shell at install (index + manifest + icons), then
- * network-first with cache fallback for same-origin GETs. The app has no
- * mutable assets beyond the optional public/textures/*.jpg drops, which are
- * also cached on first fetch so revisits work offline. */
-const CACHE = 'solar-system-3d-v1';
-const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+ * Strategy:
+ *   - Precache the shell at install (index + offline page + manifest + icons).
+ *   - Network-first with cache fallback for same-origin GETs, so a fresh
+ *     deploy is picked up on the next navigation while offline still works.
+ *   - The cache name is VERSIONED per build (BUILD_VERSION is injected at
+ *     build time by the vite.config.ts closeBundle plugin). When a new SW
+ *     installs, `activate` deletes every cache that isn't the current
+ *     version, so stale shells from previous deploys are evicted and the
+ *     runtime cache can't grow unbounded across deploys.
+ *   - A count-based LRU cap trims the runtime cache within a single deploy's
+ *     lifetime (e.g. many optional texture drops).
+ *
+ * BUILD_VERSION is a build-time placeholder replaced with a short content
+ * hash of the emitted JS/CSS bundles (see vite.config.ts). In dev / an
+ * un-built copy it stays the literal string, which is fine — the cache is
+ * only used in production.
+ */
+const BUILD_VERSION = 'b8f7ef957e';
+const CACHE = 'orrery-' + BUILD_VERSION;
+// Max entries kept in the runtime cache before LRU eviction kicks in. The
+// shell itself is a handful of entries; this headroom is for optional
+// public/textures/*.jpg drops that get cached on first fetch.
+const MAX_ENTRIES = 100;
+const PRECACHE = ['./', 'offline.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -31,14 +49,61 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Navigations (top-level document requests) fall back to the cached shell,
+  // then to the dedicated offline page if even that is missing.
+  const isNavigation = request.mode === 'navigate';
+
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Cache successful responses (stale-while-revalidate-ish).
-        const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(request, copy));
+        // Cache successful responses (stale-while-revalidate-ish). Only cache
+        // same-origin responses we actually served.
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => {
+            cache.put(request, copy);
+            return trimCache(CACHE, MAX_ENTRIES);
+          });
+        }
         return response;
       })
-      .catch(() => caches.match(request).then((hit) => hit || caches.match('./'))),
+      .catch(() => {
+        // Offline (or network failed): serve from cache. Navigations fall back
+        // to the shell, then the offline page.
+        return caches
+          .match(request)
+          .then(
+            (hit) =>
+              hit ||
+              (isNavigation
+                ? caches.match('./').then((shell) => shell || caches.match('offline.html'))
+                : undefined),
+          );
+      }),
   );
+});
+
+/**
+ * Count-based LRU trim: CacheStorage returns keys in insertion order, so the
+ * oldest entries are first. Drop the oldest until we're at or under maxEntries.
+ */
+async function trimCache(cacheName, maxEntries) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length <= maxEntries) return;
+  const toDelete = keys.slice(0, keys.length - maxEntries);
+  await Promise.all(toDelete.map((req) => cache.delete(req)));
+}
+
+// Error handlers: the SW must never let an unhandled rejection or error take
+// the worker down (that would break offline for the whole session). We can't
+// do much beyond observing, but swallowing them keeps the worker alive.
+self.addEventListener('error', (event) => {
+  // Prevent the error from being treated as unhandled (which would terminate
+  // the worker in some engines).
+  if (event.error) event.preventDefault();
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  event.preventDefault();
 });
