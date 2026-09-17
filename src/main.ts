@@ -15,11 +15,7 @@ import {
 import {
   buildScene,
   updatePositions,
-  applySpin,
-  updateBeltFields,
-  applyBeltLodOnly,
   satelliteExtentScene,
-  updateBodyHighlight,
   constellationCenter,
   constellationEmphasis,
   constellationEmphasisOpacity,
@@ -27,9 +23,6 @@ import {
   constellationPresence,
   updateConstellationHighlight,
   updateConstellationFigureHighlights,
-  lerpScale,
-  applyScaleMorph,
-  reprojectOrbitLine,
   resampleMoonOrbitLine,
   setIssSatellite,
   resampleIssOrbitLine,
@@ -66,7 +59,6 @@ import {
   frameSystem,
   frameConstellations,
   frameConstellation,
-  stepFlight,
   makeFlight,
   easeInOutCubic,
   type CamAnchor,
@@ -93,10 +85,11 @@ import { smallBodyFacts } from './sim/smallBodies';
 import { fetchApod } from './sim/apod';
 import { ONBOARD_STEPS, shouldShowOnboarding, markOnboarded } from './sim/onboarding';
 import { parseKpJson, latestKp, gScale, gScaleLabel, type KpSample } from './sim/spaceWeather';
-import { sceneIsStatic } from './render/idle';
+
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
 import { createEventsPanel } from './app/eventsPanel';
+import { createFrameLoop } from './app/frameLoop';
 import { J2000_UTC, type BodyDefinition } from './sim/types';
 import { moonGeocentricJ2000 } from './sim/moon';
 import { moonHorizonsDiff } from './sim/horizons';
@@ -513,7 +506,7 @@ const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').mat
 // real-scale state) must keep driving `applyScaleMorph` every frame.
 const MORPH_DUR = 3.0; // seconds, each way
 
-interface ScaleMorph {
+export interface ScaleMorph {
   /** "How real" 0..1 (eased with easeInOutCubic when applied). */
   p: number;
   /** Direction of travel: +1 → real scale, -1 → visible scale. 0 = parked. */
@@ -2891,7 +2884,7 @@ canvas.addEventListener('pointerup', (ev) => {
 // code only acts on 1-2 pointers, so the 3-finger twin (F2) has no
 // interference either. A scrub must never be mistaken for a click-pick: a
 // moved release arms suppressPickAfterScrub.
-type ScrubState = {
+export type ScrubState = {
   startX: number;
   startY: number;
   startDays: number;
@@ -3424,7 +3417,7 @@ window.addEventListener('pointercancel', (ev) => {
 // removes then re-adds it and re-runs _onTouchStart at length 2, re-arming
 // the pinch/dolly from the live positions — no jump.
 const touchPointers = new Map<number, { x: number; y: number }>();
-type ThreeFingerScrub = ScrubState & {
+export type ThreeFingerScrub = ScrubState & {
   live: boolean; // a scrub was once live (re-armed while <3 fingers remain)
   ended: boolean; // the end path already ran (lift or cancel)
 };
@@ -3711,362 +3704,143 @@ function updatePlanetScreenLabelFrame(): void {
   updatePlanetScreenLabels(planetLabelLayer, camera, inputs, wCss, hCss);
 }
 
-function frame(): void {
-  requestAnimationFrame(frame);
-
-  // GPU context is down (see the webglcontextlost/restored handlers at the
-  // bottom): stop doing sim + GPU work while it's out. We deliberately keep
-  // the rAF chain alive instead of tearing it down — on restore the next
-  // frame just resumes, with zero re-init or forced reload.
-  if (contextLost) return;
-
-  // Plan 044 B6: exoplanet mode runs on its OWN scene/renderer over the same
-  // canvas. While active, drive the exo scene and skip the main solar-system
-  // sim/render entirely (two renderers on one canvas would fight). The exo
-  // scene advances on the same sim clock, so time keeps flowing.
-  if (exoMode && exoScene) {
-    exoScene.tick(clock.t, performance.now());
-    return;
-  }
-
-  const nowMs = performance.now();
-  const dtReal = Math.min(0.1, (nowMs - lastMs) / 1000);
-  lastMs = nowMs;
-
-  // F6: on the very first frame, seed the reference camera/target snapshot
-  // that the render tail compares against. (The reference is only refreshed
-  // in the tail, after a frame is actually rendered — see `f6CamInit`.)
-  if (!f6CamInit) {
-    F6_LAST_CAM.x = built.camera.position.x;
-    F6_LAST_CAM.y = built.camera.position.y;
-    F6_LAST_CAM.z = built.camera.position.z;
-    F6_LAST_TARGET.x = built.controls.target.x;
-    F6_LAST_TARGET.y = built.controls.target.y;
-    F6_LAST_TARGET.z = built.controls.target.z;
-    f6CamInit = true;
-  }
-
-  // F5: the cinematic intro's title fades in/out on its own real-time clock
-  // (independent of the sim, so it reads the same at any speed / paused).
-  if (intro) tickIntroTitle(dtReal);
-
-  clock.tick(dtReal);
-  const dtDays = clock.t - lastDays;
-  lastDays = clock.t;
-
-  // --- Real-scale morph (B3): advance the toggle morph and derive this
-  // frame's scale. `frameScale` is what positions/belts/orbits use; outside
-  // a morph it is exactly the static `scale`. Body RADII are driven
-  // separately by applyScaleMorph (the baked mesh is always the build-scale
-  // geometry).
-  let frameScale: VisualScale = scale;
-  if (morph) {
-    if (morph.dir !== 0) {
-      // Ease the 3 s leg. `morph.p` is the raw 0..1 position; the EASED
-      // value drives both the layout blend and the body radii so everything
-      // moves in lockstep.
-      // Plan 044 C4: reduced-motion → snap to the end of the leg (no 3 s
-      // eased scale sweep).
-      if (REDUCED_MOTION) {
-        morph.p = morph.dir === 1 ? 1 : 0;
-      } else {
-        morph.p = Math.min(1, Math.max(0, morph.p + (morph.dir * dtReal) / MORPH_DUR));
-      }
-      if ((morph.dir === 1 && morph.p >= 1) || (morph.dir === -1 && morph.p <= 0)) {
-        morphEnd();
-      }
-    }
-    const e = morph.dir === 0 ? 1 : easeInOutCubic(morph.p);
-    frameScale = lerpScale(VISIBLE_SCALE, TRUE_SCALE, e);
-    applyScaleMorph(built, e);
-    // Re-project every orbit line through the blend so lines stay glued to
-    // the bodies at any progress (cheap: 256 pts/line, no geometry alloc).
-    // Only moons route through the moonDistance mapping — planets use
-    // planetDistance (passing a planet id as moonId would mis-scale it).
-    for (const entry of built.bodies.values()) {
-      if (entry.orbit)
-        reprojectOrbitLine(entry.orbit, frameScale, entry.parent ? entry.def.id : null);
-    }
-    // On the last frame of a leg, reframe the camera: a fresh "System" fit
-    // in the NEW layout (the old framing is meaningless across the scale
-    // change), eased over 1.2 s so it lands as a graceful pull-in / push-out.
-    // Reversing mid-leg cancels any in-flight reframe (user intent wins).
-    if (morph.dir === 0) {
-      if (!morph.reframed) {
-        morph.reframed = true;
-        flight = makeFlight(
-          [built.camera.position.x, built.camera.position.y, built.camera.position.z],
-          [built.controls.target.x, built.controls.target.y, built.controls.target.z],
-          camAnchorFor('system'),
-          REDUCED_MOTION ? 0 : 1.2,
-          null,
-          built.camera.fov,
-          FOV_DEG,
-        );
-        built.controls.enabled = false;
-      }
-    } else if (flight && morph.reframed) {
-      flight = null; // mid-leg reversal: drop the reframe, hand back to controls
-      built.controls.enabled = true;
-      built.controls.update();
-    }
-  }
-
-  // Moon orbit line (moon-orbit fix): the drawn loop is sampled at a
-  // placeholder epoch and re-sampled here, throttled to ~4 Hz, at the LIVE
-  // sim time — so the line always matches the Moon's real, slowly-precessing
-  // geocentric path (129 ephemeris samples ≈ 1 ms, negligible). It writes the
-  // same position/unit-dir/km buffers `reprojectOrbitLine` uses, so it also
-  // feeds the scale morph's per-frame re-projection correctly.
-  {
-    const now = performance.now();
-    if (now - lastMoonResampleMs > 250) {
-      lastMoonResampleMs = now;
-      const moonEntry = built.bodies.get('moon');
-      if (moonEntry?.orbit) resampleMoonOrbitLine(moonEntry.orbit, clock.t, frameScale);
-      // Plan 044 B1: the ISS orbit line re-samples on the same throttle (the
-      // ISS orbit precesses slowly; 97 SGP4 samples ≈ 1 ms, negligible).
-      const issEntry = built.bodies.get('iss');
-      if (issEntry?.orbit && issEntry.satellite) {
-        resampleIssOrbitLine(issEntry.orbit, issEntry.satellite, clock.t, frameScale);
-      }
-    }
-  }
-
-  updatePositions(built, clock.t, frameScale);
-  // The belt population (2,100 Kepler solves + matrix composes) is the
-  // heaviest per-frame CPU cost. When the sim is paused nothing moves, so
-  // skip the re-solve entirely (matrices already written on the last tick).
-  // The F6 near/far LOD cross-fade, which depends on camera distance, is
-  // applied in the render tail (after the camera branches) — see there.
-  if (!clock.isPaused) {
-    updateBeltFields(built, clock.t, frameScale, built.camera.position.length());
-  }
-  applySpin(built, dtDays);
-
-  if (flight) {
-    // Camera flight in progress. Drive the camera manually from the eased
-    // (target + offset) path — do NOT call controls.update() here: with
-    // damping on it would re-derive the camera from its internal spherical
-    // state (and any residual drag delta) and fight/corrupt the flight. If
-    // the flight tracks a picked body, hand its live world position to
-    // stepFlight: the target is EASED from the flight-start target to the
-    // body's current position (see stepFlight), so a follow SWAP — the
-    // intro's Sun→Earth leg — glides instead of teleporting the camera to
-    // the new body on the first frame.
-    built.controls.enabled = false;
-    let liveTarget: [number, number, number] | undefined;
-    if (flight.followId) {
-      const e = built.bodies.get(flight.followId);
-      if (e) liveTarget = [e.worldPos.x, e.worldPos.y, e.worldPos.z];
-    }
-    const sample = stepFlight(flight, dtReal, liveTarget);
-    const target = sample.target;
-    // camera = eased target + eased offset (glides onto a moving body).
-    built.controls.target.set(target[0], target[1], target[2]);
-    built.camera.position.set(
-      target[0] + sample.offset[0],
-      target[1] + sample.offset[1],
-      target[2] + sample.offset[2],
-    );
-    // Ease the FOV too (sky anchor widens it; others ease back to 50°).
-    // Only touch the projection matrix while it is actually changing.
-    if (Math.abs(built.camera.fov - sample.fov) > 1e-3) {
-      built.camera.fov = sample.fov;
-      built.camera.updateProjectionMatrix();
-    }
-    built.camera.lookAt(target[0], target[1], target[2]);
-    if (sample.done) {
-      flight = null;
-      if (intro) {
-        // A leg of the cinematic intro just finished: advance to the next leg
-        // (or end the intro on the last one). Do NOT hand back to the free
-        // controls — the intro is still driving the camera.
-        onIntroLegDone();
-        // onIntroLegDone either started the next leg's flight or ended the
-        // intro (which started its own Earth flight). Either way a NEW flight
-        // is now active (or we just re-enabled controls on finish), so let
-        // this frame fall through to the render — no controls re-sync.
-      } else if (pendingSkyTour) {
-        // Sky anchor landed: start the panoramic sweep from this pose. The
-        // tour drives the camera directly (controls stay disabled) and runs
-        // until the user grabs it (pointerdown/wheel/keydown, see above).
-        pendingSkyTour = false;
-        startSkyTour();
-      } else {
-        built.controls.enabled = true;
-        // Re-sync the control's internal state to the pose we just landed on
-        // so user drag/wheel resumes smoothly from here.
-        built.controls.update();
-        // Re-anchor the orbit pivot on the selected body (plan 017 F4: the
-        // selection is the anchor — Sky/System landings leave this on the
-        // Sun, whose worldPos IS the origin the anchors frame).
-        if (followId) {
-          const e = built.bodies.get(followId);
-          if (e) built.controls.target.copy(e.worldPos);
-        }
-      }
-      syncUrl();
-    }
-  } else if (skyTour) {
-    // Panoramic sky sweep (post-Sky-anchor): pan around the origin so the
-    // full sky of constellations comes into view in turn.
-    advanceSkyTour(dtReal);
-  } else if (followId) {
-    // Free follow: keep the followed body centered at the orbit pivot.
-    // When the followed body is a satellite, lock the CAMERA to its parent
-    // planet (not the moon): the moon orbits the planet many times per sim
-    // day, so chasing the moon made the whole view whirl/jitter at speed
-    // (the "chaotic tracking"). The planet is the stable pivot; the selected
-    // moon is instead marked by its pulsing highlight ring (see below), which
-    // reads correctly at any speed. Planets are only a little faster than
-    // the camera's lerp can track, so the view stays steady.
-    const entry = built.bodies.get(followId);
-    const lockEntry =
-      entry && moonParent.has(followId) ? built.bodies.get(moonParent.get(followId)!) : entry;
-    if (lockEntry) built.controls.target.lerp(lockEntry.worldPos, 0.2);
-    built.controls.update();
-  } else {
-    built.controls.update();
-  }
-
-  // --- F6 idle-skip gate (computed AFTER the camera branches moved the camera) ---
-  // When the sim is paused, the camera/target haven't moved this frame (no
-  // drag, wheel, damping settle, follow-lerp, flight, or tour), nothing is
-  // scrubbing / morphing / flying / in the intro, and no input has marked the
-  // scene dirty since the last rendered frame — the on-screen frame is static,
-  // so skip the (expensive) WebGL render AND the per-frame DOM/emphasis/pulse
-  // passes. The rAF chain (scheduled at the top of `frame`) stays alive, so the
-  // very next interaction re-renders immediately. This is the battery saving of
-  // the F6 perf pass: a parked, paused view costs ~0 GPU.
-  {
-    const c = built.camera.position;
-    const t = built.controls.target;
-    f6CameraMoving =
-      Math.abs(c.x - F6_LAST_CAM.x) +
-        Math.abs(c.y - F6_LAST_CAM.y) +
-        Math.abs(c.z - F6_LAST_CAM.z) +
-        Math.abs(t.x - F6_LAST_TARGET.x) +
-        Math.abs(t.y - F6_LAST_TARGET.y) +
-        Math.abs(t.z - F6_LAST_TARGET.z) >
-      1e-4;
-    // F6: when paused the belt re-solve is skipped above, but the near/far LOD
-    // cross-fade depends on camera distance — re-apply it if the camera moved
-    // (a zoom while paused), without re-solving the frozen belt positions.
-    if (clock.isPaused && f6CameraMoving) {
-      applyBeltLodOnly(built, frameScale, c.length());
-    }
-    // NB: we do NOT gate on selectedBodyId/selectedConstellation here. The
-    // picked-body / picked-constellation highlight is a wall-clock pulse that
-    // is a pure function of `nowMs` (no accumulation), so if the frame is
-    // static it freezes harmlessly and resumes seamlessly on the next input —
-    // no visible jump. Gating on it would make the skip a no-op for the common
-    // default view (which is always anchored on the Sun, a selected body).
-    if (
-      !sceneDirty &&
-      sceneIsStatic({
-        paused: clock.isPaused,
-        cameraMoving: f6CameraMoving,
-        scrubbing: !!(scrub?.movedX || threeFinger?.live),
-        flightActive: flight !== null,
-        morphActive: morph !== null,
-        skyTourActive: skyTour !== null,
-        introActive: intro !== null,
-      })
-    ) {
-      return; // static frame — skip render + DOM; rAF continues (scheduled above)
-    }
-    // We render this frame: refresh the reference camera/target (so the next
-    // frame's motion test is measured from this rendered pose) and clear the
-    // dirty flag. A frame that moved OR was dirty always renders.
-    F6_LAST_CAM.x = c.x;
-    F6_LAST_CAM.y = c.y;
-    F6_LAST_CAM.z = c.z;
-    F6_LAST_TARGET.x = t.x;
-    F6_LAST_TARGET.y = t.y;
-    F6_LAST_TARGET.z = t.z;
-    sceneDirty = false;
-  }
-
-  // Plan 016 P1: re-evaluate the 88 view emphases every frame — the
-  // screen-space label overlay reads them at display rate (no stepping).
-  computeConstellationEmphases();
-  // Constellation proximity highlight (D4): material writes only —
-  // throttled + pose-gated, so idle frames cost little. Runs after the
-  // camera pose for this frame is finalized.
-  updateConstellationHighlightThrottled(nowMs);
-  // The picked constellation's gold lines pulse every frame (plan 010) — the
-  // pose-gated pass above only refreshes when the camera moves, so without
-  // this the pulse would freeze in a parked view. One material write.
-  updatePickedConstellationPulse(nowMs);
-
-  // Pulsing highlight on the picked body — a planet or a moon (plan 015 P6) —
-  // driven by wall-clock time so the pulse is smooth and independent of the
-  // sim speed / direction.
-  updateBodyHighlight(built, selectedBodyId, nowMs / 1000);
-
-  // Sun surface shader (plan 044 A1): advance the granulation animation with
-  // wall-clock time (smooth, independent of sim speed/direction). One uniform
-  // write per frame.
-  built.sunShader.setTime(nowMs / 1000);
-
-  // Aurora curtain (plan 044 B5): advance the animation with wall-clock time
-  // (smooth, independent of sim speed). No-op when the band is invisible.
-  built.aurora?.setTime(nowMs / 1000);
-
-  // Sun lens flare + subtle DOF (plan 044 A3). The flare is a camera-attached
-  // screen-space overlay: project the sun to NDC, lay the ghost dots out along
-  // the sun→centre line, and show it only while the sun is in-frame AND not
-  // occluded by a planet. DOF focus tracks the selected body's distance.
-  updateSunFlareAndDOF();
-
-  // Shadow culling: the Sun is a point light, so its shadow is a 6-face
-  // cube map (2048² each) re-rendered every frame — the heaviest single GPU
-  // cost. The shadow cube's far plane is 140 units (SUN_SHADOWS.far), so once
-  // the camera is beyond that the planets are far enough apart that their
-  // mutual shadows are sub-pixel / invisible anyway. Disable the whole shadow
-  // pass out there; keep it for close/mid views where eclipses + ring shadows
-  // are actually visible. Only toggle when the state actually changes.
-  const SHADOW_CULL_DIST = 170;
-  const camDist = built.camera.position.length();
-  const shadowsOn = camDist <= SHADOW_CULL_DIST;
-  if (shadowsOn !== built.sunLight.castShadow) built.sunLight.castShadow = shadowsOn;
-
-  // F2: the zodiacal-light afterglow stays pointed at the Sun as the camera
-  // orbits — refresh its view direction from the (final) camera position.
-  built.skybox.update(built.camera);
-
-  // F1: HDR path. Default routes through the EffectComposer (HalfFloat RT →
-  // UnrealBloom → SMAA → OutputPass = ACES + sRGB). The `?post=0` / `p`-key
-  // fallback renders DIRECTLY to the canvas instead — no bloom/corona, the
-  // pre-F1 look — so a device that chokes on the composer can still run.
-  if (postOn) built.post.composer.render();
-  else built.renderer.render(built.scene, built.camera);
-  // Screen-space constellation name labels (plan 016 P1): the 2D overlay
-  // pass after the 3D render, so the names sit crisp above the frame.
-  updateConstellationScreenLabelFrame();
-  // Plan 044 A5: screen-space planet/body name labels (leader lines + fade +
-  // de-collision) on their own 2D overlay.
-  updatePlanetScreenLabelFrame();
-  fmtDate();
-  // Plan 026 F1: while the calendar popover is open, keep the selected-day
-  // highlight tracking the running sim clock — but ONLY when the user is
-  // viewing the clock's own month (browsing other months must not snap the
-  // view back). Cheap: re-render only when the viewed day actually changes.
-  if (calOpen) {
-    const d = clock.toDate();
-    if (d.getUTCFullYear() === calYear && d.getUTCMonth() === calMonth) {
-      const day = d.getUTCDate();
-      if (day !== calSelDay) {
-        calSelDay = day;
-        renderCalendar();
-      }
-    }
-  }
-  tlFrame(); // plan 023 F3: caret follows the clock while scrubbing
-  updateInfo();
-}
-requestAnimationFrame(frame);
+// --- Per-frame render/sim loop (plan 044 D2, step 2) ------------------------
+// The loop body lives in src/app/frameLoop.ts (createFrameLoop). The mutable
+// module-level `let`s below are wired as getter/setter accessors so the loop
+// reads live values and writes land back here; stable values are plain refs.
+const frameLoop = createFrameLoop({
+  // stable values
+  F6_LAST_CAM,
+  F6_LAST_TARGET,
+  FOV_DEG,
+  MORPH_DUR,
+  REDUCED_MOTION,
+  clock,
+  moonParent,
+  // mutable state the loop reads AND writes (getter/setter)
+  get calSelDay() {
+    return calSelDay;
+  },
+  set calSelDay(v: typeof calSelDay) {
+    calSelDay = v;
+  },
+  get f6CamInit() {
+    return f6CamInit;
+  },
+  set f6CamInit(v: typeof f6CamInit) {
+    f6CamInit = v;
+  },
+  get f6CameraMoving() {
+    return f6CameraMoving;
+  },
+  set f6CameraMoving(v: typeof f6CameraMoving) {
+    f6CameraMoving = v;
+  },
+  get flight() {
+    return flight;
+  },
+  set flight(v: typeof flight) {
+    flight = v;
+  },
+  get lastDays() {
+    return lastDays;
+  },
+  set lastDays(v: typeof lastDays) {
+    lastDays = v;
+  },
+  get lastMoonResampleMs() {
+    return lastMoonResampleMs;
+  },
+  set lastMoonResampleMs(v: typeof lastMoonResampleMs) {
+    lastMoonResampleMs = v;
+  },
+  get lastMs() {
+    return lastMs;
+  },
+  set lastMs(v: typeof lastMs) {
+    lastMs = v;
+  },
+  get pendingSkyTour() {
+    return pendingSkyTour;
+  },
+  set pendingSkyTour(v: typeof pendingSkyTour) {
+    pendingSkyTour = v;
+  },
+  get sceneDirty() {
+    return sceneDirty;
+  },
+  set sceneDirty(v: typeof sceneDirty) {
+    sceneDirty = v;
+  },
+  // mutable state the loop only reads (getter)
+  get built() {
+    return built;
+  },
+  get calMonth() {
+    return calMonth;
+  },
+  get calOpen() {
+    return calOpen;
+  },
+  get calYear() {
+    return calYear;
+  },
+  get contextLost() {
+    return contextLost;
+  },
+  get exoMode() {
+    return exoMode;
+  },
+  get exoScene() {
+    return exoScene;
+  },
+  get followId() {
+    return followId;
+  },
+  get intro() {
+    return intro;
+  },
+  get morph() {
+    return morph;
+  },
+  get postOn() {
+    return postOn;
+  },
+  get scale() {
+    return scale;
+  },
+  get scrub() {
+    return scrub;
+  },
+  get selectedBodyId() {
+    return selectedBodyId;
+  },
+  get skyTour() {
+    return skyTour;
+  },
+  get threeFinger() {
+    return threeFinger;
+  },
+  // callbacks
+  advanceSkyTour,
+  camAnchorFor,
+  computeConstellationEmphases,
+  fmtDate,
+  morphEnd,
+  onIntroLegDone,
+  renderCalendar,
+  startSkyTour,
+  syncUrl,
+  tickIntroTitle,
+  tlFrame,
+  updateConstellationHighlightThrottled,
+  updateConstellationScreenLabelFrame,
+  updateInfo,
+  updatePickedConstellationPulse,
+  updatePlanetScreenLabelFrame,
+  updateSunFlareAndDOF,
+});
+frameLoop.start();
 
 // --- WebGL context loss / restore -----------------------------------------
 // three.js registers its OWN webglcontextlost/restored listeners on the
