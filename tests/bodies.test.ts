@@ -31,6 +31,10 @@ describe('body data', () => {
   it('every non-sun body has valid elements', () => {
     for (const b of ALL_BODIES) {
       if (b.kind === 'star') continue;
+      // The ISS is a special-case body: its position comes from SGP4
+      // propagation (src/sim/sgp4.ts), not the mean-element ephemeris, so it
+      // has no `elements`.
+      if (b.id === 'iss') continue;
       const el = b.elements;
       expect(el, `${b.id}: missing elements`).toBeDefined();
       if (!el) continue;
@@ -124,12 +128,14 @@ describe('spot checks (real astronomy)', () => {
     expect((findBody('triton') as BodyDefinition).elements!.i).toBeGreaterThan(90);
     for (const m of MOONS) {
       if (m.id === 'triton') continue;
+      if (m.id === 'iss') continue; // SGP4 body, no mean elements
       expect(m.elements!.i, `${m.id} i`).toBeLessThan(90);
     }
   });
 
   it('moon at J2000 sits near a (sanity: |r - a| <= a*(e + 0.02))', () => {
     for (const m of MOONS) {
+      if (m.id === 'iss') continue; // SGP4 body, no mean elements
       const p = positionAt(m.elements!, 0);
       const r = dist(p);
       expect(r, `${m.id} |r|`).toBeGreaterThan(0);

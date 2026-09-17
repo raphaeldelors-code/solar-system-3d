@@ -12,7 +12,10 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": {
+      "satellite.js": ["./src/vendor/satellite.js-shim.ts"]
+    }
   },
   "include": ["src", "tests", "vite.config.ts"]
 }

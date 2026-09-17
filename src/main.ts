@@ -31,6 +31,8 @@ import {
   applyScaleMorph,
   reprojectOrbitLine,
   resampleMoonOrbitLine,
+  setIssSatellite,
+  resampleIssOrbitLine,
   resolveConstellationLabels,
   constellationLabelOpacity,
   VISIBLE_SCALE,
@@ -39,6 +41,8 @@ import {
   type BuiltScene,
   type VisualScale,
 } from './render/scene';
+import { fetchIssTle, FALLBACK_ISS_TLE } from './data/issTle';
+import { parseTle, type Satellite } from './sim/sgp4';
 import { isSunOccluded } from './render/post';
 import {
   createPlanetLabelLayer,
@@ -442,6 +446,9 @@ let lastDays = clock.t;
 let lastMs = performance.now();
 // Throttle for the per-frame Moon orbit-line resample (see the frame loop).
 let lastMoonResampleMs = 0;
+// Plan 044 B1: the live ISS satellite record (set once a TLE loads). Shared
+// across scene rebuilds so a scale morph doesn't lose the TLE.
+let issSatellite: Satellite | null = null;
 
 // ---------------------------------------------------------------------------
 // F6 idle-skip: skip the (expensive) WebGL render pass when the on-screen
@@ -607,6 +614,11 @@ function requestScale(target: 'real' | 'visible'): void {
 function resampleMoonNow(): void {
   const moonEntry = built.bodies.get('moon');
   if (moonEntry?.orbit) resampleMoonOrbitLine(moonEntry.orbit, clock.t, scale);
+  // Plan 044 B1: the ISS orbit line jumps with the epoch too.
+  const issEntry = built.bodies.get('iss');
+  if (issEntry?.orbit && issEntry.satellite) {
+    resampleIssOrbitLine(issEntry.orbit, issEntry.satellite, clock.t, scale);
+  }
   lastMoonResampleMs = performance.now();
 }
 
@@ -621,6 +633,10 @@ function rebuildScene(newScale: VisualScale): BuiltScene {
       entry.parent.pivot.add(entry.orbit);
     }
   }
+  // Plan 044 B1: re-attach the live ISS satellite across a rebuild (scale
+  // morph) so the TLE isn't lost — the new scene's ISS body is hidden until
+  // this runs, so a TLE that already loaded keeps the ISS visible.
+  if (issSatellite) setIssSatellite(built, issSatellite, clock.t, scale);
   applyToggles();
   updatePositions(built, clock.t, scale);
   // Optional real NASA textures: probe public/textures/<id>.jpg and swap them
@@ -2344,6 +2360,24 @@ rebuildScene(scale);
 // the composer branch both read `postOn`; this just hides the corona sprite
 // so a fallback device never flashes it).
 built.sunGlow.visible = postOn;
+// Plan 044 B1: load the live ISS TLE. The static fallback is applied
+// immediately (so the ISS is visible even offline / before the fetch lands),
+// then a CelesTrak fetch upgrades it to the freshest elements. Both paths
+// funnel through `applyIssTle`, which parses + attaches + reveals the body.
+function applyIssTle(tle: { name: string; noradId: number; line1: string; line2: string }): void {
+  try {
+    issSatellite = parseTle(tle);
+    setIssSatellite(built, issSatellite, clock.t, scale);
+  } catch (err) {
+    console.warn('[iss] TLE parse failed:', err);
+  }
+}
+applyIssTle(FALLBACK_ISS_TLE);
+void fetchIssTle()
+  .then((tle) => {
+    if (tle) applyIssTle(tle); // null = fetch failed; the fallback is already live
+  })
+  .catch((err) => console.warn('[iss] TLE fetch failed, using fallback:', err));
 // Plan 016 P1: constellation name labels live on a 2D screen-space overlay
 // (not 3D sprites) — see render/constellationScreenLabels.ts. One layer for
 // the page's lifetime: it anchors to the #app canvas, which persists across
@@ -3484,6 +3518,12 @@ function frame(): void {
       lastMoonResampleMs = now;
       const moonEntry = built.bodies.get('moon');
       if (moonEntry?.orbit) resampleMoonOrbitLine(moonEntry.orbit, clock.t, frameScale);
+      // Plan 044 B1: the ISS orbit line re-samples on the same throttle (the
+      // ISS orbit precesses slowly; 97 SGP4 samples ≈ 1 ms, negligible).
+      const issEntry = built.bodies.get('iss');
+      if (issEntry?.orbit && issEntry.satellite) {
+        resampleIssOrbitLine(issEntry.orbit, issEntry.satellite, clock.t, frameScale);
+      }
     }
   }
 

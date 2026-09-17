@@ -62,7 +62,7 @@ const parentOf = new Map<string, Planet>();
 for (const m of MOONS) if (m.parent) parentOf.set(m.id, byId.get(m.parent)!);
 
 const moonsOf = (pid: string) =>
-  MOONS.filter((m) => m.parent === pid).map((m) => ({
+  MOONS.filter((m) => m.parent === pid && m.id !== 'iss').map((m) => ({
     id: m.id,
     ak: m.elements!.a, // km (moon unit)
     e: m.elements!.e,
@@ -235,7 +235,10 @@ describe('visibleScale — solver floor/envelope invariants', () => {
   it('the per-moon floor/cap clamp path is exercised', () => {
     // Every moon resolves to a finite scene distance.
     for (const m of MOONS) {
-      expect(Number.isFinite(moonDistance(m.id, m.elements!.a)), m.id).toBe(true);
+      // The ISS has no mean elements; its distance is clamped from a fixed
+      // ~420 km orbit radius (see MOON_CLAMPS.iss).
+      const km = m.id === 'iss' ? 420 : m.elements!.a;
+      expect(Number.isFinite(moonDistance(m.id, km)), m.id).toBe(true);
     }
     // Phobos is the tight case: its base curve at perigee (1.16) sits well
     // below the solved floor (1.978), so the floor clamp must engage.

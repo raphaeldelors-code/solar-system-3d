@@ -18,6 +18,7 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import type { BodyDefinition, OrbitalElements } from '../sim/types';
 import { positionAtInto, sampleOrbit, type Vec3 } from '../sim/kepler';
 import { moonGeocentricJ2000 } from '../sim/moon';
+import { propagateEcliptic, ISS_ORBIT_PERIOD_DAYS, type Satellite } from '../sim/sgp4';
 import { AU_KM } from '../sim/types';
 import {
   makeSurfaceTexture,
@@ -216,6 +217,14 @@ export interface SceneBody {
    * ringed planet, so a fly-to lands with the whole body + rings in view.
    */
   frameExtent: number;
+  /**
+   * SGP4 satellite record (ISS only, plan 044 B1): set by `setIssSatellite`
+   * once a TLE is loaded. When present, `updatePositions` drives this body's
+   * position from SGP4 propagation instead of the mean-element ephemeris, and
+   * the orbit line is resampled from the live satellite. Null for every other
+   * body and for the ISS until a TLE loads (the ISS is hidden until then).
+   */
+  satellite: Satellite | null;
 }
 
 export interface BuiltScene {
@@ -645,7 +654,11 @@ export function buildScene(
       builtRadius: r,
       cloudsMesh: null,
       frameExtent,
+      satellite: null,
     };
+    // The ISS is hidden until a TLE loads (setIssSatellite reveals it). Without
+    // a satellite record its position is undefined, so it must not render.
+    if (def.id === 'iss') entry.mesh.visible = false;
     map.set(def.id, entry);
   }
 
@@ -655,6 +668,54 @@ export function buildScene(
       // ensure single parent
       e.orbit.removeFromParent();
       e.parent.pivot.add(e.orbit);
+    }
+  }
+
+  // ISS orbit line (plan 044 B1): the ISS has no Keplerian `elements`, so its
+  // orbit line is built here (not in the per-body loop) as a static circle in
+  // the ecliptic frame, attached to Earth's pivot (like the Moon's). The
+  // circle's radius is the clamped scene distance (see MOON_CLAMPS.iss); the
+  // body position (updatePositions) is clamped to the SAME radius, so the ISS
+  // dot rides on the drawn line. `setIssSatellite` re-samples the line's
+  // inclination/node from the live TLE and reveals the body.
+  {
+    const iss = map.get('iss');
+    const earth = map.get('earth');
+    if (iss && earth) {
+      const N = 96;
+      const pts: THREE.Vector3[] = [];
+      const radii = new Float32Array(N + 1);
+      const unitDirs = new Float32Array((N + 1) * 3);
+      const rScene = scale.moonDistance(420, 'iss') ?? 2.0; // clamped scene radius
+      for (let k = 0; k <= N; k++) {
+        const u = (k / N) * Math.PI * 2;
+        // Placeholder circle in the ecliptic frame (i=0, node=0); setIssSatellite
+        // re-samples it with the live TLE's inclination/node.
+        const x = rScene * Math.cos(u);
+        const y = rScene * Math.sin(u);
+        const z = 0;
+        pts.push(new THREE.Vector3(x, y, z));
+        radii[k] = 420; // km (the moonDistance domain)
+        const d = Math.hypot(x, y, z) || 1;
+        unitDirs[k * 3] = x / d;
+        unitDirs[k * 3 + 1] = y / d;
+        unitDirs[k * 3 + 2] = z / d;
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineBasicMaterial({
+        color: 0x88aacc,
+        transparent: true,
+        opacity: 0.4,
+      });
+      const line = new THREE.Line(geo, mat);
+      line.userData.geo = geo;
+      line.userData.mat = mat;
+      line.userData.radii = radii;
+      line.userData.unitDirs = unitDirs;
+      line.visible = false; // hidden until a TLE loads
+      earth.pivot.add(line);
+      iss.orbit = line;
+      disposables.push(geo, mat);
     }
   }
 
@@ -1845,6 +1906,29 @@ export function updatePositions(built: BuiltScene, tDays: number, scale: VisualS
         pivot.position.copy(local);
       }
       entry.worldPos.copy(pivot.position);
+    } else if (def.id === 'iss' && entry.satellite) {
+      // ISS (plan 044 B1): position from SGP4 propagation (J2000 ecliptic, AU),
+      // the same frame the Moon's Meeus ephemeris uses. The distance display
+      // goes through the shared moon scale (clamped to a thin ring just outside
+      // Earth — see MOON_CLAMPS.iss). The orbit line is a child of Earth's
+      // pivot, so the body receives the SAME pivot rotation to stay on it.
+      const res = propagateEcliptic(entry.satellite, tDays);
+      if (res) {
+        const [px, py, pz] = res.posAu;
+        const s = eclipticToSceneInto({ x: px, y: py, z: pz }, scratch);
+        const d = Math.hypot(px, py, pz);
+        const km = d * AU_KM;
+        const factor = scale.moonDistance(km, 'iss') / Math.max(1e-9, d);
+        const local = s.multiplyScalar(factor);
+        const parent = entry.parent;
+        if (parent) {
+          local.applyQuaternion(parent.pivot.quaternion);
+          pivot.position.copy(parent.worldPos).add(local);
+        } else {
+          pivot.position.copy(local);
+        }
+        entry.worldPos.copy(pivot.position);
+      }
     }
   }
 }
@@ -2006,6 +2090,63 @@ export function resampleMoonOrbitLine(orbit: THREE.Line, tDays: number, scale: V
     dirs[k * 3 + 1] = u.y;
     dirs[k * 3 + 2] = u.z;
     const mapped = scale.moonDistance(km, 'moon');
+    pos.setXYZ(k, u.x * mapped, u.y * mapped, u.z * mapped);
+  }
+  pos.needsUpdate = true;
+  geo.computeBoundingSphere();
+}
+
+/**
+ * Attach a live SGP4 satellite to the ISS body (plan 044 B1). Called from
+ * main.ts once a TLE is loaded (CelesTrak fetch or the static fallback).
+ * Reveals the ISS mesh/label/orbit line (all hidden until a TLE loads) and
+ * resamples the orbit line at the current sim time so the first frame already
+ * shows the correct loop.
+ */
+export function setIssSatellite(
+  built: BuiltScene,
+  satellite: Satellite,
+  tDays: number,
+  scale: VisualScale,
+): void {
+  const iss = built.bodies.get('iss');
+  if (!iss) return;
+  iss.satellite = satellite;
+  iss.mesh.visible = true;
+  iss.label.visible = true;
+  if (iss.orbit) {
+    iss.orbit.visible = true;
+    resampleIssOrbitLine(iss.orbit, satellite, tDays, scale);
+  }
+}
+
+/**
+ * Resample the ISS orbit line from the live SGP4 satellite at the current sim
+ * time (mirrors `resampleMoonOrbitLine`). The ISS orbit is near-circular, so
+ * one revolution of the propagated path is a stable loop; the k=0 vertex is
+ * the ISS's live position, so the dot sits exactly on the line. In-place:
+ * writes into the line's existing position attribute (no allocation).
+ */
+export function resampleIssOrbitLine(
+  orbit: THREE.Line,
+  satellite: Satellite,
+  tDays: number,
+  scale: VisualScale,
+): void {
+  const geo = orbit.userData.geo as THREE.BufferGeometry | undefined;
+  if (!geo) return;
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const n = pos.count;
+  const period = ISS_ORBIT_PERIOD_DAYS;
+  for (let k = 0; k < n; k++) {
+    const res = propagateEcliptic(satellite, tDays + (k / (n - 1)) * period);
+    if (!res) continue;
+    const [x, y, z] = res.posAu;
+    const d = Math.hypot(x, y, z);
+    const km = d * AU_KM;
+    const s = eclipticToScene({ x, y, z });
+    const u = s.normalize();
+    const mapped = scale.moonDistance(km, 'iss') ?? 2.0;
     pos.setXYZ(k, u.x * mapped, u.y * mapped, u.z * mapped);
   }
   pos.needsUpdate = true;

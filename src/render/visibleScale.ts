@@ -148,6 +148,12 @@ interface MoonClamp {
  */
 const MOON_CLAMPS: Readonly<Record<string, MoonClamp>> = {
   moon: { floor: 2.208715, cap: 3.111655 },
+  // The ISS orbits at ~420 km, which the base curve maps to ~0.955 — inside
+  // Earth's visible disc (~1.615). Clamp it to a thin ring just outside Earth
+  // and well inside the Moon's 2.21 floor so it reads as "hugging the planet".
+  // floor/cap are close (near-circular orbit) so the orbit line is a tight
+  // circle hugging Earth.
+  iss: { floor: 1.95, cap: 2.05 },
   phobos: { floor: 1.978417, cap: 2.79312 },
   deimos: { floor: 2.294943, cap: 2.794943 },
   amalthea: { floor: 2.584476, cap: 11.023209 },

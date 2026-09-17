@@ -39,7 +39,7 @@ describe('searchBodies', () => {
 
   it('matches kind words ("moon" lists satellites)', () => {
     const moons = searchBodies(ALL_BODIES, 'moon');
-    expect(moons.length).toBe(22); // the Moon + 21 satellites
+    expect(moons.length).toBe(23); // the Moon + 21 satellites + the ISS
     expect(moons.map((h) => h.id)).toContain('moon');
   });
 

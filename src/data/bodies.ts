@@ -377,6 +377,24 @@ export const MOONS: BodyDefinition[] = [
     texture: 'rock',
   },
   {
+    // The ISS is a SPECIAL-CASE body: it has no Keplerian `elements` because
+    // its position is computed by SGP4 propagation from a live TLE
+    // (src/sim/sgp4.ts + src/data/issTle.ts), not by the mean-element ephemeris
+    // the other moons use. The scene (src/render/scene.ts) detects `id ===
+    // 'iss'` and drives its position/orbit line from the satellite record
+    // instead of `def.elements`. It is hidden until a TLE is loaded.
+    id: 'iss',
+    name: 'ISS',
+    kind: 'moon',
+    parent: 'earth',
+    radiusKm: 100, // ~109 m structure; 100 km keeps it a visible dot, not a disc
+    rotationHours: 1.5, // ~92 min orbital period (tidal to its orbit)
+    tiltDeg: 0,
+    color: rgb(0xd8d8e0),
+    color2: rgb(0x9a9aa8),
+    texture: 'rock',
+  },
+  {
     id: 'phobos',
     name: 'Phobos',
     kind: 'moon',
