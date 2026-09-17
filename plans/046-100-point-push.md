@@ -61,10 +61,14 @@ below.
 
 ### A. Credibility + quick wins (do first — cheap, de-risk)
 
-- [ ] **A1. Fix the tagline/ephemeris mismatch.** Either (a) change the hero
-      tagline from "10,000 years" to the true JPL window ("250 years, 1800–2050"),
-      or (b) extend the ephemeris to a real long-range model. Start with (a) — it
-      is a one-line copy fix and removes a review-bombing risk. _Effort: S._
+- [x] **A1. Fix the tagline/ephemeris mismatch.** DONE 2c78647 — chose option (a):
+      all 6 tagline occurrences ("10,000 years" → "250 years") + a "Data &
+      accuracy" note in the About dialog naming the NASA/JPL source (Standish &
+      Williams 1992), the 1800–2050 validity window, and that out-of-window
+      scrubbing is Kepler extrapolation (illustrative, not precise). User
+      directed "take the best decision"; (b) extend-ephemeris was rejected
+      (network-blocked in this env + questionable ±10,000yr accuracy). E2E
+      13/13. Deployed d24b31a.
 - [ ] **A2. Resolve the constellation-art GPL-2.0 license.** The Stellarium
       "western" figures are GPL-2.0; shipping them in a proprietary app is a legal
       blocker. Options: (a) replace with CC0/own figures, (b) re-illustrate, or
