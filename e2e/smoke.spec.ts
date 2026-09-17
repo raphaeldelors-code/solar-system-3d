@@ -241,9 +241,7 @@ test('DSO toggle: Messier markers group exists + toggles visibility (B4)', async
       { timeout: 3000 },
     )
     .toBe(true);
-  await expect
-    .poll(async () => page.url(), { timeout: 3000 })
-    .toContain('dso=1');
+  await expect.poll(async () => page.url(), { timeout: 3000 }).toContain('dso=1');
 });
 
 test('pause-on-visibilitychange: hidden flag tracks the tab (D10)', async ({ page }) => {
