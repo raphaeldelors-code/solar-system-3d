@@ -951,8 +951,9 @@ function applyToggles(): void {
   built.constellationFigures.visible = figuresOn;
   // Plan 044 A3: subtle DOF (bokeh) toggle. Off by default. Only meaningful on
   // the HDR/composer path — when postOn is false the composer (and its bokeh
-  // pass) isn't rendered, so the toggle is a no-op there.
-  built.post.setDOF(dofEl.checked && postOn);
+  // pass) isn't rendered, so the toggle is a no-op there. D6: the low tier has
+  // no composer at all (built.post === null), so it's a no-op there too.
+  built.post?.setDOF(dofEl.checked && postOn);
 }
 
 // --- Plan 044 A3: sun lens flare + subtle DOF ------------------------------
@@ -964,6 +965,9 @@ const _flareBodyWorld = new THREE.Vector3();
 let _flareOccluders: THREE.Object3D[] | null = null;
 
 function updateSunFlareAndDOF(): void {
+  // D6: the flare + DOF live in the post stack, which the low tier doesn't
+  // build — nothing to drive there.
+  if (!built.post) return;
   const cam = built.camera;
   const sun = built.bodies.get('sun');
   const flare = built.post.flare;
@@ -2180,8 +2184,9 @@ window.addEventListener('resize', () => {
   built.camera.aspect = window.innerWidth / window.innerHeight;
   built.camera.updateProjectionMatrix();
   built.renderer.setSize(window.innerWidth, window.innerHeight);
-  // F1: keep the post stack's render target at the new size too.
-  built.post.setSize(window.innerWidth, window.innerHeight);
+  // F1: keep the post stack's render target at the new size too. D6: the low
+  // tier has no composer, so this is a no-op there.
+  built.post?.setSize(window.innerWidth, window.innerHeight);
   // F3: re-check the phone breakpoint for the mini strip's day-only date.
   // Only rewrite when it actually flips (a refresh mid-frame is otherwise a
   // no-op for the date, but avoid redundant DOM writes on every resize).

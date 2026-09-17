@@ -458,7 +458,9 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     // UnrealBloom → SMAA → OutputPass = ACES + sRGB). The `?post=0` / `p`-key
     // fallback renders DIRECTLY to the canvas instead — no bloom/corona, the
     // pre-F1 look — so a device that chokes on the composer can still run.
-    if (deps.postOn) deps.built.post.composer.render();
+    // D6: the low quality tier has NO composer (built.post === null), so it
+    // always renders directly too.
+    if (deps.postOn && deps.built.post) deps.built.post.composer.render();
     else deps.built.renderer.render(deps.built.scene, deps.built.camera);
     // Screen-space constellation name labels (plan 016 P1): the 2D overlay
     // pass after the 3D render, so the names sit crisp above the frame.

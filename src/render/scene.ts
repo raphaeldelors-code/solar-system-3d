@@ -29,6 +29,7 @@ import {
 import { BELTS } from '../data/belts';
 import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, applyBeltLod, type BeltField } from './belts';
+import { scaledBeltCount, QUALITY_PROFILES, type QualityTier } from './quality';
 import { CONSTELLATIONS, raDecToUnit, type Constellation } from '../data/constellations';
 import { FIGURE_FITS, figurePlacement } from '../data/figures';
 import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows';
@@ -258,8 +259,9 @@ export interface BuiltScene {
   constellations: THREE.Group;
   /** Classic figure plates (plan 007); hidden until the Figures toggle. */
   constellationFigures: THREE.Group;
-  /** HDR→bloom→SMAA→Output post stack (plan 035 F1). */
-  post: PostStack;
+  /** HDR→bloom→SMAA→Output post stack (plan 035 F1). `null` on the low
+   *  quality tier (D6) — the frame loop then renders directly to the canvas. */
+  post: PostStack | null;
   /** Sun corona sprite (plan 035 F1); positioned at the sun, ~10× its radius. */
   sunGlow: THREE.Sprite;
   /** Animated sun-surface shader (plan 044 A1); setTime() per frame. */
@@ -337,7 +339,9 @@ export function buildScene(
   canvas: HTMLCanvasElement,
   bodies: BodyDefinition[],
   scale: VisualScale,
+  quality: QualityTier = 'high',
 ): BuiltScene {
+  const profile = QUALITY_PROFILES[quality];
   const renderer = new THREE.WebGLRenderer({
     canvas,
     // Keep canvas MSAA on: the default path renders through the EffectComposer
@@ -348,13 +352,17 @@ export function buildScene(
     // main.ts can export a PNG screenshot of the current view.
     preserveDrawingBuffer: true,
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // D6: the quality tier caps the pixel ratio (DPR 2 → 1 on low-tier devices)
+  // so fill-rate + composer RT size stay bounded on weak GPUs.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, profile.pixelRatioCap));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   // Shadows: Sun point light casts shadow-cube maps so moons/planets
   // eclipse each other (Moon on Earth, Io on Jupiter, rings on Saturn).
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // D6: the low tier disables the whole shadow pass (the heaviest single GPU
+  // cost — a 6-face 2048² cube map re-rendered every frame).
+  renderer.shadowMap.enabled = profile.shadows;
+  if (profile.shadows) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000005);
@@ -413,7 +421,12 @@ export function buildScene(
   const constellationFigures = buildConstellationFigures();
   scene.add(constellationFigures);
 
-  const post = buildPostStack(renderer, scene, camera, window.innerWidth, window.innerHeight);
+  // D6: the low tier skips the HDR→bloom→SMAA post stack entirely (the
+  // composer's HalfFloat RT + bloom + SMAA are a large GPU cost) and renders
+  // directly to the canvas — the same path the `?post=0` fallback uses.
+  const post: PostStack | null = profile.post
+    ? buildPostStack(renderer, scene, camera, window.innerWidth, window.innerHeight)
+    : null;
 
   // Sun corona: a separate additive billboard that gives the unlit sun disc a
   // real glow/halo (the plan-016 flat "teal ring" replaced by a radial corona).
@@ -426,7 +439,8 @@ export function buildScene(
   // loop below; setTime() is driven per-frame from main.ts.
   const sunShader = buildSunShaderMaterial();
 
-  const disposables: { dispose: () => void }[] = [skybox, post, sunGlow, sunShader];
+  const disposables: { dispose: () => void }[] = [skybox, sunGlow, sunShader];
+  if (post) disposables.push(post);
   const map = new Map<string, SceneBody>();
 
   // Planets and Sun first so moons can resolve their parents.
@@ -762,7 +776,9 @@ export function buildScene(
   // interfere with body/parent resolution.
   const belts: BeltField[] = [];
   for (const def of BELTS) {
-    const field = buildBeltField(def);
+    // D6: scale the belt population by the quality tier (a prefix of the same
+    // seeded sequence — see scaledBeltCount).
+    const field = buildBeltField(def, scaledBeltCount(def.count, quality));
     belts.push(field);
     scene.add(field.mesh);
     scene.add(field.points); // F6 far-LOD cloud (hidden until a far view)
