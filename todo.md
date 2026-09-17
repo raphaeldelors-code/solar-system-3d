@@ -83,7 +83,7 @@ One feature per commit, gates green before each. Start at A1.
 - [x] C4 fix(a11y): contrast, prefers-reduced-motion, keyboard time-scrub (plan 044) — `9eb2b2a`
 - [x] C5 feat(brand): name + logo + icon (drop the horse) (plan 044) — `b1be2bf`
 - [x] D1 docs(legal): asset licensing ledger + GPL-3.0 LICENSE + in-app attribution (plan 044) — `cb713ba`
-- [ ] D2 refactor: split main.ts god-file (frameLoop/scrub/searchUi/eventsPanel/contextLoss) (plan 044)
+- [ ] D2 refactor: split main.ts god-file (frameLoop/scrub/searchUi/eventsPanel/contextLoss) (plan 044) — IN PROGRESS: eventsPanel done `205b122` (main.ts 4200→4101); next: frameLoop
 - [ ] D3 test: browser E2E (Playwright) smoke spec in CI (plan 044)
 - [ ] D4 fix(pwa): service worker — hashed filename, cache cap, error handler, offline page (plan 044)
 - [ ] D5 perf: bundle diet + CI size budget (plan 044)
