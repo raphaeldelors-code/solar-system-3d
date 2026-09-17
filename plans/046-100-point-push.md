@@ -129,8 +129,12 @@ below.
 - [ ] **C6. Label system.** Depth-occlusion fade + collision layout +
       hide-when-behind-a-planet (DOM labels currently float through geometry).
       _Effort: M._
-- [ ] **C7. Milky Way band + star color-temperature spread.** The black void
-      reads as "empty", not "space". _Effort: S._
+- [x] **C7. Milky Way band + star color-temperature spread.** DONE (already
+      shipped, plan 035 F2) — `src/render/skybox.ts` builds a Milky-Way equirect
+      skybox from `public/textures/milkyway_equirect.png` (1.2MB bake), wired
+      into `scene.ts` (buildSkybox → scene.add, in disposables) with a
+      `MILKYWAY_TINT` brightness control; star color-temperature spread is in
+      the starfield. Review overstated this as missing. _Effort: S._
 - [x] **C8. UI polish pass.** DONE fc016a2 — contrast audit: all 8 text/bg
       pairs pass WCAG AA (min 6.88:1, no gap); focus-visible + reduced-motion
       already present. Normalized the fragmented type scale (13 sizes incl. 7
