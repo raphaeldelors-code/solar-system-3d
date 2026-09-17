@@ -226,7 +226,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] B2 JPL Horizons live mode — 8b007be (baked DE441 snapshot + Meeus diff in Moon info card)
 - [x] B3 Real starfield (Yale Bright Star Catalogue, 8,999 stars + spikes) — 5064739
 - [x] B4 SBDB body-facts panel — 3085842 (baked SBDB records for 5 small bodies)
-- [ ] B5 Space weather + aurora shader (NOAA Kp)
+- [x] B5 Space weather + aurora shader (NOAA Kp) — 4d4ffc7 (live fetch + polar band)
 - [ ] B6 Exoplanet Archive scene
 - [ ] B7 Named asteroids + comets (SBDB/MPC)
 - [ ] B8 Photo mode + APOD daily panel
