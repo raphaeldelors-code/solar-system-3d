@@ -301,6 +301,27 @@
         background: var(--danger);
         box-shadow: 0 0 14px rgba(255, 77, 77, 0.9);
       }
+      /* B5 (plan 046): next-asteroid indicator. A small dot before the label;
+         calm grey by default, amber when CNEOS flags the object potentially
+         hazardous (data-hazard='1', set by applyNeo). */
+      #neo {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        justify-content: flex-end;
+      }
+      #neo::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #4a5878; /* no data / non-hazardous */
+        box-shadow: 0 0 6px rgba(120, 160, 220, 0.4);
+      }
+      #neo[data-hazard='1']::before {
+        background: #ffd24a;
+        box-shadow: 0 0 10px rgba(255, 210, 74, 0.7);
+      }
       /* ---- Events panel (B1) ---- */
       /* Plan 043 F5: the events row is a COLUMN, not the default horizontal
          .row flex — so the list spans the full panel width and the note sits
@@ -2008,7 +2029,7 @@
         color: #7f93b5;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-DHz0Cw9d.js"></script>
+    <script type="module" crossorigin src="./assets/index-BkJhOJxL.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -2277,6 +2298,12 @@
           <div class="row" id="space-weather-row">
             <label data-i18n="spaceWeather">Space weather</label
             ><span id="space-weather" class="value">Kp —</span>
+          </div>
+          <!-- B5 (plan 046): live NASA CNEOS near-Earth-object feed. Shows the
+               soonest close approach in the next 7 days; the dot turns amber
+               when the object is flagged potentially hazardous. -->
+          <div class="row" id="neo-row">
+            <label data-i18n="neo">Next asteroid</label><span id="neo" class="value">—</span>
           </div>
           <div class="row">
             <label data-i18n="speed">Speed</label>
