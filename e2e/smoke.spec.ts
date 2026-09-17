@@ -220,21 +220,33 @@ test('pause-on-visibilitychange: hidden flag tracks the tab (D10)', async ({ pag
   await waitForRender(page);
 
   // Initially visible (headless page is foreground) → hidden is false.
-  expect(await page.evaluate(() => (window as unknown as { __debug?: { hidden?: boolean } }).__debug?.hidden)).toBe(false);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __debug?: { hidden?: boolean } }).__debug?.hidden,
+    ),
+  ).toBe(false);
 
   // Simulate the tab going hidden: override document.hidden, fire the event.
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  expect(await page.evaluate(() => (window as unknown as { __debug?: { hidden?: boolean } }).__debug?.hidden)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __debug?: { hidden?: boolean } }).__debug?.hidden,
+    ),
+  ).toBe(true);
 
   // Simulate returning to the tab: hidden false again.
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  expect(await page.evaluate(() => (window as unknown as { __debug?: { hidden?: boolean } }).__debug?.hidden)).toBe(false);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __debug?: { hidden?: boolean } }).__debug?.hidden,
+    ),
+  ).toBe(false);
 });
 
 test('app shell reloads offline via the service worker', async ({ page, context }) => {
