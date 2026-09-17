@@ -236,7 +236,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] C4 Accessibility (contrast, reduced-motion, keyboard scrub) — 9eb2b2a (apod-copy contrast, instant flights/morph/pulse under reduced-motion, `,`/`.` time-scrub)
 - [x] C5 Name + logo + icon (drop the horse) — b1be2bf (renamed to Orrery, new orrery icon via scripts/gen_icon.py, time-led tagline, OG card)
 - [x] D1 Asset licensing ledger (legal blocker) — cb713ba (GPL-3.0 LICENSE + docs/asset-licensing.md ledger + in-app About dialog; Stellarium figures verified GPL-2.0)
-- [ ] D2 Split main.ts god-file — IN PROGRESS: step 1 eventsPanel (205b122), step 2 frameLoop (95ce34d), step 3 scrub (c380a6c), step 4 searchUi (cd8e9be, main.ts 4200→3145); remaining: contextLoss
+- [x] D2 Split main.ts god-file — DONE: eventsPanel (205b122) + frameLoop (95ce34d) + scrub (c380a6c) + searchUi (cd8e9be) + contextLoss (bdb1808, main.ts 4200→3133), all 5 sections behind createX(deps) factories
 - [ ] D3 Browser E2E (Playwright)
 - [ ] D4 Fix the service worker
 - [ ] D5 Bundle diet + CI size budget
