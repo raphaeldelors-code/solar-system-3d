@@ -67,7 +67,7 @@ One feature per commit, gates green before each. Start at A1.
 - [x] A2 feat(render): Earth night lights (Black Marble) + animated clouds (plan 044) — `1e0e4eb`
 - [x] A3 feat(render): lens flare + subtle DOF post passes (plan 044) — `42d2fd8`
 - [x] A4 feat(render): real Saturn ring texture (Cassini map) (plan 044) — `5a75f74`
-- [ ] A5 fix(ui): planet label redesign — leader lines, distance fade, de-collide (plan 044)
+- [x] A5 fix(ui): planet label redesign — leader lines, distance fade, de-collide (plan 044) — `0cc05eb`
 - [ ] A6 feat(web): cinematic camera easing + intro ends on the time-scrub (plan 044)
 - [ ] B1 feat(data): live ISS + satellite tracking (SGP4 + CelesTrak TLEs) (plan 044)
 - [ ] B2 feat(data): JPL Horizons live mode (plan 044)
