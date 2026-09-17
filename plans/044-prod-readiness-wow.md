@@ -235,7 +235,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] C3 Timeline discoverability + speed-slider tick labels — ca4ee39 (one-time nudge + 1 hr/s·1 d/s·1 mo/s ticks)
 - [x] C4 Accessibility (contrast, reduced-motion, keyboard scrub) — 9eb2b2a (apod-copy contrast, instant flights/morph/pulse under reduced-motion, `,`/`.` time-scrub)
 - [x] C5 Name + logo + icon (drop the horse) — b1be2bf (renamed to Orrery, new orrery icon via scripts/gen_icon.py, time-led tagline, OG card)
-- [ ] D1 Asset licensing ledger (legal blocker)
+- [x] D1 Asset licensing ledger (legal blocker) — cb713ba (GPL-3.0 LICENSE + docs/asset-licensing.md ledger + in-app About dialog; Stellarium figures verified GPL-2.0)
 - [ ] D2 Split main.ts god-file
 - [ ] D3 Browser E2E (Playwright)
 - [ ] D4 Fix the service worker
