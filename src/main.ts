@@ -96,7 +96,7 @@ import { parseKpJson, latestKp, gScale, gScaleLabel, type KpSample } from './sim
 import { sceneIsStatic } from './render/idle';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
-import { findEvents, type Event as SimEvent } from './sim/events';
+import { createEventsPanel } from './app/eventsPanel';
 import { J2000_UTC, type BodyDefinition } from './sim/types';
 import { moonGeocentricJ2000 } from './sim/moon';
 import { moonHorizonsDiff } from './sim/horizons';
@@ -1120,7 +1120,7 @@ function applyDatePick(): void {
   dateEl.classList.remove('flash');
   void dateEl.offsetWidth;
   dateEl.classList.add('flash');
-  if (eventsVisible()) refreshEvents();
+  if (eventsPanel.eventsVisible()) eventsPanel.refreshEvents();
   syncUrl();
 }
 
@@ -1171,7 +1171,7 @@ function pickCalendarDay(day: number): void {
   dateEl.classList.remove('flash');
   void dateEl.offsetWidth;
   dateEl.classList.add('flash');
-  if (eventsVisible()) refreshEvents();
+  if (eventsPanel.eventsVisible()) eventsPanel.refreshEvents();
   syncUrl();
   renderCalendar(); // re-mark the selected day
 }
@@ -1245,7 +1245,7 @@ dateCalTodayEl.addEventListener('click', () => {
   dateEl.classList.remove('flash');
   void dateEl.offsetWidth;
   dateEl.classList.add('flash');
-  if (eventsVisible()) refreshEvents();
+  if (eventsPanel.eventsVisible()) eventsPanel.refreshEvents();
   syncUrl();
   calYear = now.getUTCFullYear();
   calMonth = now.getUTCMonth();
@@ -1449,119 +1449,20 @@ nowBtn.addEventListener('click', () => {
   syncUrl();
 });
 
-// --- Celestial events (B1) -------------------------------------------------
-// Scan a window around "now" for eclipses, transits, conjunctions, oppositions
-// and Saturn ring edge-ings; render them as a clickable list. Clicking an
-// event jumps the sim clock to that instant and flies to the relevant body.
-
-function eventsVisible(): boolean {
-  return !eventsRowEl.hidden;
-}
-
-function setComputing(msg: string): void {
-  eventsListEl.textContent = msg;
-  eventsListEl.classList.add('computing');
-}
-
-function clearComputing(): void {
-  eventsListEl.classList.remove('computing');
-}
-
-/** Scan the sim around the current date and fill the events list. */
-function refreshEvents(): void {
-  if (!eventsVisible()) return;
-  const years = parseInt(eventsRangeEl.value, 10) || 5;
-  setComputing('Computing events…');
-  // Defer the (up to ~1 s) scan one frame so "Computing events…" paints first.
-  requestAnimationFrame(() => {
-    const nowMs = clock.toDate().getTime();
-    const spanMs = years * 365.25 * 86_400_000;
-    const t0Days = (nowMs - spanMs - J2000_UTC) / 86_400_000;
-    const t1Days = (nowMs + spanMs - J2000_UTC) / 86_400_000;
-    const evs = findEvents(t0Days, t1Days, { coarseStepDays: 0.2 });
-    renderEvents(evs);
-  });
-}
-
-function renderEvents(evs: SimEvent[]): void {
-  clearComputing();
-  eventsListEl.replaceChildren();
-  if (evs.length === 0) {
-    const p = document.createElement('p');
-    p.className = 'ev-note';
-    p.textContent = 'No events in this window.';
-    eventsListEl.appendChild(p);
-    return;
-  }
-  const frag = document.createDocumentFragment();
-  for (const ev of evs) {
-    const row = document.createElement('div');
-    row.className = 'ev ' + evClass(ev);
-    const d = new Date(ev.dateMs);
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(d.getUTCDate()).padStart(2, '0');
-    const dateSpan = document.createElement('span');
-    dateSpan.className = 'ev-date';
-    dateSpan.textContent = `${y}-${m}-${dd}`;
-    const what = document.createElement('span');
-    what.className = 'ev-what';
-    what.textContent = ev.title;
-    what.title = ev.detail;
-    const det = document.createElement('span');
-    det.className = 'ev-detail';
-    det.textContent = ev.detail;
-    what.appendChild(det);
-    row.append(dateSpan, what);
-    row.addEventListener('click', () => {
-      clock.setDate(new Date(ev.dateMs));
-      resampleMoonNow(); // Moon orbit line jumps with the epoch
-      syncUrl();
-      // Flash the date readout so the jump is obvious.
-      dateEl.classList.remove('flash');
-      void dateEl.offsetWidth;
-      dateEl.classList.add('flash');
-      // Fly to the event's primary body if it has a frameable anchor.
-      const id = ev.bodyId;
-      if (id) {
-        const dest = camAnchorForBody(id);
-        if (dest) flyTo(dest, 1.4, id);
-      }
-    });
-    frag.appendChild(row);
-  }
-  eventsListEl.appendChild(frag);
-}
-
-/** Colour class per event type (drives the date accent in the list). */
-function evClass(ev: SimEvent): string {
-  switch (ev.type) {
-    case 'solar-eclipse':
-      return 'ecl-solar';
-    case 'lunar-eclipse':
-      return 'ecl-lunar';
-    case 'transit':
-      return 'transit';
-    case 'saturn-edge-on':
-      return 'saturn';
-    default:
-      return '';
-  }
-}
-
-eventsToggleBtn.addEventListener('click', () => {
-  eventsRowEl.hidden = !eventsRowEl.hidden;
-  eventsToggleBtn.classList.toggle('active', !eventsRowEl.hidden);
-  if (!eventsRowEl.hidden) refreshEvents();
-  syncUrl();
-});
-
-eventsRangeEl.addEventListener('change', () => {
-  refreshEvents();
-});
-
-datePickEl.addEventListener('change', () => {
-  applyDatePick();
+// --- Celestial events (B1) — extracted to src/app/eventsPanel.ts (plan 044 D2) ---
+const eventsPanel = createEventsPanel({
+  clock,
+  dateEl,
+  eventsToggleBtn,
+  eventsRangeEl,
+  eventsRowEl,
+  eventsListEl,
+  datePickEl,
+  resampleMoonNow,
+  syncUrl,
+  camAnchorForBody,
+  flyTo,
+  applyDatePick,
 });
 
 // --- Body search combobox (B2) + constellations (plan 010, S4) --------------
@@ -2499,7 +2400,7 @@ if (urlState.eventsOpen != null) {
   eventsToggleBtn.classList.toggle('active', urlState.eventsOpen);
 }
 // Restore an opened events list from a shared link.
-if (!eventsRowEl.hidden) refreshEvents();
+if (!eventsRowEl.hidden) eventsPanel.refreshEvents();
 // Plan 017 F4: the selection is ALWAYS the view anchor — a restored body
 // keeps its follow, a restored constellation keeps its pick, and anything
 // else (no/unknown follow) re-anchors on the Sun. There is no free-camera
