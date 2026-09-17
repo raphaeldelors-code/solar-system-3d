@@ -87,6 +87,7 @@ import {
 import { commandForKey, digitToPlanet, paletteEntries, COMMANDS } from './render/commands';
 import { bodyFacts } from './render/bodyFacts';
 import { sbdbFacts } from './sim/sbdb';
+import { parseKpJson, latestKp, gScale, gScaleLabel, type KpSample } from './sim/spaceWeather';
 import { sceneIsStatic } from './render/idle';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
@@ -405,6 +406,7 @@ const infoPeriodEl = document.getElementById('info-period') as HTMLSpanElement;
 const infoDistanceEl = document.getElementById('info-distance') as HTMLSpanElement;
 const infoRangeEl = document.getElementById('info-range') as HTMLSpanElement;
 const infoFactsEl = document.getElementById('info-facts') as HTMLDivElement | null;
+const spaceWeatherEl = document.getElementById('space-weather') as HTMLSpanElement | null;
 const infoLabel1El = document.getElementById('info-label-1') as HTMLSpanElement;
 const infoLabel2El = document.getElementById('info-label-2') as HTMLSpanElement;
 const infoLabel3El = document.getElementById('info-label-3') as HTMLSpanElement;
@@ -2421,6 +2423,46 @@ void fetchIssTle()
     if (tle) applyIssTle(tle); // null = fetch failed; the fallback is already live
   })
   .catch((err) => console.warn('[iss] TLE fetch failed, using fallback:', err));
+
+// Plan 044 B5: space weather. Fetch the live NOAA/SWPC planetary Kp index
+// (CORS-open, unlike the JPL APIs) and drive the Earth aurora band + a small
+// panel indicator. The endpoint is a 3-hour-sampled array, oldest→newest; we
+// take the latest sample. On failure the aurora simply stays off (Kp < 4) and
+// the indicator shows "—" — the app never blocks on this.
+const KP_URL = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json';
+async function fetchKp(): Promise<KpSample | null> {
+  const res = await fetch(KP_URL, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Kp HTTP ${res.status}`);
+  const raw = (await res.json()) as unknown;
+  return latestKp(parseKpJson(raw));
+}
+function applyKp(sample: KpSample | null): void {
+  // Drive the aurora band (no-op below Kp 4 — invisible).
+  built.aurora?.setKp(sample ? sample.Kp : 0);
+  // Panel indicator: "Kp 5.3 · G1 · Minor storm" or "Kp —" when no data.
+  if (spaceWeatherEl) {
+    if (sample) {
+      const g = gScale(sample.Kp);
+      spaceWeatherEl.textContent = `Kp ${sample.Kp.toFixed(1)} · ${gScaleLabel(g)}`;
+      spaceWeatherEl.dataset.kp = String(Math.round(sample.Kp));
+    } else {
+      spaceWeatherEl.textContent = 'Kp —';
+      delete spaceWeatherEl.dataset.kp;
+    }
+  }
+}
+void fetchKp()
+  .then(applyKp)
+  .catch((err) => console.warn('[kp] fetch failed, aurora stays off:', err));
+// Refresh every 15 min so a developing storm lights the aurora without a reload.
+setInterval(
+  () => {
+    void fetchKp()
+      .then(applyKp)
+      .catch(() => {});
+  },
+  15 * 60 * 1000,
+);
 // Plan 016 P1: constellation name labels live on a 2D screen-space overlay
 // (not 3D sprites) — see render/constellationScreenLabels.ts. One layer for
 // the page's lifetime: it anchors to the #app canvas, which persists across
@@ -3746,6 +3788,10 @@ function frame(): void {
   // wall-clock time (smooth, independent of sim speed/direction). One uniform
   // write per frame.
   built.sunShader.setTime(nowMs / 1000);
+
+  // Aurora curtain (plan 044 B5): advance the animation with wall-clock time
+  // (smooth, independent of sim speed). No-op when the band is invisible.
+  built.aurora?.setTime(nowMs / 1000);
 
   // Sun lens flare + subtle DOF (plan 044 A3). The flare is a camera-attached
   // screen-space overlay: project the sun to NDC, lay the ghost dots out along

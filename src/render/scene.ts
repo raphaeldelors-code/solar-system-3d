@@ -51,6 +51,7 @@ import {
 } from './post';
 import { buildSkybox, type Skybox } from './skybox';
 import { atmosphereConfigFor, buildShell, type AtmosphereShell } from './atmosphere';
+import { makeAurora, type Aurora } from './aurora';
 import { makeRingTexture, remapRingUVRadial } from './rings';
 
 export const AU = 1; // 1 scene unit per AU
@@ -179,6 +180,11 @@ export interface SceneBody {
    */
   atmosphereMesh: import('./atmosphere').AtmosphereShell | null;
   /**
+   * Aurora band (Earth only, plan 044 B5), a child of the pivot. Driven by the
+   * live NOAA Kp index; null for every body except Earth.
+   */
+  aurora: import('./aurora').Aurora | null;
+  /**
    * Pulsing glow ring highlighting the selected satellite (child of the
    * pivot so it tilts with the body; hidden unless this body is the
    * selection). See `setSatelliteHighlight`.
@@ -248,6 +254,11 @@ export interface BuiltScene {
   sunGlow: THREE.Sprite;
   /** Animated sun-surface shader (plan 044 A1); setTime() per frame. */
   sunShader: SunShader;
+  /**
+   * Aurora band (plan 044 B5), Earth only. setKp() feeds the live NOAA Kp;
+   * setTime() advances the curtain animation per frame.
+   */
+  aurora: import('./aurora').Aurora | null;
   /** Per-frame scratch state (sorted body order for updatePositions). */
   userData: { updateOrder?: SceneBody[] };
   dispose: () => void;
@@ -551,6 +562,16 @@ export function buildScene(
       // disposed in dispose() below (geo+mat), like the cloud shell.
     }
 
+    // Aurora (plan 044 B5): a polar band around Earth, driven by the live NOAA
+    // Kp index. Earth only. Child of the pivot so it tilts with the planet.
+    // Invisible until main.ts feeds it a Kp (setKp), and only visible when
+    // Kp >= 4 (see auroraVisual).
+    let aurora: Aurora | null = null;
+    if (def.id === 'earth') {
+      aurora = makeAurora(r);
+      pivot.add(aurora.mesh);
+    }
+
     // Label sprite above the body. Plan 044 A5: the 3D sprite is now HIDDEN —
     // planet/body names moved to a 2D screen-space overlay (main.ts +
     // render/planetScreenLabels.ts) with leader lines + distance fade +
@@ -645,6 +666,7 @@ export function buildScene(
       orbitEmphasis,
       ringsMesh,
       atmosphereMesh,
+      aurora,
       parent,
       spin: 0,
       worldPos: new THREE.Vector3(),
@@ -744,6 +766,8 @@ export function buildScene(
       // Atmosphere shells (plan 035 F4): per-body geo+mat (shader uniform
       // tint is a plain Vector3 — no texture to release).
       if (entry.atmosphereMesh) entry.atmosphereMesh.disposeAtmosphere();
+      // Aurora band (plan 044 B5): per-body geo+mat (Earth only).
+      if (entry.aurora) entry.aurora.dispose();
     }
     constellations.userData.dispose?.();
     for (const child of constellationFigures.children) {
@@ -770,6 +794,7 @@ export function buildScene(
     post,
     sunGlow: sunGlow.sprite,
     sunShader,
+    aurora: map.get('earth')?.aurora ?? null,
     userData: {},
     dispose,
   };
