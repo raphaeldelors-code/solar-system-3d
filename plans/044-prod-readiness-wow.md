@@ -216,12 +216,12 @@ or license dependency, clean per-feature commit. Then A2–A6 (scene), B1–B8
 (data), C1–C5 (UX/brand), D1–D10 (engineering). Re-run the 3 judges after each
 phase to re-grade and confirm the score is climbing toward 100.
 
-- [ ] A1 Sun shader (animated photosphere + limb darkening + HDR corona)
-- [ ] A2 Earth night lights + animated clouds
-- [ ] A3 Lens flare + subtle DOF
-- [ ] A4 Real Saturn ring texture
-- [ ] A5 Planet label redesign (leader lines, de-collide)
-- [ ] A6 Cinematic camera easing + intro ends on time-scrub
+- [x] A1 Sun shader (animated photosphere + limb darkening + HDR corona)
+- [x] A2 Earth night lights + animated clouds
+- [x] A3 Lens flare + subtle DOF
+- [x] A4 Real Saturn ring texture
+- [x] A5 Planet label redesign (leader lines, de-collide)
+- [x] A6 Cinematic camera easing + intro ends on time-scrub
 - [ ] B1 Live ISS + satellite tracking (SGP4 + CelesTrak)
 - [ ] B2 JPL Horizons live mode
 - [ ] B3 Real starfield from Gaia (1M-star extract)
