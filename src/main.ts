@@ -6,12 +6,6 @@
 import * as THREE from 'three';
 import { SimClock } from './sim/clock';
 import { ALL_BODIES, PLANETS } from './data/bodies';
-import { searchBodies, groupedBodyMenu } from './data/searchIndex';
-import {
-  searchConstellations,
-  constellationMenu,
-  CONSTELLATION_ID_PREFIX,
-} from './data/constellationSearch';
 import {
   buildScene,
   updatePositions,
@@ -91,6 +85,7 @@ import { parseAppState, encodeAppState, type ViewState } from './state/urlState'
 import { createEventsPanel } from './app/eventsPanel';
 import { createFrameLoop } from './app/frameLoop';
 import { createScrub } from './app/scrub';
+import { createSearchUi } from './app/searchUi';
 import { type BodyDefinition } from './sim/types';
 import { moonGeocentricJ2000 } from './sim/moon';
 import { moonHorizonsDiff } from './sim/horizons';
@@ -1448,157 +1443,15 @@ const eventsPanel = createEventsPanel({
   applyDatePick,
 });
 
-// --- Body search combobox (B2) + constellations (plan 010, S4) --------------
-// The panel's "Find" combobox lists the 88 IAU constellations alongside the
-// bodies. Constellation rows are tagged `const:<Name>` (bodies stay bare ids)
-// so one dropdown, one keyboard-nav path and one `findPick` handle both kinds.
-// Selecting a body flies the camera exactly like a pick; selecting a
-// constellation flies to a sky-dome view that centres it and lights its lines
-// gold. Plan 017 F4: the "Free camera" row is GONE — the anchor is the
-// selection, always; the global Sky/System anchors select the Sun (at their
-// two zooms) instead of dropping to a free camera. The `f` / `c` URL
-// params keep `followId` / `selectedConstellation` as the sources of truth.
-
-const findMenu = groupedBodyMenu(ALL_BODIES); // body display order, unfiltered
-const constellationMenuAll = constellationMenu(); // 88, IAU order (ids `const:Name`)
-const FIND_MENU_CONST_CAP = 15; // empty-query menu: bodies + a slice of consts
-let findActiveIdx = -1; // highlighted row in the open dropdown
-
-/**
- * A single dropdown row: a body (`c: false`) or a constellation (`c: true`).
- * `id` is the pick id — the bare body id for bodies, or the `const:<Name>`
- * namespaced id for constellations (so one `findPick` handles both kinds).
- */
-interface FindRow {
-  c: boolean;
-  id: string;
-  name: string;
-  sub: string;
-}
-
-function findRowsFor(query: string): FindRow[] {
-  const rows: FindRow[] = [];
-  if (!query.trim()) {
-    for (const e of findMenu) rows.push({ c: false, id: e.id, name: e.name, sub: e.sub });
-    for (const e of constellationMenuAll.slice(0, FIND_MENU_CONST_CAP)) {
-      rows.push({ c: true, id: e.id, name: e.name, sub: e.sub });
-    }
-    return rows;
-  }
-  const bodies = searchBodies(ALL_BODIES, query);
-  for (const h of bodies) {
-    rows.push({
-      c: false,
-      id: h.id,
-      name: h.name,
-      sub: h.parentName ? `moon of ${h.parentName}` : h.kind,
-    });
-  }
-  const consts = searchConstellations(query);
-  for (const c of consts) rows.push({ c: true, id: c.id, name: c.name, sub: c.sub });
-  return rows;
-}
-
-function findLabel(id: string): string {
-  if (id.startsWith(CONSTELLATION_ID_PREFIX)) return id.slice(CONSTELLATION_ID_PREFIX.length);
-  return byId.get(id)?.name ?? id;
-}
-
-/** Reflect the current follow into the input (called by flyTo + URL restore). */
-function setFindValue(id: string): void {
-  findInputEl.value = findLabel(id);
-}
-
-function findClose(): void {
-  findListEl.hidden = true;
-  findActiveIdx = -1;
-}
-
-function findMarkActive(): void {
-  const rows = findListEl.querySelectorAll<HTMLElement>('.fr');
-  rows.forEach((r, i) => r.classList.toggle('active', i === findActiveIdx));
-  rows[findActiveIdx]?.scrollIntoView({ block: 'nearest' });
-}
-
-function findRender(query: string): void {
-  const rows = findRowsFor(query);
-  findListEl.replaceChildren();
-  const frag = document.createDocumentFragment();
-  if (rows.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'fr-empty';
-    empty.textContent = 'No matches';
-    frag.appendChild(empty);
-  } else {
-    for (const r of rows) {
-      const row = document.createElement('div');
-      row.className = r.c ? 'fr fr-const' : 'fr';
-      row.innerHTML = `<span class="fr-name">${r.name}</span><span class="fr-sub">${r.sub}</span>`;
-      row.addEventListener('click', () => findPick(r.id));
-      frag.appendChild(row);
-    }
-  }
-  findListEl.appendChild(frag);
-  findActiveIdx = 0;
-  findMarkActive();
-  findListEl.hidden = false;
-}
-
-/**
- * Select a body (or `const:<Name>` constellation) from the dropdown and fly
- * to it. Constellations fly to a sky-dome view that centres the figure and
- * lights its lines gold (plan 010, S4); the body/constellation pick clears
- * the other's selection so only one target is ever emphasized.
- * Plan 017 F4: there is no "free camera" pick — an empty or unknown id
- * (e.g. Esc with the list closed) falls back to the Sun anchor, keeping the
- * selection the single source of the view anchor.
- */
-function findPick(id: string): void {
-  findInputEl.value = findLabel(id);
-  findClose();
-  findInputEl.blur();
-  if (id.startsWith(CONSTELLATION_ID_PREFIX)) {
-    flyToConstellation(id.slice(CONSTELLATION_ID_PREFIX.length));
-    return;
-  }
-  const destId = id && camAnchorForBody(id) ? id : 'sun';
-  const dest = camAnchorForBody(destId);
-  if (dest) flyTo(dest, 1.4, destId);
-}
-
-findInputEl.addEventListener('focus', () => findRender(findInputEl.value));
-findInputEl.addEventListener('input', () => {
-  // Any edit breaks "exactly one body" — re-open as a search from the
-  // typed text so the user can pick what they mean.
-  findRender(findInputEl.value);
-});
-findInputEl.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Escape') {
-    ev.preventDefault();
-    // Esc closes the list; pressed again (list closed), it re-anchors on the
-    // Sun (plan 017 F4: there is no free-camera state to drop back to).
-    if (!findListEl.hidden) findClose();
-    else findPick('');
-    return;
-  }
-  if (findListEl.hidden) return;
-  const rows = findListEl.querySelectorAll<HTMLElement>('.fr');
-  if (ev.key === 'ArrowDown') {
-    ev.preventDefault();
-    findActiveIdx = Math.min(rows.length - 1, findActiveIdx + 1);
-    findMarkActive();
-  } else if (ev.key === 'ArrowUp') {
-    ev.preventDefault();
-    findActiveIdx = Math.max(0, findActiveIdx - 1);
-    findMarkActive();
-  } else if (ev.key === 'Enter') {
-    ev.preventDefault();
-    const active = rows[findActiveIdx];
-    if (active) active.click();
-  }
-});
-document.addEventListener('pointerdown', (ev) => {
-  if (!findListEl.hidden && !(ev.target as Element | null)?.closest('#find-wrap')) findClose();
+// The "Find" combobox (body + constellation search) lives in src/app/searchUi.ts
+// (plan 044 D2). Only setFindValue is needed here (flyTo + URL restore call it).
+const { setFindValue } = createSearchUi({
+  byId,
+  camAnchorForBody,
+  findInputEl,
+  findListEl,
+  flyTo,
+  flyToConstellation,
 });
 
 orbitsEl.addEventListener('change', () => {
