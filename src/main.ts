@@ -91,6 +91,8 @@ import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
 import { findEvents, type Event as SimEvent } from './sim/events';
 import { J2000_UTC, type BodyDefinition } from './sim/types';
+import { moonGeocentricJ2000 } from './sim/moon';
+import { moonHorizonsDiff } from './sim/horizons';
 import {
   fmtMonthDayUtc,
   monthSeparators,
@@ -1227,7 +1229,7 @@ function updateInfo(): void {
       ? `${formatDistanceKm(r.distanceKm)} from ${byId.get(def.parent ?? '')?.name ?? 'parent'}`
       : `${formatDistanceKm(r.distanceKm)} from Sun`;
   infoRangeEl.textContent = `${formatDistanceKm(r.perihelionKm)} / ${formatDistanceKm(r.aphelionKm)}`;
-  setInfoFacts(def);
+  setInfoFacts(def, clock.t);
 }
 
 /**
@@ -1235,7 +1237,7 @@ function updateInfo(): void {
  * Called from every `updateInfo()` branch so the card never carries a body's
  * facts while showing a constellation (or nothing). Display-only.
  */
-function setInfoFacts(def: BodyDefinition | null): void {
+function setInfoFacts(def: BodyDefinition | null, tDays?: number): void {
   if (!infoFactsEl) return;
   infoFactsEl.replaceChildren();
   if (!def) return;
@@ -1249,6 +1251,30 @@ function setInfoFacts(def: BodyDefinition | null): void {
     value.textContent = row.value;
     el.append(label, value);
     infoFactsEl.appendChild(el);
+  }
+  // Plan 044 B2: for the Moon, diff the analytic Meeus model against the
+  // baked JPL Horizons (DE441) ephemeris and show the residual — the live
+  // "most accurate" proof. Only when the snapshot covers the current time.
+  if (def.id === 'moon' && tDays !== undefined) {
+    const meeus = moonGeocentricJ2000(tDays);
+    const diff = moonHorizonsDiff(meeus, tDays);
+    if (diff) {
+      const rows: { label: string; value: string }[] = [
+        { label: 'JPL Horizons range', value: formatDistanceKm(diff.rangeKm) },
+        { label: 'Meeus vs DE441', value: `Δ ${diff.residualKm.toFixed(1)} km` },
+      ];
+      for (const row of rows) {
+        const el = document.createElement('div');
+        el.className = 'info-row';
+        const label = document.createElement('span');
+        label.textContent = row.label;
+        const value = document.createElement('span');
+        value.className = 'value';
+        value.textContent = row.value;
+        el.append(label, value);
+        infoFactsEl.appendChild(el);
+      }
+    }
   }
 }
 
