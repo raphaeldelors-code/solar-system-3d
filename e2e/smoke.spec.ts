@@ -155,6 +155,35 @@ test('?q=low override selects the low tier (D6)', async ({ page }) => {
   expect(tier).toBe('low');
 });
 
+test('telemetry consent is opt-in + persists (D7)', async ({ page }) => {
+  watchPageErrors(page);
+  await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
+  await waitForRender(page);
+
+  // Default: unset (opt-in — nothing is sent until the user grants).
+  const initial = await page.evaluate(
+    () => (window as unknown as { __debug?: { telemetryConsent?: string } }).__debug?.telemetryConsent,
+  );
+  expect(initial).toBe('unset');
+
+  // Open the About dialog and grant consent.
+  await page.click('#about-btn');
+  await expect(page.locator('#about')).toBeVisible();
+  await page.click('#telemetry-consent');
+  const granted = await page.evaluate(
+    () => (window as unknown as { __debug?: { telemetryConsent?: string } }).__debug?.telemetryConsent,
+  );
+  expect(granted).toBe('granted');
+
+  // The choice persists across a reload (localStorage).
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await waitForRender(page);
+  const persisted = await page.evaluate(
+    () => (window as unknown as { __debug?: { telemetryConsent?: string } }).__debug?.telemetryConsent,
+  );
+  expect(persisted).toBe('granted');
+});
+
 test('app shell reloads offline via the service worker', async ({ page, context }) => {
   watchPageErrors(page);
   // First load (online): the SW installs, precaches the shell, and the
