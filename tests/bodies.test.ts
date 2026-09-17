@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ALL_BODIES, findBody, SUN, PLANETS, MOONS, DWARF_PLANETS } from '../src/data/bodies';
+import { SMALL_BODIES } from '../src/sim/smallBodies';
 import type { BodyDefinition } from '../src/sim/types';
 import { positionAt, sampleOrbit } from '../src/sim/kepler';
 
@@ -13,12 +14,15 @@ function isFiniteNumber(x: number): boolean {
 }
 
 describe('body data', () => {
-  it('has a sun, 8 planets, dwarf planets, and moons', () => {
+  it('has a sun, 8 planets, dwarf planets, moons, and named small bodies', () => {
     expect(SUN.kind).toBe('star');
     expect(PLANETS).toHaveLength(8);
     expect(DWARF_PLANETS.length).toBeGreaterThanOrEqual(1);
     expect(MOONS.length).toBeGreaterThanOrEqual(9);
-    expect(ALL_BODIES).toHaveLength(1 + PLANETS.length + DWARF_PLANETS.length + MOONS.length);
+    // Plan 044 B7: ALL_BODIES now also includes the named asteroids + comets.
+    expect(ALL_BODIES).toHaveLength(
+      1 + PLANETS.length + DWARF_PLANETS.length + MOONS.length + SMALL_BODIES.length,
+    );
   });
 
   it('has unique ids and names', () => {
@@ -39,8 +43,11 @@ describe('body data', () => {
       expect(el, `${b.id}: missing elements`).toBeDefined();
       if (!el) continue;
       expect(isFiniteNumber(el.a) && el.a > 0, `${b.id}: a=${el.a}`).toBe(true);
-      // inclination may be a tiny negative in JPL tables; allow a small margin
-      expect(isFiniteNumber(el.e) && el.e >= 0 && el.e < 0.8, `${b.id}: e=${el.e}`).toBe(true);
+      // Planets/dwarfs are near-circular (e < 0.8); named comets (B7) are
+      // genuinely highly eccentric (Halley 0.968, NEOWISE 0.999), so allow
+      // e < 1 for the small kind.
+      const eMax = b.kind === 'small' ? 1 : 0.8;
+      expect(isFiniteNumber(el.e) && el.e >= 0 && el.e < eMax, `${b.id}: e=${el.e}`).toBe(true);
       expect(isFiniteNumber(el.i) && el.i >= -0.01 && el.i <= 180, `${b.id}: i=${el.i}`).toBe(true);
       expect(isFiniteNumber(el.n) && el.n > 0, `${b.id}: n=${el.n}`).toBe(true);
     }

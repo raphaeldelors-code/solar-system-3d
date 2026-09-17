@@ -91,6 +91,13 @@ export function groupedBodyMenu(bodies: readonly BodyDefinition[]): SearchEntry[
       used.add(b.id);
     }
   }
+  // Plan 044 B7: named asteroids + comets, after the dwarf planets.
+  for (const b of bodies) {
+    if (b.kind === 'small' && !used.has(b.id)) {
+      out.push({ id: b.id, name: name(b), kind: b.kind, parentName: 'sun', sub: 'small body' });
+      used.add(b.id);
+    }
+  }
   return out;
 }
 

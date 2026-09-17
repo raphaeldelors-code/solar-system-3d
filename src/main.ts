@@ -89,6 +89,7 @@ import {
 import { commandForKey, digitToPlanet, paletteEntries, COMMANDS } from './render/commands';
 import { bodyFacts } from './render/bodyFacts';
 import { sbdbFacts } from './sim/sbdb';
+import { smallBodyFacts } from './sim/smallBodies';
 import { parseKpJson, latestKp, gScale, gScaleLabel, type KpSample } from './sim/spaceWeather';
 import { sceneIsStatic } from './render/idle';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
@@ -655,7 +656,11 @@ function rebuildScene(newScale: VisualScale): BuiltScene {
   if (followId) {
     const entry = built.bodies.get(followId);
     if (entry) {
-      const d = scale.followDistanceKm(entry.def.radiusKm, entry.def.kind === 'dwarf');
+      const d = scale.followDistanceKm(
+        entry.def.radiusKm,
+        entry.def.kind === 'dwarf',
+        entry.def.kind === 'small',
+      );
       built.controls.target.copy(entry.worldPos);
       built.camera.position.copy(entry.worldPos).add(new THREE.Vector3(d, d * 0.6, d));
     }
@@ -1335,6 +1340,20 @@ function setInfoFacts(def: BodyDefinition | null, tDays?: number): void {
   // are not in the SBDB, so sbdbFacts returns [] for them and nothing is
   // added. (Baked data: the SBDB API has no CORS headers, see src/sim/sbdb.ts.)
   for (const row of sbdbFacts(def.id)) {
+    const el = document.createElement('div');
+    el.className = 'info-row';
+    const label = document.createElement('span');
+    label.textContent = row.label;
+    const value = document.createElement('span');
+    value.className = 'value';
+    value.textContent = row.value;
+    el.append(label, value);
+    infoFactsEl.appendChild(el);
+  }
+  // Plan 044 B7: named asteroids + comets get their own SBDB facts block
+  // (designation, class, H, diameter, SPK-ID). The five dwarf planets use
+  // B4's sbdbFacts above; the two are mutually exclusive per body.
+  for (const row of smallBodyFacts(def.id)) {
     const el = document.createElement('div');
     el.className = 'info-row';
     const label = document.createElement('span');

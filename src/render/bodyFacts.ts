@@ -43,8 +43,8 @@ export const FUN_FACTS: Record<string, string> = {
  * retrograde — the magnitude is shown with a "(retrograde)" tag so a Venus
  * day (≈243 d) reads correctly without a confusing negative.
  */
-export function formatDayLength(hours: number): string {
-  if (!Number.isFinite(hours) || hours === 0) return '—';
+export function formatDayLength(hours: number | null): string {
+  if (hours === null || !Number.isFinite(hours) || hours === 0) return '—';
   const retro = hours < 0;
   const h = Math.abs(hours);
   const s = h < 48 ? `${h.toFixed(1)} h` : `${(h / 24).toFixed(1)} d`;

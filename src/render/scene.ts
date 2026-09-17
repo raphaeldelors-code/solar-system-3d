@@ -37,6 +37,7 @@ import {
   planetRadiusKm,
   dwarfRadiusKm,
   moonRadiusKm,
+  smallRadiusKm,
   planetDistance,
   moonDistance,
   baseMoonDistance,
@@ -84,6 +85,12 @@ export interface VisualScale {
   dwarfRadiusKm: (km: number) => number;
   /** Scene radius for a moon of given km radius (much smaller than planets). */
   moonRadiusKm: (km: number) => number;
+  /**
+   * Scene radius for a named small body (asteroid/comet, plan 044 B7).
+   * `VISIBLE_SCALE` gives them a small dot floor (below the dwarf tier);
+   * `TRUE_SCALE` keeps them physical so the true-scale tour morphs them.
+   */
+  smallRadiusKm: (km: number) => number;
   /** Scene distance multiplier applied to heliocentric AU positions. */
   planetDistance: (au: number) => number;
   /**
@@ -97,7 +104,7 @@ export interface VisualScale {
    * `dwarf` selects the dwarf tier (plan 038) so a dwarf's follow frame
    * matches its smaller disc; ignored by `TRUE_SCALE`.
    */
-  followDistanceKm: (km: number, dwarf?: boolean) => number;
+  followDistanceKm: (km: number, dwarf?: boolean, small?: boolean) => number;
   /**
    * Multiplier applied to belt rock instance sizes (1 = visible-mode dots,
    * ~0 at true scale where km-sized asteroids are sub-pixel). Used by the
@@ -115,7 +122,8 @@ export interface VisualScale {
 export const VISIBLE_SCALE: VisualScale = {
   bodyRadiusKm: planetRadiusKm,
   dwarfRadiusKm,
-  moonRadiusKm: moonRadiusKm,
+  moonRadiusKm,
+  smallRadiusKm,
   planetDistance,
   moonDistance: (km, moonId) => (moonId ? moonDistance(moonId, km) : null) ?? baseMoonDistance(km),
   followDistanceKm,
@@ -127,6 +135,7 @@ export const TRUE_SCALE: VisualScale = {
   bodyRadiusKm: (km) => (km / AU_TO_KM) * AU,
   dwarfRadiusKm: (km) => (km / AU_TO_KM) * AU,
   moonRadiusKm: (km) => (km / AU_TO_KM) * AU,
+  smallRadiusKm: (km) => (km / AU_TO_KM) * AU,
   planetDistance: (au) => au,
   moonDistance: (km) => (km / AU_TO_KM) * AU,
   followDistanceKm: (km) => Math.max(1.5, (km / AU_TO_KM) * 8),
@@ -150,10 +159,11 @@ export function lerpScale(from: VisualScale, to: VisualScale, p: number): Visual
     bodyRadiusKm: (km) => L(from.bodyRadiusKm(km), to.bodyRadiusKm(km)),
     dwarfRadiusKm: (km) => L(from.dwarfRadiusKm(km), to.dwarfRadiusKm(km)),
     moonRadiusKm: (km) => L(from.moonRadiusKm(km), to.moonRadiusKm(km)),
+    smallRadiusKm: (km) => L(from.smallRadiusKm(km), to.smallRadiusKm(km)),
     planetDistance: (au) => L(from.planetDistance(au), to.planetDistance(au)),
     moonDistance: (km, moonId) => L(from.moonDistance(km, moonId), to.moonDistance(km, moonId)),
-    followDistanceKm: (km, dwarf) =>
-      L(from.followDistanceKm(km, dwarf), to.followDistanceKm(km, dwarf)),
+    followDistanceKm: (km, dwarf, small) =>
+      L(from.followDistanceKm(km, dwarf, small), to.followDistanceKm(km, dwarf, small)),
     beltSizeFactor: L(from.beltSizeFactor ?? 1, to.beltSizeFactor ?? 0),
   };
 }
@@ -429,11 +439,12 @@ export function buildScene(
     const isStar = def.kind === 'star';
     const isMoon = def.kind === 'moon';
     const isDwarf = def.kind === 'dwarf';
+    const isSmall = def.kind === 'small';
 
     // Radius in scene units (stars get a special size; moons are much
     // smaller than planets so satellites read as satellites; dwarfs get
     // their own compressed tier — plan 038 — so Ceres & co stop reading as
-    // planet-sized discs).
+    // planet-sized discs; named small bodies (B7) get a smaller dot tier).
     const r = isStar
       ? scale === TRUE_SCALE
         ? (def.radiusKm / AU_TO_KM) * 1.15
@@ -442,7 +453,9 @@ export function buildScene(
         ? scale.moonRadiusKm(def.radiusKm)
         : isDwarf
           ? scale.dwarfRadiusKm(def.radiusKm)
-          : scale.bodyRadiusKm(def.radiusKm);
+          : isSmall
+            ? scale.smallRadiusKm(def.radiusKm)
+            : scale.bodyRadiusKm(def.radiusKm);
     // Scale-independent radii for the true-scale tour (B3): the tour blends
     // between the visible-mode and true-mode layouts live, so each body
     // needs BOTH radii (the baked mesh radius is `r`, the build scale).
@@ -452,14 +465,18 @@ export function buildScene(
         ? TRUE_SCALE.moonRadiusKm(def.radiusKm)
         : isDwarf
           ? TRUE_SCALE.dwarfRadiusKm(def.radiusKm)
-          : TRUE_SCALE.bodyRadiusKm(def.radiusKm);
+          : isSmall
+            ? TRUE_SCALE.smallRadiusKm(def.radiusKm)
+            : TRUE_SCALE.bodyRadiusKm(def.radiusKm);
     const visibleRadius = isStar
       ? SUN_R
       : isMoon
         ? VISIBLE_SCALE.moonRadiusKm(def.radiusKm)
         : isDwarf
           ? VISIBLE_SCALE.dwarfRadiusKm(def.radiusKm)
-          : VISIBLE_SCALE.bodyRadiusKm(def.radiusKm);
+          : isSmall
+            ? VISIBLE_SCALE.smallRadiusKm(def.radiusKm)
+            : VISIBLE_SCALE.bodyRadiusKm(def.radiusKm);
 
     const geo = new THREE.SphereGeometry(r, 48, 32);
     // The sun's surface is a shader (plan 044 A1), not a texture — skip the
@@ -1893,7 +1910,10 @@ export function updatePositions(built: BuiltScene, tDays: number, scale: VisualS
     if (def.kind === 'star') {
       pivot.position.set(0, 0, 0);
       entry.worldPos.set(0, 0, 0);
-    } else if ((def.kind === 'planet' || def.kind === 'dwarf') && def.elements) {
+    } else if (
+      (def.kind === 'planet' || def.kind === 'dwarf' || def.kind === 'small') &&
+      def.elements
+    ) {
       const p = positionAtInto(def.elements, tDays, auScratch); // AU, ecliptic frame
       const s = eclipticToSceneInto(p, scratch);
       const d = Math.hypot(p.x, p.y, p.z);

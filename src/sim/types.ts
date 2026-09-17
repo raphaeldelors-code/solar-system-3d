@@ -37,7 +37,7 @@ export interface OrbitalElements {
   periodicM?: Array<{ b: number; c: number; s: number; f: number }>;
 }
 
-export type BodyKind = 'star' | 'planet' | 'moon' | 'dwarf';
+export type BodyKind = 'star' | 'planet' | 'moon' | 'dwarf' | 'small';
 
 /**
  * A celestial body. The single source of truth for the whole simulation.
@@ -54,8 +54,9 @@ export interface BodyDefinition {
   parent?: string;
   /** Display radius [km] (also used for true-scale rendering). */
   radiusKm: number;
-  /** Rotation period [hours]; negative = retrograde. */
-  rotationHours: number;
+  /** Rotation period [hours]; negative = retrograde. Null when unknown
+   *  (named small bodies, plan 044 B7 — the SBDB doesn't provide it). */
+  rotationHours: number | null;
   /** Axial tilt [deg] relative to orbital plane. */
   tiltDeg: number;
   /** Surface color used by the procedural texture generator. */

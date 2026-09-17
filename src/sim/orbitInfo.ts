@@ -50,9 +50,11 @@ export function formatPeriod(days: number): string {
   return `${s} yr`;
 }
 
-/** Human-friendly distance in km (rounded; M/B above 1e6/1e9). */
+/** Human-friendly distance in km (rounded; M/B above 1e6/1e9). Sub-km values
+ *  (named small bodies, plan 044 B7) are shown in metres. */
 export function formatDistanceKm(km: number): string {
   if (!Number.isFinite(km) || km < 0) return '—';
+  if (km < 1) return `${Math.round(km * 1000).toLocaleString('en-US')} m`;
   if (km < 1e6) return `${Math.round(km).toLocaleString('en-US')} km`;
   if (km < 1e8) return `${(km / 1e6).toFixed(1)} M km`;
   return `${(km / 1e9).toFixed(2)} B km`;

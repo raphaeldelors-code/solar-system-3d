@@ -18,6 +18,7 @@
  * Meeus ch.47 tables instead of the two-body solution.
  * Retrograde orbits are encoded by i > 90 deg (Triton), never by n < 0.
  */ import type { BodyDefinition } from '../sim/types';
+import { smallBodyDefinitions } from '../sim/smallBodies';
 
 /** Convert 0xrrggbb to an RGB tuple for BodyDefinition.color. */
 const rgb = (hex: number): [number, number, number] => [
@@ -835,7 +836,14 @@ export const MOONS: BodyDefinition[] = [
   },
 ];
 
-export const ALL_BODIES: BodyDefinition[] = [SUN, ...PLANETS, ...DWARF_PLANETS, ...MOONS];
+export const ALL_BODIES: BodyDefinition[] = [
+  SUN,
+  ...PLANETS,
+  ...DWARF_PLANETS,
+  ...MOONS,
+  // Plan 044 B7: named asteroids + comets (real J2000 orbits from the SBDB).
+  ...smallBodyDefinitions(),
+];
 
 /** Body by id (for resolving moon parents / UI). */
 export function findBody(id: string): BodyDefinition | undefined {

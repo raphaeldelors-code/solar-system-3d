@@ -159,6 +159,12 @@ const SOLVER_ANCHORS: Array<{ id: string; a: number; d: number }> = [
   { id: 'eris', a: 67.864, d: 132.602786 },
 ];
 
+// Plan 044 B7: a compressed outer anchor (no real body) keeps the far comets
+// / Scattered Disc in frame. It is NOT part of the per-body snapshot above —
+// it has no corresponding body — so it lives separately and is only used by
+// the ramp-extension test below.
+const B7_OUTER = { a: 600, d: 220 };
+
 // ===========================================================================
 describe('visibleScale — solver floor/envelope invariants', () => {
   it('anchor snapshot matches the real body data (drift guard)', () => {
@@ -179,9 +185,11 @@ describe('visibleScale — solver floor/envelope invariants', () => {
   });
 
   it('the stored ramp extends linearly past the last anchor', () => {
-    const A = SOLVER_ANCHORS[SOLVER_ANCHORS.length - 2];
-    const B = SOLVER_ANCHORS[SOLVER_ANCHORS.length - 1];
-    for (const au of [B.a + 5, B.a + 20, 120]) {
+    // The last anchor is the B7 compressed outer anchor (no real body); the
+    // one before it is Eris.
+    const A = SOLVER_ANCHORS[SOLVER_ANCHORS.length - 1];
+    const B = B7_OUTER;
+    for (const au of [B.a + 50, B.a + 200, 900]) {
       const t = (au - B.a) / (B.a - A.a);
       const expectLin = B.d + (B.d - A.d) * t;
       expect(planetDistance(au)).toBeCloseTo(expectLin, 6);

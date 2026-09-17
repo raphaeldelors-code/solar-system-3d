@@ -61,6 +61,12 @@ const ANCHORS: ReadonlyArray<readonly [au: number, d: number]> = [
   [43.11, 128.602786], // haumea
   [45.43, 130.602786], // makemake
   [67.864, 132.602786], // eris
+  // Plan 044 B7: one compressed outer anchor so the far comets/Scattered
+  // Disc (Sedna a=544, NEOWISE a=358, Hale-Bopp a=177) stay in frame instead
+  // of the linear extension flinging them to ~16,000 units. The slope past
+  // Eris is deliberately shallow (log-ish) so a 500 AU orbit maps to only a
+  // few hundred units beyond Eris.
+  [600, 220],
 ];
 
 /** Piecewise-linear heliocentric distance mapping (AU -> scene units).
@@ -108,6 +114,19 @@ export function dwarfRadiusKm(km: number): number {
  *  satellite, floor of 0.08 so tiny moons stay visible. */
 export function moonRadiusKm(km: number): number {
   return Math.max(0.08, 0.08 + 0.09 * Math.log10(km / 100 + 1));
+}
+
+/**
+ * Scene radius for a named small body (asteroid/comet, plan 044 B7).
+ *
+ * Sits BELOW the dwarf tier (floor 0.06 vs the dwarf 0.15) so a named
+ * asteroid reads as a small dot, not a planet-sized disc — while the log
+ * term still lets the big ones (Vesta 261 km, Pallas 257 km) read slightly
+ * larger than a dust grain. The 0.06 floor keeps the sub-km comets (Encke
+ * 2.4 km, Halley 5.5 km) visible as dots.
+ */
+export function smallRadiusKm(km: number): number {
+  return 0.06 + 0.12 * Math.log10(km / 10 + 1);
 }
 
 // --------------------------------------------------------------------------
@@ -195,8 +214,9 @@ export function moonDistance(moonId: string, km: number): number | null {
 /** Suggested follow-camera distance for a body of the given km radius.
  *  `dwarf` selects the dwarf-radius tier (plan 038) so a dwarf's follow
  *  frame matches its smaller disc (r≈0.38–0.48 → the 3.0 floor, not the
- *  planet-tier 6.6–7.0 that would frame Ceres at 8% of the viewport). */
-export function followDistanceKm(km: number, dwarf = false): number {
-  const r = dwarf ? dwarfRadiusKm(km) : planetRadiusKm(km);
+ *  planet-tier 6.6–7.0 that would frame Ceres at 8% of the viewport).
+ *  `small` (plan 044 B7) selects the named-small-body dot tier. */
+export function followDistanceKm(km: number, dwarf = false, small = false): number {
+  const r = small ? smallRadiusKm(km) : dwarf ? dwarfRadiusKm(km) : planetRadiusKm(km);
   return Math.max(3, r * 6);
 }
