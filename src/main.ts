@@ -86,6 +86,7 @@ import { createEventsPanel } from './app/eventsPanel';
 import { createFrameLoop } from './app/frameLoop';
 import { createScrub } from './app/scrub';
 import { createSearchUi } from './app/searchUi';
+import { createContextLoss } from './app/contextLoss';
 import { type BodyDefinition } from './sim/types';
 import { moonGeocentricJ2000 } from './sim/moon';
 import { moonHorizonsDiff } from './sim/horizons';
@@ -3111,35 +3112,22 @@ const frameLoop = createFrameLoop({
   updateSunFlareAndDOF,
 });
 frameLoop.start();
-
-// --- WebGL context loss / restore -----------------------------------------
-// three.js registers its OWN webglcontextlost/restored listeners on the
-// canvas: it preventDefaults the loss (so the browser keeps the context alive
-// for recovery), flags its internal _isContextLost (making render() a no-op
-// while down), and on restore re-initializes GPU state. These app-level
-// listeners layer the UX on top: pause the render loop + show the overlay
-// while the context is out, and hide the overlay and resume when it comes
-// back. We do NOT touch the renderer here — three.js owns that path.
-canvas.addEventListener('webglcontextlost', (ev: Event) => {
-  // Three.js preventDefaults its own listener; we just observe the loss.
-  ev.preventDefault();
-  contextLost = true;
-  glLostEl.hidden = false;
-  glLostEl.classList.add('show');
+createContextLoss({
+  canvas,
+  glLostEl,
+  glReloadBtn,
+  built,
+  markSceneDirty,
+  contextLost: {
+    get: () => contextLost,
+    set: (v) => {
+      contextLost = v;
+    },
+  },
+  lastMs: {
+    get: () => lastMs,
+    set: (v) => {
+      lastMs = v;
+    },
+  },
 });
-
-canvas.addEventListener('webglcontextrestored', () => {
-  contextLost = false;
-  markSceneDirty(); // F6: repaint after context restore
-  glLostEl.hidden = true;
-  glLostEl.classList.remove('show');
-  // Resync the renderer to the (possibly) current viewport after the browser
-  // recreates the underlying context, so the first resumed frame isn't stale.
-  built.renderer.setSize(window.innerWidth, window.innerHeight);
-  lastMs = performance.now(); // don't apply a huge dt to the sim on resume
-});
-
-// Escape hatch in case the browser never fires a restore (rare, but e.g. some
-// mobile drivers). A manual reload always works and is what a user would do
-// by hand anyway.
-glReloadBtn.addEventListener('click', () => window.location.reload());
