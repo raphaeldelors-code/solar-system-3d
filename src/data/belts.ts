@@ -122,13 +122,19 @@ export function mulberry32(seed: number): () => number {
 /**
  * Sample `belt.count` belt objects with deterministic orbital elements.
  * node / peri / M0 are uniform on [0, 360); a/e/i uniform in their ranges.
+ *
+ * `count` overrides the belt's full count (D6 quality tier). The result is a
+ * PREFIX of the same seeded sequence — sampling `n < belt.count` objects yields
+ * exactly the first `n` of the full belt, so a low-tier belt is a strict subset
+ * of the high-tier belt (same positions, no visual pop on a watchdog rebuild).
  */
-export function sampleBelt(belt: BeltDefinition): BeltObject[] {
+export function sampleBelt(belt: BeltDefinition, count?: number): BeltObject[] {
   const rnd = mulberry32(belt.seed);
   const range = (lo: number, hi: number): number => lo + rnd() * (hi - lo);
+  const n = count == null ? belt.count : Math.max(0, Math.min(count, belt.count));
 
   const out: BeltObject[] = [];
-  for (let k = 0; k < belt.count; k++) {
+  for (let k = 0; k < n; k++) {
     const a = range(belt.a[0], belt.a[1]);
     const e = range(belt.e[0], belt.e[1]);
     const i = range(belt.i[0], belt.i[1]);

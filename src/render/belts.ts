@@ -49,8 +49,8 @@ const BELT_AU: Vec3 = { x: 0, y: 0, z: 0 };
  * mesh starts at the origin for at most one frame. Also builds the far-LOD
  * point cloud (F6): same N positions, one draw call, no per-rock transform.
  */
-export function buildBeltField(def: BeltDefinition): BeltField {
-  const objects = sampleBelt(def);
+export function buildBeltField(def: BeltDefinition, count?: number): BeltField {
+  const objects = sampleBelt(def, count);
   const n = objects.length;
 
   const mat = new THREE.MeshStandardMaterial({
