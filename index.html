@@ -1514,6 +1514,55 @@
         background: #2b4a7a;
         border-color: var(--accent);
       }
+      /* D6: WebGL-unavailable fallback. Shown at boot when the browser can't
+         create a WebGL context at all (disabled / unsupported / blocked GPU).
+         Mirrors the #gl-lost styling; stays up (no auto-recovery — the app
+         can't render without WebGL, so a reload is the only exit). */
+      #gl-unavailable {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        background: rgba(2, 4, 9, 0.96);
+        color: var(--text);
+        font:
+          15px/1.6 system-ui,
+          sans-serif;
+        padding: 24px;
+      }
+      #gl-unavailable.show {
+        display: flex;
+      }
+      #gl-unavailable .box {
+        max-width: 420px;
+      }
+      #gl-unavailable h2 {
+        margin: 0 0 10px;
+        font-size: 17px;
+        color: #8fb4e8;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      #gl-unavailable p {
+        margin: 0 0 16px;
+        opacity: 0.8;
+      }
+      #gl-unavailable button {
+        background: #1a2334;
+        color: var(--text);
+        border: 1px solid #33415e;
+        border-radius: 7px;
+        padding: 8px 16px;
+        font: inherit;
+        cursor: pointer;
+      }
+      #gl-unavailable button:hover {
+        background: #2b4a7a;
+        border-color: var(--accent);
+      }
       /* ===== Plan 035 F5: cinematic intro =====
          Full-screen overlay, pointer-transparent (the canvas underneath stays
          interactive — ANY manual input on it skips the intro via JS). The
@@ -1916,7 +1965,7 @@
         color: #7f93b5;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-lUH6mOaG.js"></script>
+    <script type="module" crossorigin src="./assets/index-BHY-epRr.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -1932,6 +1981,19 @@
           the context is restored.
         </p>
         <button id="gl-reload" type="button">Reload page</button>
+      </div>
+    </div>
+    <!-- D6: WebGL-unavailable fallback. Shown at boot when the browser can't
+         create a WebGL context at all; the app can't render without it. -->
+    <div id="gl-unavailable" role="alert" hidden>
+      <div class="box">
+        <h2>WebGL required</h2>
+        <p>
+          This app needs WebGL to render the 3D solar system, but your browser or device doesn't
+          support it (or it's disabled). Try a recent version of Chrome, Edge, Firefox, or Safari,
+          or enable hardware acceleration in your browser settings.
+        </p>
+        <button id="gl-unavailable-reload" type="button">Reload page</button>
       </div>
     </div>
     <div id="tooltip" aria-hidden="true"></div>
