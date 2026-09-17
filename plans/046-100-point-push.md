@@ -93,9 +93,13 @@ below.
       sprites tinted by type + sized by brightness; "DSO" toggle (i18n en+fr),
       `?dso=1` URL round-trip, disposal wired, E2E 12/12. Deployed 0d14562.
       (Hubble sprite + search deferred — markers + toggle ship the core wow.)
-- [ ] **B5. Live NEO close-approach feed.** NASA CNEOS (free, CORS-friendly) +
-      a "next asteroid to pass Earth" HUD. Real-time, news-worthy, zero license
-      risk. _Effort: S._
+- [x] **B5. Live NEO close-approach feed.** DONE 72a67d8 — NASA CNEOS (DEMO_KEY,
+      CORS-open) 7-day window → soonest close approach in a "Next asteroid"
+      panel row (name · LD · when), amber dot when flagged hazardous, hourly
+      refresh, never blocks on failure. Pure parser in `src/sim/neo.ts` (10
+      unit tests) — CNEOS times are UTC, marked `Z` so `Date.parse` doesn't
+      misread them as local (sandbox is CEST, which shifted the day by one).
+      E2E 13/13. Deployed 1050631.
 - [ ] **B6. Exoplanet mode v2.** Searchable ~1,000-system baked catalog +
       transit light curves (turns the 13-system demo into a real differentiator).
       _Effort: M._
