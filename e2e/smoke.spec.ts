@@ -214,6 +214,23 @@ test('i18n: en default + fr via navigator locale (D9)', async ({ browser }) => {
   await frContext.close();
 });
 
+test('NEO row: next-asteroid indicator present (B5)', async ({ page }) => {
+  watchPageErrors(page);
+  await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
+  await waitForRender(page);
+
+  // The "Next asteroid" row + value span exist (the live CNEOS fetch is
+  // network-dependent in headless, so we assert the UI is wired, not the value).
+  const row = await page.evaluate(() => {
+    const label = document.querySelector('#neo-row label');
+    const val = document.getElementById('neo');
+    return { hasRow: !!label, hasValue: !!val, labelText: label?.textContent ?? '' };
+  });
+  expect(row.hasRow).toBe(true);
+  expect(row.hasValue).toBe(true);
+  expect(row.labelText).toBe('Next asteroid');
+});
+
 test('DSO toggle: Messier markers group exists + toggles visibility (B4)', async ({ page }) => {
   watchPageErrors(page); // fails the test on any uncaught error (e.g. building 109 sprites)
   await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });

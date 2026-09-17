@@ -28,6 +28,7 @@ export interface Messages {
   // Time
   now: string;
   spaceWeather: string;
+  neo: string;
   speed: string;
   jumpTo: string;
   pause: string;
@@ -95,6 +96,7 @@ export const en: Messages = {
 
   now: 'Now',
   spaceWeather: 'Space weather',
+  neo: 'Next asteroid',
   speed: 'Speed',
   jumpTo: 'Jump to',
   pause: 'Pause',
@@ -158,6 +160,7 @@ export const fr: Messages = {
 
   now: 'Maintenant',
   spaceWeather: 'Météo spatiale',
+  neo: 'Prochain astéroïde',
   speed: 'Vitesse',
   jumpTo: 'Aller à',
   pause: 'Pause',

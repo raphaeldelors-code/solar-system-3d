@@ -87,6 +87,7 @@ import { smallBodyFacts } from './sim/smallBodies';
 import { fetchApod } from './sim/apod';
 import { ONBOARD_STEPS, shouldShowOnboarding, markOnboarded } from './sim/onboarding';
 import { parseKpJson, latestKp, gScale, gScaleLabel, type KpSample } from './sim/spaceWeather';
+import { parseNeoFeed, formatNeoLabel } from './sim/neo';
 
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
@@ -405,6 +406,7 @@ const infoDistanceEl = document.getElementById('info-distance') as HTMLSpanEleme
 const infoRangeEl = document.getElementById('info-range') as HTMLSpanElement;
 const infoFactsEl = document.getElementById('info-facts') as HTMLDivElement | null;
 const spaceWeatherEl = document.getElementById('space-weather') as HTMLSpanElement | null;
+const neoEl = document.getElementById('neo') as HTMLSpanElement | null;
 const infoLabel1El = document.getElementById('info-label-1') as HTMLSpanElement;
 const infoLabel2El = document.getElementById('info-label-2') as HTMLSpanElement;
 const infoLabel3El = document.getElementById('info-label-3') as HTMLSpanElement;
@@ -2680,6 +2682,44 @@ setInterval(
       .catch(() => {});
   },
   15 * 60 * 1000,
+);
+// B5 (plan 046): live NASA CNEOS near-Earth-object feed. CORS-open, DEMO_KEY
+// (no key needed for the free tier). We fetch a 7-day window and show the
+// SOONEST close approach in a small panel row — a real "news-worthy" data
+// moment. On failure the row shows "—" and the app never blocks on it.
+const NEO_URL =
+  'https://api.nasa.gov/neo/rest/v1/feed?start_date={start}&end_date={end}&api_key=DEMO_KEY';
+async function fetchNeo(): Promise<ReturnType<typeof parseNeoFeed> | null> {
+  const d = (offsetDays: number) =>
+    new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
+  const url = NEO_URL.replace('{start}', d(0)).replace('{end}', d(6));
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`CNEOS HTTP ${res.status}`);
+  return parseNeoFeed(await res.json());
+}
+function applyNeo(result: ReturnType<typeof parseNeoFeed> | null): void {
+  if (!neoEl) return;
+  if (result?.soonest) {
+    neoEl.textContent = formatNeoLabel(result.soonest, Date.now());
+    neoEl.title = `${result.soonest.name} — ${result.soonest.jplUrl}`;
+    neoEl.dataset.hazard = result.soonest.hazardous ? '1' : '0';
+  } else {
+    neoEl.textContent = '—';
+    neoEl.title = '';
+    delete neoEl.dataset.hazard;
+  }
+}
+void fetchNeo()
+  .then(applyNeo)
+  .catch((err) => console.warn('[neo] CNEOS fetch failed, row shows —:', err));
+// Refresh hourly — close approaches don't change minute-to-minute.
+setInterval(
+  () => {
+    void fetchNeo()
+      .then(applyNeo)
+      .catch(() => {});
+  },
+  60 * 60 * 1000,
 );
 // Plan 016 P1: constellation name labels live on a 2D screen-space overlay
 // (not 3D sprites) — see render/constellationScreenLabels.ts. One layer for
