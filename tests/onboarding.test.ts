@@ -8,7 +8,7 @@ import {
 
 /** In-memory Storage stub (localStorage is unavailable in the node env). */
 function memStorage(init: Record<string, string> = {}) {
-  let map = new Map(Object.entries(init));
+  const map = new Map(Object.entries(init));
   return {
     getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
     setItem: (k: string, v: string) => void map.set(k, v),
