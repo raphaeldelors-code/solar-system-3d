@@ -69,13 +69,13 @@ One feature per commit, gates green before each. Start at A1.
 - [x] A4 feat(render): real Saturn ring texture (Cassini map) (plan 044) — `5a75f74`
 - [x] A5 fix(ui): planet label redesign — leader lines, distance fade, de-collide (plan 044) — `0cc05eb`
 - [x] A6 feat(web): cinematic camera easing + intro ends on the time-scrub (plan 044) — `c7313b7`
-- [ ] B1 feat(data): live ISS + satellite tracking (SGP4 + CelesTrak TLEs) (plan 044)
-- [ ] B2 feat(data): JPL Horizons live mode (plan 044)
-- [ ] B3 feat(data): real starfield from Gaia 1M-star extract (plan 044)
-- [ ] B4 feat(data): SBDB body-facts panel (plan 044)
-- [ ] B5 feat(data): space weather + aurora shader (NOAA Kp) (plan 044)
-- [ ] B6 feat(data): Exoplanet Archive scene (plan 044)
-- [ ] B7 feat(data): named asteroids + comets (SBDB/MPC) (plan 044)
+- [x] B1 feat(data): live ISS + satellite tracking (SGP4 + CelesTrak TLEs) (plan 044) — `e9790c4`
+- [x] B2 feat(data): JPL Horizons live mode (plan 044) — `8b007be`
+- [x] B3 feat(data): real starfield from Gaia 1M-star extract (plan 044) — `5064739`
+- [x] B4 feat(data): SBDB body-facts panel (plan 044) — `3085842`
+- [x] B5 feat(data): space weather + aurora shader (NOAA Kp) (plan 044) — `4d4ffc7`
+- [x] B6 feat(data): Exoplanet Archive scene (plan 044) — `1748e63`
+- [x] B7 feat(data): named asteroids + comets (SBDB/MPC) (plan 044) — `ff18c45`
 - [ ] B8 feat(web): photo mode + APOD daily panel (plan 044)
 - [ ] C1 style(ui): real type system + documented color palette (plan 044)
 - [ ] C2 feat(web): 3-step first-run onboarding (plan 044)

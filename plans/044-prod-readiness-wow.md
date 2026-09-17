@@ -228,7 +228,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] B4 SBDB body-facts panel — 3085842 (baked SBDB records for 5 small bodies)
 - [x] B5 Space weather + aurora shader (NOAA Kp) — 4d4ffc7 (live fetch + polar band)
 - [x] B6 Exoplanet Archive scene — 1748e63 (13 multi-planet systems as mini solar systems)
-- [ ] B7 Named asteroids + comets (SBDB/MPC)
+- [x] B7 Named asteroids + comets (SBDB/MPC) — ff18c45 (47 bodies: 17 asteroids + 30 comets, real J2000 orbits)
 - [ ] B8 Photo mode + APOD daily panel
 - [ ] C1 Real type system + color palette
 - [ ] C2 3-step first-run onboarding
