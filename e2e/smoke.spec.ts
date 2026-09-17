@@ -124,6 +124,37 @@ test('WebGL context-loss overlay toggles', async ({ page }) => {
   await expect(overlay).toBeHidden();
 });
 
+test('quality tier boots + WebGL guard hidden (D6)', async ({ page }) => {
+  watchPageErrors(page);
+  await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
+  await waitForRender(page);
+
+  // The __debug handle exposes the selected quality tier + boot guard.
+  const debug = await page.evaluate(() => {
+    const d = (window as unknown as { __debug?: { qualityTier?: string; bootOk?: boolean } })
+      .__debug;
+    return d ? { qualityTier: d.qualityTier, bootOk: d.bootOk } : null;
+  });
+  expect(debug, '__debug handle missing').not.toBeNull();
+  expect(debug!.qualityTier).toMatch(/^(high|medium|low)$/);
+  expect(debug!.bootOk).toBe(true);
+
+  // The WebGL-unavailable fallback is hidden on a WebGL-capable browser.
+  await expect(page.locator('#gl-unavailable')).toBeHidden();
+});
+
+test('?q=low override selects the low tier (D6)', async ({ page }) => {
+  watchPageErrors(page);
+  await page.goto('/?intro=0&q=low', { waitUntil: 'domcontentloaded' });
+  await waitForRender(page);
+
+  const tier = await page.evaluate(
+    () =>
+      (window as unknown as { __debug?: { qualityTier?: string } }).__debug?.qualityTier ?? null,
+  );
+  expect(tier).toBe('low');
+});
+
 test('app shell reloads offline via the service worker', async ({ page, context }) => {
   watchPageErrors(page);
   // First load (online): the SW installs, precaches the shell, and the
