@@ -64,6 +64,7 @@ export interface Messages {
   labels: string;
   belts: string;
   figures: string;
+  dso: string;
   dof: string;
 
   // Share
@@ -130,6 +131,7 @@ export const en: Messages = {
   labels: 'Labels',
   belts: 'Belts',
   figures: 'Figures',
+  dso: 'DSO',
   dof: 'DOF',
 
   share: 'Copy share link',
@@ -192,6 +194,7 @@ export const fr: Messages = {
   labels: 'Étiquettes',
   belts: 'Ceintures',
   figures: 'Figures',
+  dso: 'Objets profonds',
   dof: 'Profondeur',
 
   share: 'Copier le lien',

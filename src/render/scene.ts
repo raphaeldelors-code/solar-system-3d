@@ -31,6 +31,7 @@ import { MOONS } from '../data/bodies';
 import { buildBeltField, updateBeltField, applyBeltLod, type BeltField } from './belts';
 import { scaledBeltCount, QUALITY_PROFILES, type QualityTier } from './quality';
 import { CONSTELLATIONS, raDecToUnit, type Constellation } from '../data/constellations';
+import { MESSIER, type MessierObject } from '../data/messier';
 import { FIGURE_FITS, figurePlacement } from '../data/figures';
 import { SUN_SHADOWS, configureSunShadows, setBodyShadowFlags } from './shadows';
 import {
@@ -259,6 +260,8 @@ export interface BuiltScene {
   constellations: THREE.Group;
   /** Classic figure plates (plan 007); hidden until the Figures toggle. */
   constellationFigures: THREE.Group;
+  /** Messier deep-sky markers (plan 046 B4); hidden until the DSO toggle. */
+  dso: THREE.Group;
   /** HDR→bloom→SMAA→Output post stack (plan 035 F1). `null` on the low
    *  quality tier (D6) — the frame loop then renders directly to the canvas. */
   post: PostStack | null;
@@ -420,6 +423,10 @@ export function buildScene(
   // Classic figure plates (plan 007): hidden until the Figures toggle.
   const constellationFigures = buildConstellationFigures();
   scene.add(constellationFigures);
+
+  // Messier deep-sky markers (plan 046 B4): hidden until the DSO toggle.
+  const dso = buildDsoMarkers();
+  scene.add(dso);
 
   // D6: the low tier skips the HDR→bloom→SMAA post stack entirely (the
   // composer's HalfFloat RT + bloom + SMAA are a large GPU cost) and renders
@@ -809,6 +816,13 @@ export function buildScene(
       (mesh.material as THREE.MeshBasicMaterial).dispose();
       // Plate textures stay in the shared FIGURE_TEX_CACHE for rebuilds.
     }
+    // Messier DSO markers (plan 046 B4): per-sprite materials + the shared
+    // glow texture (owned by this build, not a cache).
+    for (const child of dso.children) {
+      const sprite = child as THREE.Sprite;
+      (sprite.material as THREE.SpriteMaterial).dispose();
+    }
+    dso.userData.glowTex?.dispose();
     controls.dispose();
     renderer.dispose();
   }
@@ -824,6 +838,7 @@ export function buildScene(
     skybox,
     constellations,
     constellationFigures,
+    dso,
     post,
     sunGlow: sunGlow.sprite,
     sunShader,
@@ -1655,6 +1670,97 @@ export function figureTextureUrl(name: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/\s+/g, '_')}.png`;
+}
+
+/**
+ * Build the Messier deep-sky markers (plan 046 B4): one small additive
+ * sprite per object, placed on the celestial sphere at the constellation
+ * dome radius (so they sit in the same sky as the stars + figures).
+ *
+ * Each marker is a soft radial "glow" sprite (a shared canvas texture)
+ * tinted by object type and sized by visual magnitude (brighter = bigger).
+ * The group is HIDDEN by default; main.ts shows it with the "DSO" toggle.
+ *
+ * A soft round sprite (not a hard point) reads as a fuzzy nebula/cluster
+ * rather than a star — the visual cue that distinguishes a DSO from the
+ * point-like starfield.
+ */
+export function buildDsoMarkers(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'dso';
+  group.visible = false; // off until the DSO toggle
+
+  // One shared soft-disc texture for all markers (tinted per-sprite).
+  const glowTex = makeDsoGlowTexture();
+  group.userData.glowTex = glowTex;
+
+  for (const m of MESSIER) {
+    const [x, y, z] = raDecToUnit(m.raHours, m.decDeg);
+    const r = CONSTELLATION_RADIUS * 0.995; // just inside the star dome
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTex,
+        color: dsoColor(m.type),
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    sprite.position.set(x * r, y * r, z * r);
+    // Brighter (lower vMag) = larger. Clamp so the faintest are still visible.
+    const mag = m.vMag ?? 12;
+    const size = THREE.MathUtils.clamp(14 - (mag - 3) * 1.1, 2.2, 12);
+    sprite.scale.set(size, size, 1);
+    sprite.renderOrder = 5; // above the star dots (renderOrder 4)
+    sprite.name = `dso:${m.name}`;
+    sprite.userData = { dso: m as MessierObject };
+    group.add(sprite);
+  }
+  return group;
+}
+
+/** Soft radial glow disc (white; tinted per-sprite) for DSO markers. */
+function makeDsoGlowTexture(): THREE.Texture {
+  const s = 64;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = s;
+  const ctx = cv.getContext('2d')!;
+  const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, s, s);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** Tint a DSO marker by its space-cats type code. */
+function dsoColor(type: string): number {
+  switch (type) {
+    case 'G': // galaxies
+      return 0x9fd0ff; // soft blue
+    case 'GCl': // globular clusters
+      return 0xffd9a0; // warm gold
+    case 'OCl': // open clusters
+      return 0xcfe8ff; // pale blue-white
+    case 'Neb':
+    case 'HII':
+    case 'Cl+N': // emission / H II / cluster+nebula
+      return 0xff9fb0; // pinkish (H-alpha)
+    case 'RfN': // reflection nebula
+      return 0xa0c8ff; // blue
+    case 'PN': // planetary nebula
+      return 0xb0ffd0; // green-cyan
+    case 'SNR': // supernova remnant
+      return 0xffb0a0; // warm
+    case '*Ass': // star cluster
+      return 0xffffff;
+    default:
+      return 0xdfe8ff;
+  }
 }
 
 /**

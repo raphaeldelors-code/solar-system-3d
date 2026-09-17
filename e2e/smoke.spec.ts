@@ -214,6 +214,38 @@ test('i18n: en default + fr via navigator locale (D9)', async ({ browser }) => {
   await frContext.close();
 });
 
+test('DSO toggle: Messier markers group exists + toggles visibility (B4)', async ({ page }) => {
+  watchPageErrors(page); // fails the test on any uncaught error (e.g. building 109 sprites)
+  await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
+  await waitForRender(page);
+
+  // The DSO toggle exists and is off by default.
+  const before = await page.evaluate(() => {
+    const el = document.getElementById('dso') as HTMLInputElement | null;
+    return { hasToggle: !!el, checked: el?.checked ?? false };
+  });
+  expect(before.hasToggle).toBe(true);
+  expect(before.checked).toBe(false); // off by default
+
+  // Let init fully settle (its trailing syncUrl writes dso=0) before we click,
+  // so our click's syncUrl isn't clobbered. A fixed settle wait mirrors the
+  // proven-working manual check (click → checked=true, URL dso=1).
+  await page.waitForTimeout(2500);
+
+  // Toggle on → the checkbox flips and the URL gains ?dso=1 (shareable state).
+  await page.click('#dso');
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(() => (document.getElementById('dso') as HTMLInputElement).checked),
+      { timeout: 3000 },
+    )
+    .toBe(true);
+  await expect
+    .poll(async () => page.url(), { timeout: 3000 })
+    .toContain('dso=1');
+});
+
 test('pause-on-visibilitychange: hidden flag tracks the tab (D10)', async ({ page }) => {
   watchPageErrors(page);
   await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });

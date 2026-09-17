@@ -44,6 +44,8 @@ export interface ViewState {
   belts?: boolean;
   /** Classic constellation figure plates (plan 007). Absent = off. */
   figures?: boolean;
+  /** Messier deep-sky markers (plan 046 B4). Absent = off. */
+  dso?: boolean;
   /** Subtle DOF / bokeh post pass (plan 044 A3). Absent = off. */
   dof?: boolean;
   paused?: boolean;
@@ -103,6 +105,8 @@ export function parseAppState(href: string): ViewState {
   if (belts !== undefined) state.belts = belts;
   const figures = flag(q.get('fig'));
   if (figures !== undefined) state.figures = figures;
+  const dso = flag(q.get('dso'));
+  if (dso !== undefined) state.dso = dso;
   const dof = flag(q.get('dof'));
   if (dof !== undefined) state.dof = dof;
   const paused = flag(q.get('p'));
@@ -145,6 +149,7 @@ export function encodeAppState(href: string, s: ViewState): string {
   setOrDel('l', s.labels === undefined ? undefined : s.labels ? '1' : '0');
   setOrDel('b', s.belts === undefined ? undefined : s.belts ? '1' : '0');
   setOrDel('fig', s.figures === undefined ? undefined : s.figures ? '1' : '0');
+  setOrDel('dso', s.dso === undefined ? undefined : s.dso ? '1' : '0');
   setOrDel('dof', s.dof === undefined ? undefined : s.dof ? '1' : '0');
   setOrDel('p', s.paused === undefined ? undefined : s.paused ? '1' : '0');
   setOrDel('rv', s.reversed === undefined ? undefined : s.reversed ? '1' : '0');

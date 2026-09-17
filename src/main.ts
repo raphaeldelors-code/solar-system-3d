@@ -296,8 +296,10 @@ const orbitsEl = document.getElementById('orbits') as HTMLInputElement;
 const labelsEl = document.getElementById('labels') as HTMLInputElement;
 const beltsEl = document.getElementById('belts') as HTMLInputElement;
 const figuresEl = document.getElementById('figures') as HTMLInputElement;
+const dsoEl = document.getElementById('dso') as HTMLInputElement;
 const dofEl = document.getElementById('dof') as HTMLInputElement;
 let figuresOn = false;
+let dsoOn = false;
 const shareBtn = document.getElementById('share') as HTMLButtonElement;
 const screenshotBtn = document.getElementById('screenshot') as HTMLButtonElement;
 const tooltipEl = document.getElementById('tooltip') as HTMLDivElement;
@@ -986,6 +988,8 @@ function applyToggles(): void {
   // Plan 012: constellation figures (the "Figures" toggle). The per-figure
   // fade runs in the highlight pass; here we just switch the group.
   built.constellationFigures.visible = figuresOn;
+  // Plan 046 B4: Messier deep-sky markers (the "DSO" toggle). Off by default.
+  built.dso.visible = dsoOn;
   // Plan 044 A3: subtle DOF (bokeh) toggle. Off by default. Only meaningful on
   // the HDR/composer path — when postOn is false the composer (and its bokeh
   // pass) isn't rendered, so the toggle is a no-op there. D6: the low tier has
@@ -1510,6 +1514,11 @@ beltsEl.addEventListener('change', () => {
 });
 figuresEl.addEventListener('change', () => {
   figuresOn = figuresEl.checked;
+  applyToggles();
+  syncUrl();
+});
+dsoEl.addEventListener('change', () => {
+  dsoOn = dsoEl.checked;
   applyToggles();
   syncUrl();
 });
@@ -2303,6 +2312,10 @@ if (urlState.figures != null) {
   figuresEl.checked = urlState.figures;
   figuresOn = urlState.figures;
 }
+if (urlState.dso != null) {
+  dsoEl.checked = urlState.dso;
+  dsoOn = urlState.dso;
+}
 if (urlState.dof != null) dofEl.checked = urlState.dof;
 if (urlState.paused != null) {
   clock.setPaused(urlState.paused);
@@ -2355,6 +2368,7 @@ function captureState(): ViewState {
     labels: labelsEl.checked,
     belts: beltsEl.checked,
     figures: figuresOn,
+    dso: dsoOn,
     dof: dofEl.checked,
     paused: clock.isPaused,
     eventsOpen: !eventsRowEl.hidden,
