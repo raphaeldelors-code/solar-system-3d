@@ -85,7 +85,7 @@ One feature per commit, gates green before each. Start at A1.
 - [x] D1 docs(legal): asset licensing ledger + GPL-3.0 LICENSE + in-app attribution (plan 044) — `cb713ba`
 - [x] D2 refactor: split main.ts god-file (frameLoop/scrub/searchUi/eventsPanel/contextLoss) (plan 044) — DONE: eventsPanel `205b122` + frameLoop `95ce34d` + scrub `c380a6c` + searchUi `cd8e9be` + contextLoss `bdb1808` (main.ts 4200→3133)
 - [x] D3 test: browser E2E (Playwright) smoke spec in CI (plan 044) — `667f1ed`
-- [ ] D4 fix(pwa): service worker — hashed filename, cache cap, error handler, offline page (plan 044)
+- [x] D4 fix(pwa): service worker — hashed filename, cache cap, error handler, offline page (plan 044) — `2b4af2f`
 - [ ] D5 perf: bundle diet + CI size budget (plan 044)
 - [ ] D6 fix(web): WebGL-availability guard + low-end quality tier (plan 044)
 - [ ] D7 feat(ops): privacy-first telemetry (plan 044)
