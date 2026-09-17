@@ -1563,6 +1563,49 @@
         background: #2b4a7a;
         border-color: var(--accent);
       }
+      /* D7: in-app error toast. Bottom-center, transient (auto-dismisses via
+         JS). The `hidden` attribute is the default; `.show` overrides it. */
+      #telemetry-toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%) translateY(12px);
+        z-index: 50;
+        max-width: min(90vw, 480px);
+        padding: 10px 16px;
+        border-radius: 8px;
+        background: rgba(40, 12, 16, 0.95);
+        border: 1px solid #7a2b34;
+        color: #f0c8cc;
+        font:
+          13px/1.5 system-ui,
+          sans-serif;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.25s ease,
+          transform 0.25s ease;
+      }
+      #telemetry-toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      /* D7: the consent toggle row in the About dialog. */
+      #telemetry-consent-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 0 4px;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+      }
+      #telemetry-consent-row input {
+        accent-color: var(--accent, #6ea8ff);
+        width: 16px;
+        height: 16px;
+        margin: 0;
+      }
       /* ===== Plan 035 F5: cinematic intro =====
          Full-screen overlay, pointer-transparent (the canvas underneath stays
          interactive — ANY manual input on it skips the intro via JS). The
@@ -1965,7 +2008,7 @@
         color: #7f93b5;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-BHY-epRr.js"></script>
+    <script type="module" crossorigin src="./assets/index-B2lOUVvA.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -1997,6 +2040,10 @@
       </div>
     </div>
     <div id="tooltip" aria-hidden="true"></div>
+    <!-- D7: in-app error toast. Shown by the telemetry client when an uncaught
+         error is captured (local-only; nothing is sent externally). Invisible
+         by default via CSS (opacity:0 + pointer-events:none); .show reveals it. -->
+    <div id="telemetry-toast" role="alert"></div>
 
     <!-- Plan 035 F5: cinematic intro (first-load dolly + title) and the
          command palette (press / or ? to open). Both are hidden by default;
@@ -2068,6 +2115,18 @@
             Milky Way skybox, app icon and all code — original work by the Orrery authors (GPL-3.0).
           </li>
         </ul>
+
+        <h4>Privacy &amp; telemetry</h4>
+        <p>
+          Orrery is privacy-first: by default <strong>nothing leaves your browser</strong>. You can
+          opt in to anonymous error reporting (no URLs, no body names, no identifiers — just the
+          error message and a performance snapshot) to help fix bugs. Your choice is stored only on
+          this device.
+        </p>
+        <label id="telemetry-consent-row">
+          <input id="telemetry-consent" type="checkbox" />
+          Share anonymous error reports
+        </label>
 
         <button id="about-close" type="button">Close</button>
       </div>
