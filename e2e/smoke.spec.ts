@@ -162,7 +162,8 @@ test('telemetry consent is opt-in + persists (D7)', async ({ page }) => {
 
   // Default: unset (opt-in — nothing is sent until the user grants).
   const initial = await page.evaluate(
-    () => (window as unknown as { __debug?: { telemetryConsent?: string } }).__debug?.telemetryConsent,
+    () =>
+      (window as unknown as { __debug?: { telemetryConsent?: string } }).__debug?.telemetryConsent,
   );
   expect(initial).toBe('unset');
 
@@ -171,7 +172,8 @@ test('telemetry consent is opt-in + persists (D7)', async ({ page }) => {
   await expect(page.locator('#about')).toBeVisible();
   await page.click('#telemetry-consent');
   const granted = await page.evaluate(
-    () => (window as unknown as { __debug?: { telemetryConsent?: string } }).__debug?.telemetryConsent,
+    () =>
+      (window as unknown as { __debug?: { telemetryConsent?: string } }).__debug?.telemetryConsent,
   );
   expect(granted).toBe('granted');
 
@@ -179,7 +181,8 @@ test('telemetry consent is opt-in + persists (D7)', async ({ page }) => {
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForRender(page);
   const persisted = await page.evaluate(
-    () => (window as unknown as { __debug?: { telemetryConsent?: string } }).__debug?.telemetryConsent,
+    () =>
+      (window as unknown as { __debug?: { telemetryConsent?: string } }).__debug?.telemetryConsent,
   );
   expect(persisted).toBe('granted');
 });
