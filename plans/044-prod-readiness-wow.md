@@ -184,6 +184,30 @@ on the target phones. _What:_ dynamic-import the intro/post/constellation-label
 paths, set a CI budget (fail > 800 kB raw). _Effort:_ M. _First step:_
 `vite build --report` + move `post.ts` behind `import()`.
 
+> **DONE (2026-09-17, commits `cf568cf` + `0759ca9`) — scope revised after
+> measurement.** The plan's specifics were stale (written at 775 kB, before the
+> B1–B8 data features landed; the bundle was 1,321 kB raw). Analysis:
+> `post.ts` is first-paint (built at scene construction — lazy-loading it would
+> hurt the look), so the real levers are the on-demand data files.
+>
+> 1. **horizonsMoon.json (120 kB) lazy-loaded** — dynamic-imported behind
+>    `preloadHorizons()` (kicked off at module load; `moonHorizons()` keeps its
+>    sync signature, returns null until loaded). Vite now emits it as a separate
+>    `horizonsMoon-*.js` chunk (~105 kB); main entry 1,321 → **1,218 kB raw**
+>    (414 → 368 kB gzip).
+> 2. **CI size budget** — `scripts/size-budget.mjs` wired into `npm run build`
+>    (runs locally + CI): fails if the main entry chunk exceeds **1.30 MB**
+>    (regression guard with headroom; the original 800 kB target is unreachable
+>    without dropping three.js, which alone is ~1.0 MB source).
+> 3. **SW bug fix (exposed by D5)** — `cf568cf`: the D4 service worker's LRU
+>    trim evicted the precached shell (oldest entry) once the cache tipped over
+>    MAX_ENTRIES, and the offline navigation fallback missed query-string
+>    navigations (`/?intro=0` ≠ `/`). Both fixed; offline E2E tests pass.
+>    **Follow-up (not D5):** starfield.json (512 kB, first-paint core visual)
+>    progressive-enhancement lazy-load — the next big lever; needs real-device
+>    visual verification, so it gets its own feature. exoplanets.json (12 kB) is
+>    on-demand but small; skip.
+
 **D6. WebGL-availability guard + low-end quality tier.** try/catch renderer
 creation with a fallback message; a quality tier (shadows off, DPR 1, belt count
 ↓) auto-selected from `deviceMemory`/fps sampling. _Effort:_ M. _First step:_
@@ -239,7 +263,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] D2 Split main.ts god-file — DONE: eventsPanel (205b122) + frameLoop (95ce34d) + scrub (c380a6c) + searchUi (cd8e9be) + contextLoss (bdb1808, main.ts 4200→3133), all 5 sections behind createX(deps) factories
 - [x] D3 Browser E2E (Playwright) — 667f1ed (5 smoke tests: boot+render, URL round-trip, search pick, context-loss overlay, offline reload via SW; new e2e CI job)
 - [x] D4 Fix the service worker — 2b4af2f (versioned cache via build-time content hash, LRU cap, error handlers, themed offline.html fallback; 6th E2E test)
-- [ ] D5 Bundle diet + CI size budget
+- [x] D5 Bundle diet + CI size budget (cf568cf + 0759ca9)
 - [ ] D6 WebGL guard + low-end quality tier
 - [ ] D7 Telemetry (privacy-first)
 - [ ] D8 CI hardening (PR gate, deploy smoke)
