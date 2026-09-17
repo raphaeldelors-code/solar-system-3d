@@ -2613,7 +2613,7 @@ screenshotBtn.addEventListener('click', async () => {
   octx.shadowBlur = fs / 2;
   octx.fillStyle = 'rgba(235, 240, 250, 0.92)';
   const dateLine = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-  octx.fillText(`Solar System 3D · ${dateLine}`, out.width - fs, out.height - fs * 2.2);
+  octx.fillText(`Orrery · ${dateLine}`, out.width - fs, out.height - fs * 2.2);
   // Short canonical domain (not the full param URL — that's what "Copy share
   // link" is for). Keeps the export clean and brandable.
   octx.font = `400 ${Math.round(fs * 0.82)}px system-ui, -apple-system, sans-serif`;
