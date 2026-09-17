@@ -21,6 +21,9 @@ export interface ContextLossDeps {
   markSceneDirty: () => void;
   contextLost: { get(): boolean; set(v: boolean): void };
   lastMs: { get(): number; set(v: number): void };
+  /** D7: optional hook fired on each context-loss event (for the telemetry
+   *  counter). Not called on restore. */
+  onContextLost?: () => void;
 }
 
 export function createContextLoss(deps: ContextLossDeps): void {
@@ -28,6 +31,7 @@ export function createContextLoss(deps: ContextLossDeps): void {
     // Three.js preventDefaults its own listener; we just observe the loss.
     ev.preventDefault();
     deps.contextLost.set(true);
+    deps.onContextLost?.(); // D7: telemetry counter
     deps.glLostEl.hidden = false;
     deps.glLostEl.classList.add('show');
   });

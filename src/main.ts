@@ -34,6 +34,7 @@ import {
   type QualityTier,
   type FpsWatchdog,
 } from './render/quality';
+import { createTelemetry } from './telemetry/client';
 import { buildExoScene, type ExoScene } from './render/exoScene';
 import { EXO_SYSTEMS } from './sim/exoplanets';
 import { fetchIssTle, FALLBACK_ISS_TLE } from './data/issTle';
@@ -432,6 +433,25 @@ let postOn = true;
 // it ONCE (high→medium→low) if the device can't hold ~30 fps. Declared here so
 // the boot block + watchdog can reference it before the URL parse runs.
 let qualityTier: QualityTier = 'high';
+// D7: privacy-first telemetry (plan 044). OPT-IN — nothing is sent externally
+// until the user grants consent in the About dialog; until then every report
+// is local-only (console + an in-app error toast). No external sink is
+// configured by default, so even with consent granted nothing leaves the
+// browser. The owner can drop in a sink (Sentry/GlitchTip/custom) by passing
+// `sink:` here — the consent gate in the client enforces it.
+const telemetry = createTelemetry({
+  version: (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev',
+  getQualityTier: () => qualityTier,
+  onError: (message) => {
+    // In-app error toast (created in the HTML; lazily fetched so this callback
+    // is safe to call before the init section runs). Auto-dismisses.
+    const toast = document.getElementById('telemetry-toast');
+    if (!toast) return;
+    toast.textContent = `Something went wrong: ${message}`;
+    toast.classList.add('show');
+    window.setTimeout(() => toast.classList.remove('show'), 6000);
+  },
+});
 /**
  * Currently highlighted body — a planet OR a moon (plan 015 P6). The
  * follow/camera can be on the parent planet while the selected satellite
@@ -2471,7 +2491,21 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !aboutDialog.hidden) closeAbout();
 });
 
+// D7: the telemetry consent toggle (in the About dialog). Reflects the
+// persisted choice on open; a change writes it immediately. Opt-in — the
+// checkbox starts unchecked unless the user previously granted consent.
+const telemetryConsentEl = document.getElementById('telemetry-consent') as HTMLInputElement;
+telemetryConsentEl.checked = telemetry.consent() === 'granted';
+telemetryConsentEl.addEventListener('change', () => {
+  telemetry.setConsent(telemetryConsentEl.checked ? 'granted' : 'declined');
+});
+
 // --- Init ------------------------------------------------------------------
+
+// D7: install the error/rejection capture NOW (before any init work) so a
+// throw during scene build is caught, not just post-boot errors. Local-only
+// until consent is granted.
+telemetry.install();
 
 // D6: pre-flight WebGL probe. If the browser can't create a WebGL context at
 // all (WebGL disabled, very old browser, or a blocked GPU), `buildScene`'s
@@ -3184,8 +3218,11 @@ const frameLoop = createFrameLoop({
   updatePlanetScreenLabelFrame,
   updateSunFlareAndDOF,
   // D6: feed the fps watchdog (one-shot). Null once it has fired / downgraded.
+  // D7: also feed the telemetry fps histogram (active frames only — the
+  // static-frame skip returns earlier, so parked frames never pollute it).
   sampleFrameMs: (frameMs: number) => {
     fpsWatchdog?.sample(frameMs);
+    telemetry.sampleFrame(frameMs);
   },
 });
 if (bootOk) {
@@ -3196,6 +3233,7 @@ if (bootOk) {
     glReloadBtn,
     built,
     markSceneDirty,
+    onContextLost: () => telemetry.count('context_loss'), // D7
     contextLost: {
       get: () => contextLost,
       set: (v) => {
@@ -3220,5 +3258,9 @@ if (bootOk) {
   },
   get bootOk() {
     return bootOk;
+  },
+  // D7: telemetry consent state (unset|granted|declined) for E2E + checks.
+  get telemetryConsent() {
+    return telemetry.consent();
   },
 };
