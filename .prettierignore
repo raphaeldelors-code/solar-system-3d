@@ -3,3 +3,5 @@ node_modules/
 package-lock.json
 *.lock
 .judge/
+test-results/
+playwright-report/
