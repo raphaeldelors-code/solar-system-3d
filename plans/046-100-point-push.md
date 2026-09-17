@@ -88,9 +88,11 @@ below.
       over me" 3D view from the user's position. The #1 gap vs Stellarium/
       SkySafari/Google Sky Map; converts orrery → astronomy app. Prerequisite for
       the eclipse-from-location premium feature. _Effort: L._
-- [ ] **B4. Messier 110 DSO markers.** RA/Dec, type, magnitude, Hubble sprite,
-      searchable. Deep-sky objects are table stakes for "coolest astronomy app".
-      _Effort: M._
+- [x] **B4. Messier 110 DSO markers.** DONE 940074e — 109 objects (space-cats
+      catalog, J2000 RA/Dec, type, vMag, common name) as soft additive glow
+      sprites tinted by type + sized by brightness; "DSO" toggle (i18n en+fr),
+      `?dso=1` URL round-trip, disposal wired, E2E 12/12. Deployed 0d14562.
+      (Hubble sprite + search deferred — markers + toggle ship the core wow.)
 - [ ] **B5. Live NEO close-approach feed.** NASA CNEOS (free, CORS-friendly) +
       a "next asteroid to pass Earth" HUD. Real-time, news-worthy, zero license
       risk. _Effort: S._
