@@ -198,6 +198,41 @@
         font-weight: 600;
         color: #eaf1ff;
       }
+      /* Plan 044 B5: space-weather indicator. A small dot before the Kp value
+         whose colour tracks the G-scale (calm green → storm red). The dot is
+         a ::before on the value span; data-kp (set by applyKp) drives the hue. */
+      #space-weather {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        justify-content: flex-end;
+      }
+      #space-weather::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #4a5878; /* no data / calm */
+        box-shadow: 0 0 6px rgba(120, 200, 120, 0.4);
+      }
+      #space-weather[data-kp='4']::before {
+        background: #7fd87f;
+        box-shadow: 0 0 8px rgba(127, 216, 127, 0.6);
+      }
+      #space-weather[data-kp='5']::before,
+      #space-weather[data-kp='6']::before {
+        background: #ffd24a;
+        box-shadow: 0 0 10px rgba(255, 210, 74, 0.7);
+      }
+      #space-weather[data-kp='7']::before {
+        background: #ff9a3c;
+        box-shadow: 0 0 12px rgba(255, 154, 60, 0.8);
+      }
+      #space-weather[data-kp='8']::before,
+      #space-weather[data-kp='9']::before {
+        background: #ff4d4d;
+        box-shadow: 0 0 14px rgba(255, 77, 77, 0.9);
+      }
       /* ---- Events panel (B1) ---- */
       /* Plan 043 F5: the events row is a COLUMN, not the default horizontal
          .row flex — so the list spans the full panel width and the note sits
@@ -1437,7 +1472,7 @@
         color: #7f93b5;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-DzNTIPP6.js"></script>
+    <script type="module" crossorigin src="./assets/index-BCBGuRYx.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -1595,6 +1630,12 @@
       <div class="panel-body">
         <div class="section-head">Time</div>
         <div class="row"><label>Now</label><span id="date" class="value">—</span></div>
+        <!-- Plan 044 B5: live NOAA/SWPC planetary Kp (space weather). Filled by
+             applyKp() at startup + every 15 min; the dot colour tracks the
+             G-scale (calm green → storm red). -->
+        <div class="row" id="space-weather-row">
+          <label>Space weather</label><span id="space-weather" class="value">Kp —</span>
+        </div>
         <div class="row">
           <label>Speed</label>
           <input
