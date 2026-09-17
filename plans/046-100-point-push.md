@@ -131,9 +131,11 @@ below.
       _Effort: M._
 - [ ] **C7. Milky Way band + star color-temperature spread.** The black void
       reads as "empty", not "space". _Effort: S._
-- [ ] **C8. UI polish pass.** Type scale + contrast audit + focus-visible
-      states + reduced-motion respect. The panel is the only "product" surface.
-      _Effort: S._
+- [x] **C8. UI polish pass.** DONE fc016a2 — contrast audit: all 8 text/bg
+      pairs pass WCAG AA (min 6.88:1, no gap); focus-visible + reduced-motion
+      already present. Normalized the fragmented type scale (13 sizes incl. 7
+      half-pixel values + a 9px outlier) to a clean integer modular scale
+      (10/11/12/13/14/15/16/17/26px); no sub-10px text remains. _Effort: S._
 - [ ] **C9. Accessibility.** Keyboard camera control + canvas ARIA
       description + documented touch gesture model. A11y is currently zero.
       _Effort: M._
