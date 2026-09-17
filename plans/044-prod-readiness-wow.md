@@ -266,6 +266,6 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] D5 Bundle diet + CI size budget (cf568cf + 0759ca9)
 - [x] D6 WebGL guard + low-end quality tier — a1901ba (D6.1 pure module) + 81070de (D6.2 buildScene tier) + 218c558 (D6.3 boot select + fps watchdog + WebGL guard + __debug) + de6c294 (D6.4 E2E); deployed d5617cd
 - [x] D7 Telemetry (privacy-first) — d32e17b (D7.1/D7.2 pure core + client, local-only default, pluggable sink) + 4808d6c (D7.3 consent toggle + error toast + fps sampler + context-loss counter) + ec7b167 (D7.4 E2E) + b39e66f (format fix); deployed 8143b8b. NOTE: no external sink configured by default (opt-in, local-only) — owner to drop in Sentry/GlitchTip/custom via the `sink:` seam when ready.
-- [ ] D8 CI hardening (PR gate, deploy smoke)
+- [x] D8 CI hardening (PR gate, deploy smoke) — 3a6bfd5 (squash of PR #1): pull_request trigger runs the full gate on PRs; Deploy + post-deploy smoke (fetch / + /sw.js, assert 200, retry 6x) gated on push-to-main; bundle budget (D5) now gates PRs too. Verified: PR #1 ran the gate with deploy skipped; merge push ran deploy + smoke (both success).
 - [ ] D9 i18n foundation
 - [ ] D10 Pause-on-visibilitychange + listener audit
