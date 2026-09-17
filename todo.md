@@ -81,7 +81,7 @@ One feature per commit, gates green before each. Start at A1.
 - [x] C2 feat(web): 3-step first-run onboarding (plan 044) — `43cbfca`
 - [x] C3 feat(web): timeline discoverability + speed-slider tick labels (plan 044) — `ca4ee39`
 - [x] C4 fix(a11y): contrast, prefers-reduced-motion, keyboard time-scrub (plan 044) — `9eb2b2a`
-- [ ] C5 feat(brand): name + logo + icon (drop the horse) (plan 044)
+- [x] C5 feat(brand): name + logo + icon (drop the horse) (plan 044) — `b1be2bf`
 - [ ] D1 docs(legal): asset licensing ledger (Stellarium GPL / ESA) — sale blocker (plan 044)
 - [ ] D2 refactor: split main.ts god-file (frameLoop/scrub/searchUi/eventsPanel/contextLoss) (plan 044)
 - [ ] D3 test: browser E2E (Playwright) smoke spec in CI (plan 044)
