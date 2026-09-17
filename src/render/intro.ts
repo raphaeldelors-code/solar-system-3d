@@ -12,6 +12,7 @@
  * users, for an explicit `?intro=0`, and whenever a shared URL already pins a
  * view (so a restore link never gets overridden by a fly-around).
  */
+import { cineEase } from './cameraFlight';
 
 /** One intro camera leg. `bodyId` is the follow target (tracked while flying). */
 export interface IntroLeg {
@@ -75,16 +76,63 @@ export function introShouldPlay(
 export const INTRO_SEEN_KEY = 'solar_intro_seen';
 
 /**
- * Title opacity at a given intro time (0..INTRO_DURATION). Ramps in over
- * [TITLE_FADE_IN_START, TITLE_FADE_IN_END], holds at 1, then ramps out over
- * [TITLE_FADE_OUT_START, TITLE_FADE_OUT_END]. Clamped; returns 0 outside the
- * intro window.
+ * Title opacity at a given intro time. `t` is measured from the intro start
+ * and SPANS the whole intro INCLUDING the A6 tail (0 .. INTRO_DURATION +
+ * INTRO_TAIL_DURATION). Ramps in over [TITLE_FADE_IN_START,
+ * TITLE_FADE_IN_END], holds at 1, then ramps out over the last ~1.6 s of the
+ * intro (the tail) so the title is gone by the time the strip glows. Returns
+ * 0 outside the intro window.
  */
 export function titleOpacity(t: number): number {
-  if (t < TITLE_FADE_IN_START || t > TITLE_FADE_OUT_END) return 0;
+  const total = INTRO_DURATION + INTRO_TAIL_DURATION;
+  const outStart = total - 1.6;
+  const outEnd = total - 0.6;
+  if (t < TITLE_FADE_IN_START || t > outEnd) return 0;
   if (t < TITLE_FADE_IN_END) {
     return (t - TITLE_FADE_IN_START) / (TITLE_FADE_IN_END - TITLE_FADE_IN_START);
   }
-  if (t < TITLE_FADE_OUT_START) return 1;
-  return (TITLE_FADE_OUT_END - t) / (TITLE_FADE_OUT_END - TITLE_FADE_OUT_START);
+  if (t < outStart) return 1;
+  return (outEnd - t) / (outEnd - outStart);
+}
+
+// --- Plan 044 A6: the intro TAIL (ends on the time-scrub) ---
+//
+// The old intro ended the moment the camera landed on Earth — the app's
+// signature feature (the live time-scrub timeline) was never shown. A6 adds a
+// short TAIL after the last camera leg: the camera settles, the timeline strip
+// glows into view, time visibly accelerates, and an event marker pops at the
+// "you are here" position. The tail is pure timing math here (unit-tested);
+// main.ts wires it to the DOM + clock. The cinematic easing itself
+// (`cineEase`) lives in cameraFlight.ts, next to the cubic it replaces.
+
+/** Tail length in seconds (camera settled on Earth; the strip glows + time ramps). */
+export const INTRO_TAIL_DURATION = 2.5;
+
+/**
+ * The timeline speed (log scale, the `speedEl` value) at tail time `t`.
+ * Eases from `fromSpeed` (the speed at the moment the tail starts) to
+ * `toSpeed` (a pleasant "time is flowing" default) over the tail, using the
+ * same quintic `cineEase` so the acceleration reads as deliberate. Clamped to
+ * [0, INTRO_TAIL_DURATION].
+ */
+export function introTailSpeed(t: number, fromSpeed: number, toSpeed: number): number {
+  const k = cineEase(t / INTRO_TAIL_DURATION);
+  return fromSpeed + (toSpeed - fromSpeed) * k;
+}
+
+/**
+ * The timeline strip's glow opacity at tail time `t`: 0 at the start, ramps to
+ * 1 over the first ~40% of the tail (the strip "lights up"), holds, then fades
+ * back to 0 over the last ~25% so the strip settles into its normal resting
+ * state as the intro hands back to the user.
+ */
+export function introTailGlow(t: number): number {
+  const d = INTRO_TAIL_DURATION;
+  const inEnd = d * 0.4;
+  const outStart = d * 0.75;
+  if (t <= 0) return 0;
+  if (t < inEnd) return t / inEnd;
+  if (t < outStart) return 1;
+  if (t >= d) return 0;
+  return (d - t) / (d - outStart);
 }

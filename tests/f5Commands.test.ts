@@ -3,13 +3,15 @@ import { bodyFacts, formatDayLength, FUN_FACTS } from '../src/render/bodyFacts';
 import {
   INTRO_LEGS,
   INTRO_DURATION,
+  INTRO_TAIL_DURATION,
   TITLE_FADE_IN_START,
   TITLE_FADE_IN_END,
-  TITLE_FADE_OUT_START,
-  TITLE_FADE_OUT_END,
   introShouldPlay,
   titleOpacity,
+  introTailSpeed,
+  introTailGlow,
 } from '../src/render/intro';
+import { cineEase } from '../src/render/cameraFlight';
 import {
   COMMANDS,
   commandForKey,
@@ -78,16 +80,70 @@ describe('intro', () => {
     expect(introShouldPlay(false, '1', false, false)).toBe(true);
   });
 
-  it('fades the title in then out, clamped to [0,1]', () => {
+  it('fades the title in then out (spanning the A6 tail), clamped to [0,1]', () => {
+    const total = INTRO_DURATION + INTRO_TAIL_DURATION;
     expect(titleOpacity(0)).toBe(0);
     expect(titleOpacity(TITLE_FADE_IN_START)).toBe(0);
     expect(titleOpacity(TITLE_FADE_IN_END)).toBe(1);
-    expect(titleOpacity((TITLE_FADE_IN_END + TITLE_FADE_OUT_START) / 2)).toBe(1);
-    expect(titleOpacity(TITLE_FADE_OUT_END)).toBe(0);
-    expect(titleOpacity(INTRO_DURATION)).toBe(0);
+    // mid-intro (well before the tail) is fully opaque
+    expect(titleOpacity(INTRO_DURATION * 0.5)).toBe(1);
+    // the title is still up at the start of the tail, then fades out over the
+    // last ~1.6 s of the whole intro (legs + tail)
+    expect(titleOpacity(INTRO_DURATION)).toBeGreaterThan(0);
+    expect(titleOpacity(total)).toBe(0);
+    expect(titleOpacity(total + 5)).toBe(0);
     // mid-fade-in is a value strictly between 0 and 1
     expect(titleOpacity((TITLE_FADE_IN_START + TITLE_FADE_IN_END) / 2)).toBeGreaterThan(0);
     expect(titleOpacity((TITLE_FADE_IN_START + TITLE_FADE_IN_END) / 2)).toBeLessThan(1);
+  });
+
+  it('cineEase is a smooth quintic in/out (0→1, symmetric, gentler than cubic)', () => {
+    expect(cineEase(0)).toBe(0);
+    expect(cineEase(1)).toBe(1);
+    expect(cineEase(0.5)).toBeCloseTo(0.5, 5);
+    // clamped outside [0,1]
+    expect(cineEase(-1)).toBe(0);
+    expect(cineEase(2)).toBe(1);
+    // quintic is "flatter" at the ends than the cubic: at x=0.25 the quintic
+    // has barely moved (slow start) while the cubic has moved more.
+    expect(cineEase(0.25)).toBeLessThan(0.1);
+    expect(cineEase(0.75)).toBeGreaterThan(0.9);
+  });
+
+  it('introTailSpeed eases from the start speed to the target over the tail', () => {
+    expect(introTailSpeed(0, 0, 1.5)).toBeCloseTo(0, 5);
+    expect(introTailSpeed(INTRO_TAIL_DURATION, 0, 1.5)).toBeCloseTo(1.5, 5);
+    // monotonic increasing from 0 → 1.5
+    let prev = -Infinity;
+    for (let i = 0; i <= 10; i++) {
+      const v = introTailSpeed((i / 10) * INTRO_TAIL_DURATION, 0, 1.5);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      prev = v;
+    }
+    // clamped at the ends (negative / over-long times)
+    expect(introTailSpeed(-1, 0, 1.5)).toBeCloseTo(0, 5);
+    expect(introTailSpeed(INTRO_TAIL_DURATION + 5, 0, 1.5)).toBeCloseTo(1.5, 5);
+    // a ramp DOWN (tail starts faster than the target) is monotonic decreasing
+    expect(introTailSpeed(0, 2, 1)).toBeCloseTo(2, 5);
+    expect(introTailSpeed(INTRO_TAIL_DURATION, 2, 1)).toBeCloseTo(1, 5);
+  });
+
+  it('introTailGlow ramps 0→1→0 over the tail (lights up, holds, settles)', () => {
+    expect(introTailGlow(0)).toBe(0);
+    expect(introTailGlow(INTRO_TAIL_DURATION)).toBe(0);
+    // peaks at 1 during the hold (the middle of the tail)
+    expect(introTailGlow(INTRO_TAIL_DURATION * 0.5)).toBeCloseTo(1, 5);
+    // monotonic up to the peak, then down
+    let prev = -Infinity;
+    for (let i = 0; i <= 20; i++) {
+      const t = (i / 20) * INTRO_TAIL_DURATION;
+      const v = introTailGlow(t);
+      if (t <= INTRO_TAIL_DURATION * 0.4) expect(v).toBeGreaterThanOrEqual(prev);
+      prev = v;
+    }
+    // clamped at the ends
+    expect(introTailGlow(-1)).toBe(0);
+    expect(introTailGlow(INTRO_TAIL_DURATION + 5)).toBe(0);
   });
 });
 

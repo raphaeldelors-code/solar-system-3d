@@ -73,9 +73,12 @@ import { attachRealTextures } from './render/realTextures';
 import {
   INTRO_LEGS,
   INTRO_DURATION,
+  INTRO_TAIL_DURATION,
   INTRO_SEEN_KEY,
   titleOpacity,
   introShouldPlay,
+  introTailSpeed,
+  introTailGlow,
 } from './render/intro';
 import { commandForKey, digitToPlanet, paletteEntries, COMMANDS } from './render/commands';
 import { bodyFacts } from './render/bodyFacts';
@@ -303,6 +306,15 @@ const glLostEl = document.getElementById('gl-lost') as HTMLDivElement;
 let intro: {
   leg: number; // index into INTRO_LEGS
   titleEl: HTMLDivElement | null;
+  // Plan 044 A6: the TAIL — after the last camera leg lands on Earth, the
+  // intro does NOT end immediately. Instead the camera settles, the timeline
+  // strip glows into view, time visibly accelerates, and an event marker pops
+  // at "you are here". `tail` is true once the legs are done and the tail is
+  // running; `tailT` is the tail's elapsed seconds; `tailFromSpeed` is the
+  // speed at the moment the tail started (the ramp's start point).
+  tail: boolean;
+  tailT: number;
+  tailFromSpeed: number;
 } | null = null;
 const introWrapEl = document.getElementById('intro') as HTMLDivElement | null;
 const introTitleEl = document.getElementById('intro-title') as HTMLDivElement | null;
@@ -344,6 +356,10 @@ const hudTimelineTrackEl = document.getElementById('hud-timeline-track') as HTML
 const hudTimelineDynEl = document.getElementById('hud-timeline-dynamic') as HTMLDivElement;
 const hudTimelineFillEl = document.getElementById('hud-timeline-fill') as HTMLDivElement;
 const hudTimelineCaretEl = document.getElementById('hud-timeline-caret') as HTMLDivElement;
+// Plan 044 A6: the bar (bar-relative, the SAME coordinate space the caret +
+// event markers use — 12px side inset) — the intro tail's "you are here"
+// marker lives here so its `left` lines up exactly with the caret.
+const hudTimelineBarEl = document.getElementById('hud-timeline-bar') as HTMLDivElement;
 const hudTimelineYearEl = document.getElementById('hud-timeline-year') as HTMLSpanElement;
 const hudTlTipEl = document.getElementById('hud-tl-tip') as HTMLDivElement;
 // Plan 025 F4: the rolling magnifier lens (window + 8× event track + date
@@ -1758,7 +1774,7 @@ function startIntro(): void {
   };
   built.camera.position.set(far.pos[0], far.pos[1], far.pos[2]);
   built.controls.target.set(0, 0, 0);
-  intro = { leg: 0, titleEl: introTitleEl };
+  intro = { leg: 0, titleEl: introTitleEl, tail: false, tailT: 0, tailFromSpeed: 0 };
   built.controls.enabled = false;
   lastIntroTotal = 0; // the title clock spans the WHOLE intro (0..INTRO_DURATION)
   beginIntroLeg(0);
@@ -1780,6 +1796,8 @@ function beginIntroLeg(i: number): void {
   selectedConstellation = '';
   intro.leg = i;
   built.controls.enabled = false;
+  // Plan 044 A6: the intro legs use the smoother quintic `cineEase` (the
+  // "cinematic" fly-to) instead of the cubic normal flights use.
   flight = makeFlight(
     [built.camera.position.x, built.camera.position.y, built.camera.position.z],
     [built.controls.target.x, built.controls.target.y, built.controls.target.z],
@@ -1788,39 +1806,115 @@ function beginIntroLeg(i: number): void {
     leg.bodyId,
     built.camera.fov,
     FOV_DEG,
+    true,
   );
 }
 
 let lastIntroTotal = 0;
 
 /**
- * Per-frame intro title-fade tick (called from the render loop while `intro`
- * is active). `dtReal` is the real elapsed seconds.
+ * Per-frame intro tick (called from the render loop while `intro` is active).
+ * `dtReal` is the real elapsed seconds. Drives the title fade on the whole
+ * intro clock (legs + tail), and — once the legs are done — the A6 TAIL: the
+ * timeline strip glows into view, time visibly accelerates, and an event
+ * marker pops at "you are here".
  */
 function tickIntroTitle(dtReal: number): void {
-  if (!intro?.titleEl) return;
+  if (!intro) return;
   lastIntroTotal += dtReal;
-  intro.titleEl.style.opacity = String(titleOpacity(lastIntroTotal));
+  if (intro.titleEl) intro.titleEl.style.opacity = String(titleOpacity(lastIntroTotal));
+  // Plan 044 A6: the TAIL runs after the last leg lands on Earth. The camera
+  // is settled (no flight), so this is pure UI: glow the strip, ramp the time
+  // speed, and pop the event marker. When the tail elapses, finish the intro.
+  if (intro.tail) {
+    intro.tailT += dtReal;
+    tickIntroTail(intro.tailT);
+    if (intro.tailT >= INTRO_TAIL_DURATION) finishIntro(false);
+    return;
+  }
   // Safety: if a leg's flight never reports "done" (e.g. a stalled device),
-  // end the intro once the title has faded out rather than locking the
-  // controls forever. INTRO_DURATION is the sum of all leg durations, so this
-  // only fires well after the planned dolly should be over.
-  if (lastIntroTotal > INTRO_DURATION + 1.5) {
+  // end the intro once the whole intro (legs + tail) has elapsed rather than
+  // locking the controls forever.
+  if (lastIntroTotal > INTRO_DURATION + INTRO_TAIL_DURATION + 1.5) {
     finishIntro(false);
   }
 }
 
 /**
+ * Plan 044 A6: one frame of the intro tail. `t` is the tail's elapsed seconds.
+ * Reveals + glows the timeline strip, ramps the sim speed from the tail's
+ * start speed to a pleasant "time is flowing" default, and pops the "you are
+ * here" event marker. The strip is left visible (the intro hands back to the
+ * user on the timeline, which is the whole point of the tail).
+ */
+function tickIntroTail(t: number): void {
+  // 1. Reveal the strip + paint the current year's events (once per year).
+  tlShow();
+  tlRefresh();
+  // 2. Advance the caret to the CURRENT day-of-year every frame — tlRefresh
+  // only repaints on a year change, but the tail's speed ramp moves the date
+  // continuously, so the "you are here" caret (and the marker on it) must
+  // track it live.
+  const year = tlCurrentYear();
+  const { span0Days, spanLenDays } = yearSpan(year);
+  const frac = Math.min(1, Math.max(0, (clock.t - span0Days) / spanLenDays));
+  tlSetCaret(frac);
+  // 3. Glow: a box-shadow pulse on the strip, scaled by the tail glow curve.
+  const glow = introTailGlow(t);
+  hudTimelineEl.style.boxShadow =
+    glow > 0.01 ? `0 0 ${18 * glow}px ${6 * glow}px rgba(120, 200, 255, ${0.55 * glow})` : '';
+  // 4. Time visibly accelerates: ramp the speed slider from where it was to a
+  // pleasant default (1.5 ≈ a few days per second — motion you can see).
+  const from = intro?.tailFromSpeed ?? 0;
+  const to = 1.5;
+  applySliderSpeed(introTailSpeed(t, from, to));
+  // 5. Pop the "you are here" event marker at the caret (the tail's payoff:
+  // the timeline is alive, and here's where you are in it).
+  popIntroTailMarker(glow, frac);
+}
+
+/**
+ * Plan 044 A6: the tail's event-marker pop. A single marker at the caret
+ * ("you are here") that scales/fades in with the glow, then settles. It lives
+ * in the persistent `#hud-timeline-track` (NOT the dynamic layer, which
+ * `tlPaint` clears on a year change) and is repositioned each frame so it
+ * tracks the moving caret as time ramps.
+ */
+function popIntroTailMarker(glow: number, frac: number): void {
+  if (glow <= 0.01) return;
+  let el = document.getElementById('intro-tail-marker') as HTMLElement | null;
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'intro-tail-marker';
+    hudTimelineBarEl.appendChild(el);
+  }
+  el.style.left = `${frac * 100}%`;
+  const s = 0.6 + 0.8 * glow; // pop from 0.6× to 1.4×
+  el.style.transform = `translate(-50%, -50%) scale(${s})`;
+  el.style.opacity = String(glow);
+}
+
+/**
  * A leg's flight just completed (the render loop's flight-done branch calls
- * this while `intro` is active). Advance to the next leg, or finish the intro
- * and hand the camera back to the normal follow on the final leg.
+ * this while `intro` is active). Advance to the next leg, or — on the final
+ * leg — start the A6 TAIL (the intro now ENDS on the time-scrub, not the
+ * moment the camera lands).
  */
 function onIntroLegDone(): void {
   if (!intro) return;
   if (intro.leg < INTRO_LEGS.length - 1) {
     beginIntroLeg(intro.leg + 1);
   } else {
-    finishIntro(false); // landed on Earth — normal follow takes over
+    // Plan 044 A6: landed on Earth — do NOT finish yet. Start the tail: the
+    // camera is settled (no flight), so the render loop's idle-skip won't
+    // stall it, and tickIntroTitle drives the strip glow + speed ramp + marker
+    // pop until INTRO_TAIL_DURATION elapses.
+    intro.tail = true;
+    intro.tailT = 0;
+    intro.tailFromSpeed = parseFloat(speedEl.value) || 0;
+    // The tail's first frame reveals the strip; make sure the idle-skip
+    // renders it (the strip is DOM, but the speed ramp moves the sim).
+    markSceneDirty();
   }
 }
 
@@ -1837,6 +1931,13 @@ function finishIntro(skipped: boolean): void {
   } catch {
     /* ignore — intro simply replays next load */
   }
+  // Plan 044 A6: clear the tail's glow + "you are here" marker. On a natural
+  // completion the strip is LEFT visible (the intro ends ON the timeline — the
+  // user lands on it); on a skip we hide it again (the user jumped ahead).
+  hudTimelineEl.style.boxShadow = '';
+  const tailMarker = document.getElementById('intro-tail-marker');
+  if (tailMarker) tailMarker.remove();
+  if (skipped) hudTimelineEl.classList.remove('visible');
   if (introWrapEl) {
     introWrapEl.hidden = true;
     introWrapEl.setAttribute('aria-hidden', 'true');

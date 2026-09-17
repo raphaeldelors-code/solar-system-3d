@@ -62,6 +62,12 @@ export interface Flight {
   toFov: number;
   /** FOV (degrees) at flight start. */
   fromFov: number;
+  /**
+   * Plan 044 A6: use the smoother quintic `cineEase` instead of the default
+   * cubic `easeInOutCubic`. Set by the cinematic intro legs for a longer,
+   * gentler settle; normal flights leave it false.
+   */
+  cine?: boolean;
 }
 
 export interface FlightSample {
@@ -88,6 +94,18 @@ export interface FlightSample {
 export function easeInOutCubic(x: number): number {
   const t = Math.min(1, Math.max(0, x));
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/**
+ * Plan 044 A6: a smoother quintic (x^5) ease-in/ease-out for the cinematic
+ * intro fly-to. Compared to the cubic above it has a longer, gentler
+ * acceleration into the move and a longer, softer settle out of it — the
+ * "cinematic" feel (slow start, fast middle, very gentle landing). `x` in
+ * [0,1] -> eased [0,1].
+ */
+export function cineEase(x: number): number {
+  const t = Math.min(1, Math.max(0, x));
+  return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
 }
 
 /** Unit vector from `a` to `b` ([0,1,0] if they coincide). */
@@ -264,7 +282,10 @@ export function frameConstellation(
  */
 export function stepFlight(flight: Flight, dtSeconds: number, liveTarget?: Vec3): FlightSample {
   flight.t += dtSeconds;
-  const k = easeInOutCubic(flight.t / flight.duration);
+  // Plan 044 A6: cinematic legs use the smoother quintic ease; normal flights
+  // keep the cubic. Both are [0,1]->[0,1] so the rest of the lerp is shared.
+  const ease = flight.cine ? cineEase : easeInOutCubic;
+  const k = ease(flight.t / flight.duration);
   const lp = (a: number, b: number) => a + (b - a) * k;
   const to = liveTarget ?? flight.toTarget;
   const target: Vec3 = [
@@ -295,6 +316,7 @@ export function makeFlight(
   followId: string | null,
   fromFov: number,
   defaultFov: number,
+  cine = false,
 ): Flight {
   return {
     fromTarget: fromTarget,
@@ -306,5 +328,6 @@ export function makeFlight(
     followId,
     toFov: to.fov ?? defaultFov,
     fromFov,
+    cine,
   };
 }
