@@ -334,6 +334,11 @@ export function buildScene(
     20000,
   );
   camera.position.set(0, 16, 30);
+  // The camera must be a scene child for camera-attached overlays (the sun
+  // lens-flare group, plan 044 A3) to render. OrbitControls repositions the
+  // camera object in place, so adding it to the scene is safe and has no
+  // effect on the orbit/zoom behaviour.
+  scene.add(camera);
 
   // OrbitControls (restored by plan 021 — the plan-015 "360° trackball" and
   // plan-017 Z-roll were reverted: they made the view roll up / cross poles

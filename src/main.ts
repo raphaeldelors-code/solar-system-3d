@@ -39,6 +39,7 @@ import {
   type BuiltScene,
   type VisualScale,
 } from './render/scene';
+import { isSunOccluded } from './render/post';
 import {
   createConstellationLabelLayer,
   updateConstellationScreenLabels,
@@ -275,6 +276,7 @@ const orbitsEl = document.getElementById('orbits') as HTMLInputElement;
 const labelsEl = document.getElementById('labels') as HTMLInputElement;
 const beltsEl = document.getElementById('belts') as HTMLInputElement;
 const figuresEl = document.getElementById('figures') as HTMLInputElement;
+const dofEl = document.getElementById('dof') as HTMLInputElement;
 let figuresOn = false;
 const shareBtn = document.getElementById('share') as HTMLButtonElement;
 const screenshotBtn = document.getElementById('screenshot') as HTMLButtonElement;
@@ -822,6 +824,68 @@ function applyToggles(): void {
   // Plan 012: constellation figures (the "Figures" toggle). The per-figure
   // fade runs in the highlight pass; here we just switch the group.
   built.constellationFigures.visible = figuresOn;
+  // Plan 044 A3: subtle DOF (bokeh) toggle. Off by default. Only meaningful on
+  // the HDR/composer path — when postOn is false the composer (and its bokeh
+  // pass) isn't rendered, so the toggle is a no-op there.
+  built.post.setDOF(dofEl.checked && postOn);
+}
+
+// --- Plan 044 A3: sun lens flare + subtle DOF ------------------------------
+// Per-frame driver for the camera-attached flare overlay and the bokeh focus.
+// Scratch vectors are module-level (no per-frame allocation).
+const _flareSunWorld = new THREE.Vector3();
+const _flareSunNdc = new THREE.Vector3();
+const _flareBodyWorld = new THREE.Vector3();
+let _flareOccluders: THREE.Object3D[] | null = null;
+
+function updateSunFlareAndDOF(): void {
+  const cam = built.camera;
+  const sun = built.bodies.get('sun');
+  const flare = built.post.flare;
+  // Hide the flare if the sun body isn't in the scene (e.g. not built yet).
+  if (!sun) {
+    flare.group.visible = false;
+    return;
+  }
+  sun.mesh.getWorldPosition(_flareSunWorld);
+  // Project the sun to NDC (z in [-1,1]; z>1 = behind the camera).
+  _flareSunNdc.copy(_flareSunWorld).project(cam);
+  const inFrame =
+    _flareSunNdc.z < 1 &&
+    _flareSunNdc.x > -1.05 &&
+    _flareSunNdc.x < 1.05 &&
+    _flareSunNdc.y > -1.05 &&
+    _flareSunNdc.y < 1.05;
+  if (!inFrame) {
+    flare.group.visible = false;
+  } else {
+    // Occlusion: hide the flare when a planet sits between the camera and the
+    // sun (a screen-space overlay can't depth-test against the scene).
+    if (_flareOccluders === null) {
+      _flareOccluders = [];
+      for (const entry of built.bodies.values()) {
+        if (entry.def.id !== 'sun') _flareOccluders.push(entry.mesh);
+      }
+    }
+    const occluded = isSunOccluded(cam, _flareSunWorld, _flareOccluders);
+    flare.group.visible = !occluded;
+    if (!occluded) {
+      flare.update(cam, _flareSunNdc);
+    }
+  }
+  // Subtle DOF: focus tracks the selected body's distance from the camera so
+  // the focused planet stays sharp while the foreground/background softens.
+  // Only written while the pass is enabled (one uniform write per frame).
+  if (built.post.dofEnabled()) {
+    const focusId = followId || selectedBodyId || 'sun';
+    const focusBody = built.bodies.get(focusId);
+    let dist = 1.0;
+    if (focusBody) {
+      focusBody.mesh.getWorldPosition(_flareBodyWorld);
+      dist = cam.position.distanceTo(_flareBodyWorld);
+    }
+    built.post.setDOFFocus(dist);
+  }
 }
 
 /**
@@ -1470,6 +1534,10 @@ figuresEl.addEventListener('change', () => {
   applyToggles();
   syncUrl();
 });
+dofEl.addEventListener('change', () => {
+  applyToggles();
+  syncUrl();
+});
 
 // --- Plan 035 F5: commands, cinematic intro, palette, info facts -----------
 // The pure math lives in src/render/{commands,intro,bodyFacts}.ts (unit-tested).
@@ -2018,6 +2086,7 @@ if (urlState.figures != null) {
   figuresEl.checked = urlState.figures;
   figuresOn = urlState.figures;
 }
+if (urlState.dof != null) dofEl.checked = urlState.dof;
 if (urlState.paused != null) {
   clock.setPaused(urlState.paused);
   pauseBtn.textContent = urlState.paused ? 'Resume' : 'Pause';
@@ -2069,6 +2138,7 @@ function captureState(): ViewState {
     labels: labelsEl.checked,
     belts: beltsEl.checked,
     figures: figuresOn,
+    dof: dofEl.checked,
     paused: clock.isPaused,
     eventsOpen: !eventsRowEl.hidden,
     cam: {
@@ -3417,6 +3487,12 @@ function frame(): void {
   // wall-clock time (smooth, independent of sim speed/direction). One uniform
   // write per frame.
   built.sunShader.setTime(nowMs / 1000);
+
+  // Sun lens flare + subtle DOF (plan 044 A3). The flare is a camera-attached
+  // screen-space overlay: project the sun to NDC, lay the ghost dots out along
+  // the sun→centre line, and show it only while the sun is in-frame AND not
+  // occluded by a planet. DOF focus tracks the selected body's distance.
+  updateSunFlareAndDOF();
 
   // Shadow culling: the Sun is a point light, so its shadow is a 6-face
   // cube map (2048² each) re-rendered every frame — the heaviest single GPU

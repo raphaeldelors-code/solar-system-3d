@@ -40,6 +40,18 @@ describe('parseAppState', () => {
     expect(parseAppState(`${BASE}?fig=0`).figures).toBe(false);
   });
 
+  it('treats an absent dof as no key (DOF off by default) and round-trips it', () => {
+    expect('dof' in parseAppState(`${BASE}?t=1`)).toBe(false);
+    expect(parseAppState(`${BASE}?dof=1`).dof).toBe(true);
+    expect(parseAppState(`${BASE}?dof=0`).dof).toBe(false);
+    const enc = encodeAppState(`${BASE}?t=1`, { dof: true });
+    expect(new URL(enc, 'http://localhost').searchParams.get('dof')).toBe('1');
+    // absent dof is not written
+    expect(
+      new URL(encodeAppState(`${BASE}?t=1`, {}), 'http://localhost').searchParams.has('dof'),
+    ).toBe(false);
+  });
+
   it('parses the camera triple', () => {
     const s = parseAppState(`${BASE}?cam=1,2,3,4,5,6`);
     expect(s.cam).toEqual({ pos: [1, 2, 3], target: [4, 5, 6] });
