@@ -179,6 +179,11 @@ describe('commands', () => {
     expect(commandForKey('0')).toBe('jump-digit-0');
   });
 
+  it('resolves the time-scrub keys (, and .) — plan 044 C4', () => {
+    expect(commandForKey(',')).toBe('time-step-back');
+    expect(commandForKey('.')).toBe('time-step-fwd');
+  });
+
   it('returns null for keys with no command', () => {
     expect(commandForKey('q')).toBeNull();
     expect(commandForKey('Tab')).toBeNull();

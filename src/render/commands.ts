@@ -71,6 +71,22 @@ export const COMMANDS: CommandDef[] = [
     hint: 'Run the clock backwards',
     group: 'time',
   },
+  {
+    id: 'time-step-back',
+    key: ',',
+    keys: [','],
+    label: 'Step back in time',
+    hint: 'Jump the clock back (proportional to speed)',
+    group: 'time',
+  },
+  {
+    id: 'time-step-fwd',
+    key: '.',
+    keys: ['.'],
+    label: 'Step forward in time',
+    hint: 'Jump the clock ahead (proportional to speed)',
+    group: 'time',
+  },
   // --- view ---
   {
     id: 'orbits',

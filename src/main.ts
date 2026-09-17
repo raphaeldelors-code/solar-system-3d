@@ -286,9 +286,12 @@ function updatePickedConstellationPulse(nowMs: number): void {
     // sky-dome view parks the camera at ~600 units, where presence ≈ 0.55
     // would half-dim the gold we just flew to). The figure is what the user
     // asked to see.
-    (child.material as THREE.LineBasicMaterial).opacity = constellationEmphasisOpacity(
-      nowMs / 1000,
-    );
+    // Plan 044 C4: reduced-motion → a STATIC full opacity (no breathing
+    // pulse). The figure stays emphasized, just without the wall-clock
+    // oscillation.
+    (child.material as THREE.LineBasicMaterial).opacity = REDUCED_MOTION
+      ? 1
+      : constellationEmphasisOpacity(nowMs / 1000);
   }
 }
 
@@ -490,6 +493,13 @@ let contextLost = false;
 // progress; the render loop advances it and hands control back to the free
 // OrbitControls when it lands.
 let flight: Flight | null = null;
+
+// Plan 044 C4: honor `prefers-reduced-motion` for camera flights. When set,
+// flyTo/makeFlight land INSTANTLY (duration 0 → the eased lerp resolves to the
+// end pose on the first frame) instead of animating the dolly. The intro is
+// already skipped under reduced-motion (introShouldPlay); this covers the
+// user-initiated fly-to-body / fly-to-anchor flights.
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // --- Scale toggle (B3) ------------------------------------------------------
 // One control, two states: "Visible scale" (the default exaggerated layout)
@@ -865,11 +875,12 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
   const trackId = bodyId ? (moonParent.has(bodyId) ? moonParent.get(bodyId)! : bodyId) : null;
   // The FOV eases to the anchor's requested value (sky anchor widens it)
   // or back to the default so a wide sky view is never retained.
+  // Plan 044 C4: reduced-motion → duration 0 (instant cut, no dolly).
   flight = makeFlight(
     [built.camera.position.x, built.camera.position.y, built.camera.position.z],
     [built.controls.target.x, built.controls.target.y, built.controls.target.z],
     dest,
-    duration,
+    REDUCED_MOTION ? 0 : duration,
     trackId,
     built.camera.fov,
     FOV_DEG,
@@ -898,7 +909,7 @@ function flyToConstellation(name: string): void {
     [built.camera.position.x, built.camera.position.y, built.camera.position.z],
     [built.controls.target.x, built.controls.target.y, built.controls.target.z],
     dest,
-    1.6,
+    REDUCED_MOTION ? 0 : 1.6,
     null,
     built.camera.fov,
     FOV_DEG,
@@ -1852,6 +1863,23 @@ function runCommand(id: string): void {
       fmtSpeed();
       syncUrl();
       break;
+    case 'time-step-back':
+    case 'time-step-fwd': {
+      // Plan 044 C4: a keyboard path to scrub time (the timeline drag is the
+      // mouse/touch equivalent). The step is proportional to the current sim
+      // speed — 5× the per-second rate — so at 1 d/s a tap jumps 5 days and at
+      // 30 d/s it jumps 150 days: the same "feel" as a short drag, and it
+      // respects the Reverse toggle (back = against the flow).
+      const days = Math.abs(clock.getSpeed()) * 5;
+      const dir = id === 'time-step-fwd' ? 1 : -1;
+      const sign = clock.isReversed ? -1 : 1;
+      const d = clock.toDate();
+      d.setTime(d.getTime() + dir * sign * days * 86_400_000);
+      clock.setDate(d);
+      resampleMoonNow();
+      syncUrl();
+      break;
+    }
     case 'orbits':
       orbitsEl.checked = !orbitsEl.checked;
       applyToggles();
@@ -3812,7 +3840,13 @@ function frame(): void {
       // Ease the 3 s leg. `morph.p` is the raw 0..1 position; the EASED
       // value drives both the layout blend and the body radii so everything
       // moves in lockstep.
-      morph.p = Math.min(1, Math.max(0, morph.p + (morph.dir * dtReal) / MORPH_DUR));
+      // Plan 044 C4: reduced-motion → snap to the end of the leg (no 3 s
+      // eased scale sweep).
+      if (REDUCED_MOTION) {
+        morph.p = morph.dir === 1 ? 1 : 0;
+      } else {
+        morph.p = Math.min(1, Math.max(0, morph.p + (morph.dir * dtReal) / MORPH_DUR));
+      }
       if ((morph.dir === 1 && morph.p >= 1) || (morph.dir === -1 && morph.p <= 0)) {
         morphEnd();
       }
@@ -3839,7 +3873,7 @@ function frame(): void {
           [built.camera.position.x, built.camera.position.y, built.camera.position.z],
           [built.controls.target.x, built.controls.target.y, built.controls.target.z],
           camAnchorFor('system'),
-          1.2,
+          REDUCED_MOTION ? 0 : 1.2,
           null,
           built.camera.fov,
           FOV_DEG,

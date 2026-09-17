@@ -208,6 +208,17 @@ describe('stepFlight', () => {
     approx(end.target[0], 5, 1e-6);
     approx(end.pos[0], 10, 1e-6);
   });
+  it('duration 0 lands on the to pose on the FIRST step (reduced-motion cut)', () => {
+    // Plan 044 C4: flyTo passes duration 0 under prefers-reduced-motion. The
+    // eased lerp must resolve to the end pose immediately (t/duration clamps
+    // to 1) and report done — no dolly animation.
+    const f = mk();
+    f.duration = 0;
+    const s = stepFlight(f, 0.016);
+    expect(s.done).toBe(true);
+    approx(s.target[0], 5, 1e-9);
+    approx(s.pos[0], 10, 1e-9);
+  });
   it('rigidly tracks a moving body: offset preserved, target eased to live position', () => {
     const f = makeFlight(
       [0, 0, 0],
