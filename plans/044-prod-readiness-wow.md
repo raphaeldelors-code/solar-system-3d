@@ -229,7 +229,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] B5 Space weather + aurora shader (NOAA Kp) — 4d4ffc7 (live fetch + polar band)
 - [x] B6 Exoplanet Archive scene — 1748e63 (13 multi-planet systems as mini solar systems)
 - [x] B7 Named asteroids + comets (SBDB/MPC) — ff18c45 (47 bodies: 17 asteroids + 30 comets, real J2000 orbits)
-- [ ] B8 Photo mode + APOD daily panel
+- [x] B8 Photo mode + APOD daily panel — 363471d (branded PNG watermark + live APOD card)
 - [ ] C1 Real type system + color palette
 - [ ] C2 3-step first-run onboarding
 - [ ] C3 Timeline discoverability + speed-slider tick labels

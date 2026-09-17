@@ -76,7 +76,7 @@ One feature per commit, gates green before each. Start at A1.
 - [x] B5 feat(data): space weather + aurora shader (NOAA Kp) (plan 044) — `4d4ffc7`
 - [x] B6 feat(data): Exoplanet Archive scene (plan 044) — `1748e63`
 - [x] B7 feat(data): named asteroids + comets (SBDB/MPC) (plan 044) — `ff18c45`
-- [ ] B8 feat(web): photo mode + APOD daily panel (plan 044)
+- [x] B8 feat(web): photo mode + APOD daily panel (plan 044) — `363471d`
 - [ ] C1 style(ui): real type system + documented color palette (plan 044)
 - [ ] C2 feat(web): 3-step first-run onboarding (plan 044)
 - [ ] C3 feat(web): timeline discoverability + speed-slider tick labels (plan 044)
