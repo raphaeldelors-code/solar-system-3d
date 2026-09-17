@@ -26,7 +26,7 @@ import { LENS_R, lensClampX, lensDisplace } from '../render/lensMath';
 import { yearEvents, yearSpan, hasYearEvents } from '../render/yearEvents';
 import { J2000_UTC } from '../sim/types';
 import type { SimClock } from '../sim/clock';
-import type { ScrubState, ThreeFingerScrub } from '../main';
+import type { ScrubState, ThreeFingerScrub } from './scrubTypes';
 
 export interface ScrubDeps {
   // 5 shared mutable lets (getter/setter — reads see the live value, writes

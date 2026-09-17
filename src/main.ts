@@ -28,6 +28,12 @@ import {
   type BuiltScene,
   type VisualScale,
 } from './render/scene';
+import {
+  selectQualityTier,
+  createFpsWatchdog,
+  type QualityTier,
+  type FpsWatchdog,
+} from './render/quality';
 import { buildExoScene, type ExoScene } from './render/exoScene';
 import { EXO_SYSTEMS } from './sim/exoplanets';
 import { fetchIssTle, FALLBACK_ISS_TLE } from './data/issTle';
@@ -85,6 +91,7 @@ import { parseAppState, encodeAppState, type ViewState } from './state/urlState'
 import { createEventsPanel } from './app/eventsPanel';
 import { createFrameLoop } from './app/frameLoop';
 import { createScrub } from './app/scrub';
+import type { ScrubState, ThreeFingerScrub } from './app/scrubTypes';
 import { createSearchUi } from './app/searchUi';
 import { createContextLoss } from './app/contextLoss';
 import { type BodyDefinition } from './sim/types';
@@ -420,6 +427,11 @@ let followId = '';
 // Declared here (not at its use in the URL block) so the keydown handler can
 // reference it without a temporal-dead-zone error; default true.
 let postOn = true;
+// D6: quality tier (plan 045). Selected once at boot from deviceMemory (or a
+// `?q=` override) and applied in rebuildScene; the fps watchdog may downgrade
+// it ONCE (high→medium→low) if the device can't hold ~30 fps. Declared here so
+// the boot block + watchdog can reference it before the URL parse runs.
+let qualityTier: QualityTier = 'high';
 /**
  * Currently highlighted body — a planet OR a moon (plan 015 P6). The
  * follow/camera can be on the parent planet while the selected satellite
@@ -623,7 +635,7 @@ function resampleMoonNow(): void {
 
 function rebuildScene(newScale: VisualScale): BuiltScene {
   if (built) built.dispose();
-  built = buildScene(canvas, ALL_BODIES, newScale);
+  built = buildScene(canvas, ALL_BODIES, newScale, qualityTier);
   // keep the shareable URL in sync as the user moves the camera
   built.controls.addEventListener('change', syncUrl);
   // re-attach moon orbits to parent pivots
@@ -2227,6 +2239,19 @@ if (urlState.labels != null) labelsEl.checked = urlState.labels;
   const postParam = new URL(window.location.href, 'http://localhost').searchParams.get('post');
   if (postParam === '0') postOn = false;
 }
+// D6: quality tier. `?q=high|medium|low` overrides (testing / power users);
+// otherwise select from navigator.deviceMemory (undefined on Firefox/Safari →
+// 'high', the current behaviour). The tier is applied in rebuildScene below.
+{
+  const qParam = new URL(window.location.href, 'http://localhost').searchParams.get('q');
+  if (qParam === 'high' || qParam === 'medium' || qParam === 'low') {
+    qualityTier = qParam;
+  } else {
+    qualityTier = selectQualityTier(
+      (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
+    );
+  }
+}
 if (urlState.belts != null) beltsEl.checked = urlState.belts;
 if (urlState.figures != null) {
   figuresEl.checked = urlState.figures;
@@ -2448,11 +2473,69 @@ window.addEventListener('keydown', (e) => {
 
 // --- Init ------------------------------------------------------------------
 
-rebuildScene(scale);
+// D6: pre-flight WebGL probe. If the browser can't create a WebGL context at
+// all (WebGL disabled, very old browser, or a blocked GPU), `buildScene`'s
+// `new THREE.WebGLRenderer` would throw and leave a blank page. Probe on a
+// DETACHED canvas (not the app canvas) so we don't lock the app canvas to a
+// WebGL1 context — three.js prefers WebGL2 and would be downgraded if the app
+// canvas already had a WebGL1 context. On failure show the themed fallback and
+// never start the frame loop.
+let bootOk = true;
+{
+  const probeCanvas = document.createElement('canvas');
+  const probe =
+    probeCanvas.getContext('webgl2') ||
+    probeCanvas.getContext('webgl') ||
+    probeCanvas.getContext('experimental-webgl');
+  if (!probe) {
+    bootOk = false;
+    const el = document.getElementById('gl-unavailable');
+    if (el) el.classList.add('show');
+  }
+}
+// D6: reload escape hatch for the WebGL-unavailable fallback (the app can't
+// render without WebGL, so a reload is the only exit — e.g. after the user
+// enables hardware acceleration). Wired unconditionally; it only matters when
+// the fallback is shown.
+{
+  const btn = document.getElementById('gl-unavailable-reload');
+  if (btn) btn.addEventListener('click', () => window.location.reload());
+}
+
+let fpsWatchdog: FpsWatchdog | null = null;
+if (bootOk) {
+  try {
+    rebuildScene(scale);
+  } catch (err) {
+    // The pre-flight probe passed but context creation still failed (some
+    // drivers / SwiftShader edge cases). Show the same fallback; the frame
+    // loop is gated on bootOk so it never runs against a null renderer.
+    console.error('[orrery] WebGL context creation failed:', err);
+    bootOk = false;
+    const el = document.getElementById('gl-unavailable');
+    if (el) el.classList.add('show');
+  }
+}
 // F1: honor a restored `?post=0` from the very first frame (the `p` key and
 // the composer branch both read `postOn`; this just hides the corona sprite
-// so a fallback device never flashes it).
-built.sunGlow.visible = postOn;
+// so a fallback device never flashes it). D6: the low tier has no composer
+// (built.post === null), so the corona (a bloom-driven glow) is hidden there
+// too — it would read as a flat billboard without the bloom pass.
+if (bootOk) built.sunGlow.visible = postOn && built.post != null;
+// D6: one-shot fps watchdog. Feed every ACTIVE frame's duration; if the device
+// can't hold ~30 fps for two sustained windows, downgrade the tier ONCE and
+// rebuild the scene at the lower profile. Never fires on a capable device.
+if (bootOk) {
+  fpsWatchdog = createFpsWatchdog({
+    from: qualityTier,
+    onDowngrade: (to) => {
+      qualityTier = to;
+      rebuildScene(scale);
+      built.sunGlow.visible = postOn && built.post != null;
+      fpsWatchdog = null; // one-shot — the watchdog only ever downgrades once
+    },
+  });
+}
 // Plan 044 B1: load the live ISS TLE. The static fallback is applied
 // immediately (so the ISS is visible even offline / before the fetch lands),
 // then a CelesTrak fetch upgrades it to the freshest elements. Both paths
@@ -2733,27 +2816,12 @@ canvas.addEventListener('pointerup', (ev) => {
 // code only acts on 1-2 pointers, so the 3-finger twin (F2) has no
 // interference either. A scrub must never be mistaken for a click-pick: a
 // moved release arms suppressPickAfterScrub.
-export type ScrubState = {
-  startX: number;
-  startY: number;
-  startDays: number;
-  startLog: number;
-  movedX: boolean;
-  movedY: boolean;
-  /** Plan 024 F1: the PRESS year the gesture is clamped to — Jan 1 00:00 in
-   *  days since J2000 + its length in days. "Zero" of the gesture is Jan 1
-   *  of that year; it can never scrub out of it. */
-  span0Days: number;
-  spanLenDays: number;
-};
+// (ScrubState / ThreeFingerScrub types now live in ./app/scrubTypes so the
+//  whole init section can be wrapped in an IIFE — see that module's header.)
 let scrub: null | ScrubState = null;
 let suppressPickAfterScrub = false;
 
 const touchPointers = new Map<number, { x: number; y: number }>();
-export type ThreeFingerScrub = ScrubState & {
-  live: boolean; // a scrub was once live (re-armed while <3 fingers remain)
-  ended: boolean; // the end path already ran (lift or cancel)
-};
 let threeFinger: null | ThreeFingerScrub = null;
 // Set while the synthetic re-arm bounce (survivor pointerup+down) is in
 // flight, so the touch handlers below ignore exactly those two events and
@@ -3115,24 +3183,42 @@ const frameLoop = createFrameLoop({
   updatePickedConstellationPulse,
   updatePlanetScreenLabelFrame,
   updateSunFlareAndDOF,
-});
-frameLoop.start();
-createContextLoss({
-  canvas,
-  glLostEl,
-  glReloadBtn,
-  built,
-  markSceneDirty,
-  contextLost: {
-    get: () => contextLost,
-    set: (v) => {
-      contextLost = v;
-    },
-  },
-  lastMs: {
-    get: () => lastMs,
-    set: (v) => {
-      lastMs = v;
-    },
+  // D6: feed the fps watchdog (one-shot). Null once it has fired / downgraded.
+  sampleFrameMs: (frameMs: number) => {
+    fpsWatchdog?.sample(frameMs);
   },
 });
+if (bootOk) {
+  frameLoop.start();
+  createContextLoss({
+    canvas,
+    glLostEl,
+    glReloadBtn,
+    built,
+    markSceneDirty,
+    contextLost: {
+      get: () => contextLost,
+      set: (v) => {
+        contextLost = v;
+      },
+    },
+    lastMs: {
+      get: () => lastMs,
+      set: (v) => {
+        lastMs = v;
+      },
+    },
+  });
+}
+
+// D6: debug handle for E2E + headless checks. Exposes the selected quality
+// tier (and the boot guard) so tests can read live state without coupling to
+// internals. `qualityTier` is a getter so it reflects a watchdog downgrade.
+(window as unknown as { __debug: Record<string, unknown> }).__debug = {
+  get qualityTier() {
+    return qualityTier;
+  },
+  get bootOk() {
+    return bootOk;
+  },
+};

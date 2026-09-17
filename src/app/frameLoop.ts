@@ -36,7 +36,8 @@ import {
 import { sceneIsStatic } from '../render/idle';
 import type { SimClock } from '../sim/clock';
 import type { ExoScene } from '../render/exoScene';
-import type { ScaleMorph, ScrubState, ThreeFingerScrub } from '../main';
+import type { ScaleMorph } from '../main';
+import type { ScrubState, ThreeFingerScrub } from './scrubTypes';
 
 /**
  * The cinematic intro state (plan 035 F5 / 044 A6). Mirrors the `intro`
@@ -105,6 +106,12 @@ export interface FrameLoopDeps {
   updatePickedConstellationPulse: (nowMs: number) => void;
   updatePlanetScreenLabelFrame: () => void;
   updateSunFlareAndDOF: () => void;
+  /**
+   * D6: feed the duration (ms) of this frame to the fps watchdog. Called only
+   * after a frame is actually rendered (the static-frame skip returns earlier),
+   * so parked frames never pollute the sample.
+   */
+  sampleFrameMs: (frameMs: number) => void;
 }
 
 export interface FrameLoop {
@@ -462,6 +469,10 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     // always renders directly too.
     if (deps.postOn && deps.built.post) deps.built.post.composer.render();
     else deps.built.renderer.render(deps.built.scene, deps.built.camera);
+    // D6: sample this frame's duration for the fps watchdog. We're past the
+    // static-frame skip (which returned earlier) and just rendered, so this is
+    // an ACTIVE frame — exactly what the watchdog should measure.
+    deps.sampleFrameMs(performance.now() - nowMs);
     // Screen-space constellation name labels (plan 016 P1): the 2D overlay
     // pass after the 3D render, so the names sit crisp above the frame.
     deps.updateConstellationScreenLabelFrame();
