@@ -156,3 +156,41 @@ test('app shell reloads offline via the service worker', async ({ page, context 
   await expect(page.locator('#find')).toBeVisible();
   await context.setOffline(false);
 });
+
+test('offline fallback page is precached and renders offline', async ({ page, context }) => {
+  watchPageErrors(page);
+  // Load the app once so the SW installs and precaches offline.html.
+  await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
+  await waitForRender(page);
+  await expect
+    .poll(
+      async () => {
+        return page.evaluate(async () => {
+          const reg = await navigator.serviceWorker.getRegistration();
+          return Boolean(reg && reg.active);
+        });
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(true);
+
+  // Confirm offline.html is in the SW cache. Read the build version straight
+  // from the live sw.js so we open the right (versioned) cache.
+  const inCache = await page.evaluate(async () => {
+    const res = await fetch('./sw.js');
+    const text = await res.text();
+    const m = text.match(/const BUILD_VERSION = '([a-f0-9]{10})'/);
+    if (!m) return false;
+    const cache = await caches.open('orrery-' + m[1]);
+    const keys = await cache.keys();
+    return keys.some((r) => r.url.endsWith('offline.html'));
+  });
+  expect(inCache).toBe(true);
+
+  // Go offline and load the fallback page directly: it must render from cache.
+  await context.setOffline(true);
+  await page.goto('/offline.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('h1')).toHaveText("You're offline");
+  await expect(page.locator('button')).toContainText('Retry');
+  await context.setOffline(false);
+});
