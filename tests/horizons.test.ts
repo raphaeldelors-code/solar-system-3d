@@ -1,17 +1,32 @@
-import { describe, it, expect } from 'vitest';
-import { moonHorizons, moonHorizonsDiff, HORIZONS_MOON } from '../src/sim/horizons';
+import { describe, it, expect, beforeAll } from 'vitest';
+import {
+  moonHorizons,
+  moonHorizonsDiff,
+  preloadHorizons,
+  horizonsSnapshot,
+} from '../src/sim/horizons';
 import { moonGeocentricJ2000 } from '../src/sim/moon';
 
 const AU_KM = 149_597_870.7;
+// The baked snapshot is sampled every 6 hours (see the bake script); the lazy
+// snapshot object only carries { n, data }, so the step is asserted here.
+const STEP_HOURS = 6;
 
 describe('horizons (baked DE441 Moon ephemeris)', () => {
+  beforeAll(async () => {
+    // The snapshot is now lazy-loaded (plan 044 D5) — await it once so the
+    // sync assertions below run against real data.
+    await preloadHorizons();
+  });
+
   it('snapshot is well-formed', () => {
-    expect(HORIZONS_MOON.n).toBeGreaterThan(100);
-    expect(HORIZONS_MOON.data.length).toBe(HORIZONS_MOON.n * 4);
-    expect(HORIZONS_MOON.stepHours).toBe(6);
+    const snap = horizonsSnapshot();
+    expect(snap).not.toBeNull();
+    expect(snap!.n).toBeGreaterThan(100);
+    expect(snap!.data.length).toBe(snap!.n * 4);
     // first row tDays is ~2026-09-01 (≈ 9739 days after J2000)
-    expect(HORIZONS_MOON.data[0]).toBeGreaterThan(9700);
-    expect(HORIZONS_MOON.data[0]).toBeLessThan(9800);
+    expect(snap!.data[0]).toBeGreaterThan(9700);
+    expect(snap!.data[0]).toBeLessThan(9800);
   });
 
   it('returns null outside the baked window', () => {
@@ -22,7 +37,7 @@ describe('horizons (baked DE441 Moon ephemeris)', () => {
   });
 
   it('returns a valid position at the first sample', () => {
-    const t0 = HORIZONS_MOON.data[0];
+    const t0 = horizonsSnapshot()!.data[0];
     const p = moonHorizons(t0);
     expect(p).not.toBeNull();
     const [x, y, z] = p!;
@@ -33,8 +48,8 @@ describe('horizons (baked DE441 Moon ephemeris)', () => {
   });
 
   it('interpolates smoothly (no jumps between samples)', () => {
-    const t0 = HORIZONS_MOON.data[0];
-    const stepDays = HORIZONS_MOON.stepHours / 24;
+    const t0 = horizonsSnapshot()!.data[0];
+    const stepDays = STEP_HOURS / 24;
     const p0 = moonHorizons(t0)!;
     const p1 = moonHorizons(t0 + stepDays / 2)!; // half-step
     const p2 = moonHorizons(t0 + stepDays)!;
@@ -48,8 +63,9 @@ describe('horizons (baked DE441 Moon ephemeris)', () => {
   });
 
   it('Meeus vs DE441 residual is physically plausible (< 500 km)', () => {
+    const snap = horizonsSnapshot()!;
     // Pick a time in the middle of the window
-    const tMid = (HORIZONS_MOON.data[0] + HORIZONS_MOON.data[(HORIZONS_MOON.n - 1) * 4]) / 2;
+    const tMid = (snap.data[0] + snap.data[(snap.n - 1) * 4]) / 2;
     const meeus = moonGeocentricJ2000(tMid);
     const diff = moonHorizonsDiff(meeus, tMid);
     expect(diff).not.toBeNull();

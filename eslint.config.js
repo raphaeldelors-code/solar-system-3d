@@ -27,7 +27,7 @@ export default tseslint.config(
   },
   {
     // public/sw.js + scripts are plain browser/node JS, not TS.
-    files: ['public/**/*.js', 'scripts/**/*.js', 'vite.config.js'],
+    files: ['public/**/*.js', 'scripts/**/*.js', 'scripts/**/*.mjs', 'vite.config.js'],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
     },

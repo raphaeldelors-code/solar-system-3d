@@ -15,28 +15,49 @@
  *
  * Pure + dependency-free (unit-tested in tests/horizons.test.ts).
  */
-import snapshot from '../data/horizonsMoon.json';
+/**
+ * The baked snapshot, loaded lazily (plan 044 D5). The 120 kB JSON is
+ * dynamic-imported so it is NOT in the main bundle — it only matters when the
+ * Moon info card is open. `preloadHorizons()` is kicked off at module load, so
+ * the chunk fetches in the background (in parallel with the main bundle) and is
+ * almost always ready by the time the user opens the Moon card. Until it
+ * resolves, `moonHorizons()`/`moonHorizonsDiff()` return null and the UI shows
+ * the Meeus-only readout (the same fallback as out-of-window times).
+ */
+let snapshot: { n: number; data: number[] } | null = null;
+let snapshotPromise: Promise<void> | null = null;
 
-/** One row of the baked snapshot: [tDays, xAU, yAU, zAU]. */
-export interface HorizonsRow {
-  tDays: number;
-  x: number;
-  y: number;
-  z: number;
+/**
+ * Load the baked snapshot (idempotent). Resolves once the data is cached.
+ * Exported so tests can await it; the app relies on the module-load preload.
+ */
+export function preloadHorizons(): Promise<void> {
+  if (snapshot) return Promise.resolve();
+  if (!snapshotPromise) {
+    snapshotPromise = import('../data/horizonsMoon.json')
+      .then((m) => {
+        snapshot = m.default as { n: number; data: number[] };
+      })
+      .catch((err) => {
+        // A failed preload must not take the app down — the Moon card simply
+        // falls back to the Meeus-only readout.
+        snapshotPromise = null;
+        console.warn('[horizons] snapshot preload failed', err);
+      });
+  }
+  return snapshotPromise;
 }
 
-/** The full baked snapshot (flat, row-major). */
-export const HORIZONS_MOON: {
-  source: string;
-  object: string;
-  center: string;
-  frame: string;
-  window: string;
-  jd0: number;
-  stepHours: number;
-  n: number;
-  data: number[];
-} = snapshot;
+// Kick the background preload off at module load (see above).
+void preloadHorizons();
+
+/**
+ * The loaded snapshot, or null until `preloadHorizons()` resolves. Exposed for
+ * tests (and any future code that needs the raw rows / window metadata).
+ */
+export function horizonsSnapshot(): { n: number; data: number[] } | null {
+  return snapshot;
+}
 
 /**
  * Interpolate the baked Horizons Moon ephemeris at `tDays` (days from J2000,
@@ -50,7 +71,8 @@ export const HORIZONS_MOON: {
  * are trying to display (~100 km), so it does not pollute the diff.
  */
 export function moonHorizons(tDays: number): [number, number, number] | null {
-  const { data, n } = HORIZONS_MOON;
+  if (!snapshot) return null; // not loaded yet (or preload failed)
+  const { data, n } = snapshot;
   if (n < 2) return null;
   const t0 = data[0];
   const t1 = data[(n - 1) * 4];

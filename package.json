@@ -6,7 +6,7 @@
   "description": "A realistic, extensible 3D solar system: sun, planets, moons, Kepler orbits. TypeScript + Three.js.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/size-budget.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
