@@ -58,6 +58,28 @@
         display: block;
         touch-action: none;
       }
+      /* Plan 044 B6: exoplanet-mode planet labels. A full-viewport,
+         pointer-transparent overlay (z-index 6, above the canvas at 0, below
+         the panel at 10). Each .exo-label is absolutely positioned per frame. */
+      #exo-labels {
+        position: fixed;
+        inset: 0;
+        z-index: 6;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .exo-label {
+        position: absolute;
+        top: 0;
+        left: 0;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: #cfe0ff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+        white-space: nowrap;
+        will-change: transform;
+      }
       #panel {
         position: fixed;
         /* Plan 025 F3 (v2): below the permanent top strip — the calm event
@@ -1472,10 +1494,13 @@
         color: #7f93b5;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-BCBGuRYx.js"></script>
+    <script type="module" crossorigin src="./assets/index-BZE0Aq95.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
+    <!-- Plan 044 B6: exoplanet-mode planet labels (2D overlay, z-index 6,
+         pointer-events none). Only populated while exoplanet mode is active. -->
+    <div id="exo-labels"></div>
     <div id="gl-lost" role="alert" hidden>
       <div class="box">
         <h2>3D view paused</h2>
@@ -1628,134 +1653,168 @@
     <div id="panel">
       <h1 id="panel-toggle">Solar System</h1>
       <div class="panel-body">
-        <div class="section-head">Time</div>
-        <div class="row"><label>Now</label><span id="date" class="value">—</span></div>
-        <!-- Plan 044 B5: live NOAA/SWPC planetary Kp (space weather). Filled by
+        <!-- Plan 044 B6: the solar-system controls live in #solar-controls so
+             exoplanet mode can hide them and show #exo-controls instead. -->
+        <div id="solar-controls">
+          <div class="section-head">Time</div>
+          <div class="row"><label>Now</label><span id="date" class="value">—</span></div>
+          <!-- Plan 044 B5: live NOAA/SWPC planetary Kp (space weather). Filled by
              applyKp() at startup + every 15 min; the dot colour tracks the
              G-scale (calm green → storm red). -->
-        <div class="row" id="space-weather-row">
-          <label>Space weather</label><span id="space-weather" class="value">Kp —</span>
-        </div>
-        <div class="row">
-          <label>Speed</label>
-          <input
-            id="speed"
-            type="range"
-            min="-3"
-            max="2.5"
-            step="0.01"
-            value="0"
-            aria-label="Simulation speed magnitude (log scale). Left = slower (0.001 d/s ≈ a year in 30 minutes), middle = 1 day/s, right ≈ 316 days/s. Use the Reverse button to run time backwards."
-          />
-          <span id="speed-value" class="value">1.0 d/s</span>
-        </div>
-        <div class="row">
-          <label for="date-pick">Jump to</label>
-          <input
-            id="date-pick"
-            type="date"
-            aria-label="Jump the simulation to this calendar date (keeps the current time of day)"
-          />
-        </div>
-        <div class="row">
-          <button id="pause">Pause</button>
-          <button id="reverse">Reverse →</button>
-          <button id="now">Now</button>
-        </div>
-        <div class="section-head">View</div>
-        <div class="row anchor-row" id="anchors">
-          <button
-            data-fly="constellations"
-            title="Zoom out until only the constellations fill the view"
-          >
-            🌌 Sky
-          </button>
-          <button data-fly="system" title="Fit the whole solar system in frame">🪐 System</button>
-        </div>
-        <div class="row">
-          <button
-            id="events-toggle"
-            type="button"
-            title="Eclipses, transits, conjunctions, oppositions, Saturn ring edge-on"
-          >
-            ✨ Events
-          </button>
-          <select id="events-range">
-            <option value="1">±1 yr</option>
-            <option value="5" selected>±5 yr</option>
-            <option value="10">±10 yr</option>
-          </select>
-        </div>
-        <div class="row" id="events-row" hidden>
-          <div id="events-list"></div>
-          <p class="ev-note">Click an event to jump there. Model: Kepler + geocentric Moon.</p>
-        </div>
-        <div class="row">
-          <label>Find</label>
-          <div id="find-wrap">
-            <input id="find" type="text" placeholder="Sun — type to search" autocomplete="off" />
-            <div id="find-list" hidden></div>
+          <div class="row" id="space-weather-row">
+            <label>Space weather</label><span id="space-weather" class="value">Kp —</span>
           </div>
-        </div>
-        <div class="section-head">Display</div>
-        <div class="row">
-          <label>Scale</label>
-          <div id="scale-switch" role="radiogroup" aria-label="Scale">
+          <div class="row">
+            <label>Speed</label>
+            <input
+              id="speed"
+              type="range"
+              min="-3"
+              max="2.5"
+              step="0.01"
+              value="0"
+              aria-label="Simulation speed magnitude (log scale). Left = slower (0.001 d/s ≈ a year in 30 minutes), middle = 1 day/s, right ≈ 316 days/s. Use the Reverse button to run time backwards."
+            />
+            <span id="speed-value" class="value">1.0 d/s</span>
+          </div>
+          <div class="row">
+            <label for="date-pick">Jump to</label>
+            <input
+              id="date-pick"
+              type="date"
+              aria-label="Jump the simulation to this calendar date (keeps the current time of day)"
+            />
+          </div>
+          <div class="row">
+            <button id="pause">Pause</button>
+            <button id="reverse">Reverse →</button>
+            <button id="now">Now</button>
+          </div>
+          <div class="section-head">View</div>
+          <div class="row anchor-row" id="anchors">
             <button
-              id="scale-visible"
-              type="button"
-              class="seg active"
-              role="radio"
-              aria-checked="true"
-              title="The default view — distances compressed and sizes exaggerated so everything fits on screen"
+              data-fly="constellations"
+              title="Zoom out until only the constellations fill the view"
             >
-              Visible scale
+              🌌 Sky
             </button>
+            <button data-fly="system" title="Fit the whole solar system in frame">🪐 System</button>
+            <!-- Plan 044 B6: exoplanet mode — render a confirmed exoplanet system
+               as a mini solar system. -->
             <button
-              id="scale-real"
-              type="button"
-              class="seg"
-              role="radio"
-              aria-checked="false"
-              title="True physical scale — sizes and distances to the same ratio"
+              id="exo-enter"
+              title="View confirmed exoplanet systems (NASA Exoplanet Archive)"
             >
-              Real scale
+              ✨ Systems
             </button>
           </div>
-        </div>
-        <div id="scale-caption" hidden></div>
-        <div class="row">
-          <label><input id="orbits" type="checkbox" checked /> Orbits</label>
-          <label><input id="labels" type="checkbox" checked /> Labels</label>
-          <label><input id="belts" type="checkbox" checked /> Belts</label>
-          <label><input id="figures" type="checkbox" /> Figures</label>
-          <label><input id="dof" type="checkbox" /> DOF</label>
-        </div>
-        <div class="section-head">Share</div>
-        <div class="row"><button id="share">Copy share link</button></div>
-        <div class="row"><button id="screenshot">Save screenshot</button></div>
-        <div id="info" class="info" hidden>
-          <div class="info-title" id="info-name">—</div>
-          <div class="info-row">
-            <span id="info-label-1">Orbit period</span><span id="info-period" class="value">—</span>
+          <div class="row">
+            <button
+              id="events-toggle"
+              type="button"
+              title="Eclipses, transits, conjunctions, oppositions, Saturn ring edge-on"
+            >
+              ✨ Events
+            </button>
+            <select id="events-range">
+              <option value="1">±1 yr</option>
+              <option value="5" selected>±5 yr</option>
+              <option value="10">±10 yr</option>
+            </select>
           </div>
-          <div class="info-row">
-            <span id="info-label-2">Distance</span><span id="info-distance" class="value">—</span>
+          <div class="row" id="events-row" hidden>
+            <div id="events-list"></div>
+            <p class="ev-note">Click an event to jump there. Model: Kepler + geocentric Moon.</p>
           </div>
-          <div class="info-row">
-            <span id="info-label-3">Peri / Apo</span><span id="info-range" class="value">—</span>
+          <div class="row">
+            <label>Find</label>
+            <div id="find-wrap">
+              <input id="find" type="text" placeholder="Sun — type to search" autocomplete="off" />
+              <div id="find-list" hidden></div>
+            </div>
           </div>
-          <!-- Plan 035 F5: static "facts" rows (radius / day / tilt / fun fact),
+          <div class="section-head">Display</div>
+          <div class="row">
+            <label>Scale</label>
+            <div id="scale-switch" role="radiogroup" aria-label="Scale">
+              <button
+                id="scale-visible"
+                type="button"
+                class="seg active"
+                role="radio"
+                aria-checked="true"
+                title="The default view — distances compressed and sizes exaggerated so everything fits on screen"
+              >
+                Visible scale
+              </button>
+              <button
+                id="scale-real"
+                type="button"
+                class="seg"
+                role="radio"
+                aria-checked="false"
+                title="True physical scale — sizes and distances to the same ratio"
+              >
+                Real scale
+              </button>
+            </div>
+          </div>
+          <div id="scale-caption" hidden></div>
+          <div class="row">
+            <label><input id="orbits" type="checkbox" checked /> Orbits</label>
+            <label><input id="labels" type="checkbox" checked /> Labels</label>
+            <label><input id="belts" type="checkbox" checked /> Belts</label>
+            <label><input id="figures" type="checkbox" /> Figures</label>
+            <label><input id="dof" type="checkbox" /> DOF</label>
+          </div>
+          <div class="section-head">Share</div>
+          <div class="row"><button id="share">Copy share link</button></div>
+          <div class="row"><button id="screenshot">Save screenshot</button></div>
+          <div id="info" class="info" hidden>
+            <div class="info-title" id="info-name">—</div>
+            <div class="info-row">
+              <span id="info-label-1">Orbit period</span
+              ><span id="info-period" class="value">—</span>
+            </div>
+            <div class="info-row">
+              <span id="info-label-2">Distance</span><span id="info-distance" class="value">—</span>
+            </div>
+            <div class="info-row">
+              <span id="info-label-3">Peri / Apo</span><span id="info-range" class="value">—</span>
+            </div>
+            <!-- Plan 035 F5: static "facts" rows (radius / day / tilt / fun fact),
                filled by setInfoFacts() — the live rows above stay untouched. -->
-          <div id="info-facts"></div>
+            <div id="info-facts"></div>
+          </div>
+          <div class="hint" id="hint">
+            Drag: rotate · Wheel: zoom · Click a body to fly to it · /: commands (keys: space n r o
+            l b f a p t c s 1-9 0)
+          </div>
+          <div class="hint" id="credit">
+            Constellation figures: Stellarium "western" illustrations by Johan Meuris (Free Art
+            License), registered to the real stars
+          </div>
         </div>
-        <div class="hint" id="hint">
-          Drag: rotate · Wheel: zoom · Click a body to fly to it · /: commands (keys: space n r o l
-          b f a p t c s 1-9 0)
-        </div>
-        <div class="hint" id="credit">
-          Constellation figures: Stellarium "western" illustrations by Johan Meuris (Free Art
-          License), registered to the real stars
+        <!-- /#solar-controls -->
+        <!-- Plan 044 B6: exoplanet mode controls (hidden until "Systems" is
+             chosen). A system picker + a back button; the exo scene renders
+             the chosen system as a mini solar system. -->
+        <div id="exo-controls" style="display: none">
+          <div class="section-head">Exoplanet systems</div>
+          <div class="row">
+            <label for="exo-system">System</label>
+            <select id="exo-system" aria-label="Choose an exoplanet system to view"></select>
+          </div>
+          <div class="row"><label>Info</label><span id="exo-info" class="value">—</span></div>
+          <div class="row">
+            <button id="exo-back" type="button" title="Return to the solar system">
+              ← Back to solar system
+            </button>
+          </div>
+          <div class="hint">
+            13 confirmed multi-planet systems · NASA Exoplanet Archive · orbits at real Keplerian
+            elements
+          </div>
         </div>
       </div>
     </div>
