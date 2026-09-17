@@ -2146,6 +2146,10 @@ function finishIntro(skipped: boolean): void {
   // inside showOnboarding() keeps it to once per browser.
   if (!skipped) {
     window.setTimeout(showOnboarding, 700);
+    // C3: the timeline nudge fires a touch later so it doesn't compete with
+    // the coach card sliding up (the card is bottom-center, the hint is
+    // top-center — but two simultaneous first-run prompts is too much).
+    window.setTimeout(showTimelineHint, 1400);
   }
 }
 
@@ -2216,6 +2220,28 @@ if (onboardSkip) {
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && onboardEl && !onboardEl.hidden) dismissOnboarding();
 });
+
+// ===== Plan 044 C3: one-time "drag to travel through time" nudge =====
+// The timeline is a quiet 5px line; the time-travel scrub is the app's
+// differentiator, so a first-timer gets a single ~4s pulse above it. Shown
+// once per browser (localStorage ss3d.tlhint.v1), after the intro lands.
+const tlHintEl = document.getElementById('tl-hint') as HTMLDivElement | null;
+const TL_HINT_KEY = 'ss3d.tlhint.v1';
+function showTimelineHint(): void {
+  if (!tlHintEl) return;
+  try {
+    if (localStorage.getItem(TL_HINT_KEY) === '1') return;
+    localStorage.setItem(TL_HINT_KEY, '1');
+  } catch {
+    /* private mode — show it anyway (harmless) */
+  }
+  tlHintEl.hidden = false;
+  // The CSS animation runs 4s then holds at opacity 0; hide the element after
+  // so it stops occupying the (pointer-transparent) layout slot.
+  window.setTimeout(() => {
+    tlHintEl.hidden = true;
+  }, 4200);
+}
 
 // Any manual input on the 3D view (not the UI panel / palette) skips the
 // intro to the final Earth leg — the user has spoken. The skip button itself

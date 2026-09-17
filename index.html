@@ -704,6 +704,49 @@
         height: 20px;
         pointer-events: none;
       }
+      /* Plan 044 C3: one-time "drag to travel through time" nudge. A small
+         pill centered above the strip that fades in, pulses twice, and fades
+         out. pointer-events: none — it never blocks the scrub. */
+      #tl-hint {
+        position: absolute;
+        top: 26px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 3;
+        pointer-events: none;
+        padding: 5px 14px;
+        border-radius: 999px;
+        background: var(--surface-hud);
+        border: 1px solid var(--line-strong);
+        backdrop-filter: blur(8px);
+        font: 11.5px/1.3 var(--font-body);
+        letter-spacing: 0.03em;
+        color: var(--text-bright);
+        box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        animation: tl-hint 4s ease-in-out forwards;
+      }
+      @keyframes tl-hint {
+        0% {
+          opacity: 0;
+          transform: translateX(-50%) translateY(4px);
+        }
+        12%,
+        70% {
+          opacity: 1;
+          transform: translateX(-50%) translateY(0);
+        }
+        100% {
+          opacity: 0;
+          transform: translateX(-50%) translateY(-4px);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #tl-hint {
+          animation: none;
+          opacity: 1;
+        }
+      }
       /* The 5px progress line — centered in the 20px strip. 12px side
          insets so the Jan label (rotated 45°, its box swings ~8px left of
          the tick) is never clipped at the viewport edge; every fraction
@@ -1168,6 +1211,42 @@
       #panel input[type='range'] {
         flex: 1;
         accent-color: var(--accent);
+      }
+      /* Plan 044 C3: tick labels under the log speed slider. The wrapper is
+         the flex:1 child (was the input itself); the input fills it and the
+         labels sit in a 12px strip below, each centered on its value's
+         position along the track. */
+      #panel .speed-wrap {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      #panel .speed-wrap input[type='range'] {
+        flex: none;
+      }
+      #panel .speed-ticks {
+        position: relative;
+        height: 11px;
+        font-size: 9px;
+        line-height: 1;
+        color: var(--text-muted);
+        letter-spacing: 0.02em;
+        user-select: none;
+      }
+      #panel .speed-ticks span {
+        position: absolute;
+        top: 0;
+        transform: translateX(-50%);
+        white-space: nowrap;
+      }
+      /* First tick sits near the left edge — don't let centering clip it. */
+      #panel .speed-ticks span:first-child {
+        transform: translateX(-15%);
+      }
+      #panel .speed-ticks span:last-child {
+        transform: translateX(-85%);
       }
       /* #panel .value restyled in the Plan 041 block above (brighter,
          12.5px/600, tabular) — single source of truth there. */
@@ -1853,6 +1932,11 @@
          chapters, and the hover tooltip — all hidden on release. The
          control panel and the date+speed pane sit BELOW the strip. -->
     <div id="hud-timeline">
+      <!-- Plan 044 C3: one-time discoverability pulse. Shown for ~4s on the
+           first visit (localStorage ss3d.tlhint.v1) — the timeline is a quiet
+           5px line and the time-travel interaction is the app's
+           differentiator, so it gets a single gentle nudge. -->
+      <div id="tl-hint" hidden>⏳ drag to travel through time</div>
       <div id="hud-timeline-track">
         <div id="hud-timeline-bar">
           <div id="hud-timeline-months">
@@ -1916,15 +2000,25 @@
           </div>
           <div class="row">
             <label>Speed</label>
-            <input
-              id="speed"
-              type="range"
-              min="-3"
-              max="2.5"
-              step="0.01"
-              value="0"
-              aria-label="Simulation speed magnitude (log scale). Left = slower (0.001 d/s ≈ a year in 30 minutes), middle = 1 day/s, right ≈ 316 days/s. Use the Reverse button to run time backwards."
-            />
+            <div class="speed-wrap">
+              <input
+                id="speed"
+                type="range"
+                min="-3"
+                max="2.5"
+                step="0.01"
+                value="0"
+                aria-label="Simulation speed magnitude (log scale). Left = slower (0.001 d/s ≈ a year in 30 minutes), middle = 1 day/s, right ≈ 316 days/s. Use the Reverse button to run time backwards."
+              />
+              <!-- Plan 044 C3: tick labels on the log speed slider. Positions
+                   are (v − min)/(max − min) for v = -2 (1 hr/s), 0 (1 d/s),
+                   1.477 (≈1 mo/s) over the [-3, 2.5] range. -->
+              <div class="speed-ticks" aria-hidden="true">
+                <span style="left: 12.5%">1 hr/s</span>
+                <span style="left: 54.5%">1 d/s</span>
+                <span style="left: 90.9%">1 mo/s</span>
+              </div>
+            </div>
             <span id="speed-value" class="value">1.0 d/s</span>
           </div>
           <div class="row">
