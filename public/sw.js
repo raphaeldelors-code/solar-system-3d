@@ -72,26 +72,57 @@ self.addEventListener('fetch', (event) => {
         // to the shell, then the offline page.
         return caches
           .match(request)
-          .then(
-            (hit) =>
-              hit ||
-              (isNavigation
-                ? caches.match('./').then((shell) => shell || caches.match('offline.html'))
-                : undefined),
-          );
+          .then((hit) => hit || (isNavigation ? shellOrOffline(url) : undefined));
       }),
   );
 });
 
 /**
+ * Offline navigation fallback: serve the cached app shell, then the dedicated
+ * offline page.
+ *
+ * The shell is precached as `./` (the bare origin path). But a real navigation
+ * almost always carries a query string — the app round-trips its state in the
+ * URL (`/?intro=0&t=…&f=sun&…`), so the request URL is `/?intro=0`, NOT `/`.
+ * `caches.match('./')` only matches the exact `/` URL, so a naive fallback
+ * misses every query-string navigation and drops to the offline page even
+ * though the shell is cached. Match the bare pathname first (the precached
+ * shell), then the exact request, then the offline page. (Exposed by plan 044
+ * D5, whose extra lazy chunk tipped the cache over the LRU cap and made this
+ * miss observable in the offline smoke test.)
+ */
+async function shellOrOffline(url) {
+  const shell = await caches.match('./');
+  if (shell) return shell;
+  const exact = await caches.match(requestFromUrl(url));
+  if (exact) return exact;
+  return caches.match('offline.html');
+}
+
+function requestFromUrl(url) {
+  return new Request(url.origin + url.pathname, { method: 'GET' });
+}
+
+/**
  * Count-based LRU trim: CacheStorage returns keys in insertion order, so the
- * oldest entries are first. Drop the oldest until we're at or under maxEntries.
+ * oldest entries are first. Drop the oldest RUNTIME entries until we're at or
+ * under maxEntries.
+ *
+ * The precached shell (index + offline page + manifest + icons) is NEVER
+ * evicted — it is the offline fallback, and it is the OLDEST entry (added at
+ * install), so a naive "drop the oldest" would delete exactly the thing we
+ * need when offline. Without this guard, once the runtime cache fills with
+ * constellation figures / textures / lazy chunks, the shell gets trimmed away
+ * and the offline reload falls through to a blank page. (Exposed by plan 044
+ * D5, which added a lazy horizons chunk and tipped the cache over the cap.)
  */
 async function trimCache(cacheName, maxEntries) {
   const cache = await caches.open(cacheName);
   const keys = await cache.keys();
   if (keys.length <= maxEntries) return;
-  const toDelete = keys.slice(0, keys.length - maxEntries);
+  const precached = new Set(PRECACHE.map((p) => new Request(p).url));
+  const evictable = keys.filter((req) => !precached.has(req.url));
+  const toDelete = evictable.slice(0, Math.max(0, keys.length - maxEntries));
   await Promise.all(toDelete.map((req) => cache.delete(req)));
 }
 
