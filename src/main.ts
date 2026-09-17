@@ -469,6 +469,10 @@ let selectedBodyId = '';
 let selectedConstellation = '';
 let lastDays = clock.t;
 let lastMs = performance.now();
+// D10: true while the tab is hidden (visibilitychange). The frame loop skips
+// all sim + GPU work while hidden; the visibilitychange listener (below) keeps
+// this in sync and resets lastMs on return so the sim doesn't jump.
+let hidden = document.hidden;
 // Throttle for the per-frame Moon orbit-line resample (see the frame loop).
 let lastMoonResampleMs = 0;
 // Plan 044 B1: the live ISS satellite record (set once a TLE loads). Shared
@@ -2212,6 +2216,27 @@ document.addEventListener('pointerdown', (ev) => {
     closePalette();
 });
 
+// D10: pause sim + GPU work when the tab is hidden. The browser throttles
+// rAF to ~0 in a background tab anyway, but we stop the sim clock advancing
+// and reset the lastMs reference on return so the first visible frame doesn't
+// see a huge dtReal. An AbortController owns this listener (the plan's
+// "one AbortController for page-level listeners" — this is the first
+// subsystem to adopt it; the rest are audited in the plan notes).
+const pageListeners = new AbortController();
+document.addEventListener(
+  'visibilitychange',
+  () => {
+    hidden = document.hidden;
+    if (!hidden) {
+      // Just became visible: reset the reference so the next frame's dtReal
+      // is small (the frame loop also resets it, but doing it here means the
+      // very first visible frame is already clean).
+      lastMs = performance.now();
+    }
+  },
+  { signal: pageListeners.signal },
+);
+
 window.addEventListener('resize', () => {
   markSceneDirty(); // F6: viewport changed — repaint
   built.camera.aspect = window.innerWidth / window.innerHeight;
@@ -3152,6 +3177,12 @@ const frameLoop = createFrameLoop({
   set lastMs(v: typeof lastMs) {
     lastMs = v;
   },
+  get hidden() {
+    return hidden;
+  },
+  set hidden(v: typeof hidden) {
+    hidden = v;
+  },
   get pendingSkyTour() {
     return pendingSkyTour;
   },
@@ -3276,5 +3307,9 @@ if (bootOk) {
   // D7: telemetry consent state (unset|granted|declined) for E2E + checks.
   get telemetryConsent() {
     return telemetry.consent();
+  },
+  // D10: tab-hidden state (visibilitychange) for E2E + checks.
+  get hidden() {
+    return hidden;
   },
 };

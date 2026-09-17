@@ -69,6 +69,11 @@ export interface FrameLoopDeps {
   lastDays: number;
   lastMoonResampleMs: number;
   lastMs: number;
+  /** D10: true while the tab is hidden (visibilitychange). The frame loop
+   *  skips all sim + GPU work while hidden — the browser throttles rAF to
+   *  ~0 anyway, but this stops the sim clock + lastMs reference from drifting
+   *  so the first frame after a return doesn't jump. */
+  hidden: boolean;
   pendingSkyTour: boolean;
   sceneDirty: boolean;
   // --- mutable state: read-only from the loop's perspective ---
@@ -128,6 +133,16 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     // the rAF chain alive instead of tearing it down — on restore the next
     // frame just resumes, with zero re-init or forced reload.
     if (deps.contextLost) return;
+
+    // D10: tab is hidden (visibilitychange). The browser throttles rAF to ~0
+    // anyway, but skip the sim + GPU work explicitly AND reset the lastMs
+    // reference so the first frame after a return doesn't see a huge dtReal
+    // (the clamp to 0.1 s would hide it, but resetting is cleaner and keeps
+    // the sim clock from drifting while the tab is backgrounded).
+    if (deps.hidden) {
+      deps.lastMs = performance.now();
+      return;
+    }
 
     // Plan 044 B6: exoplanet mode runs on its OWN scene/renderer over the same
     // canvas. While active, drive the exo scene and skip the main solar-system
