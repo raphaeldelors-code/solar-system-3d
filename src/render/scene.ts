@@ -63,7 +63,9 @@ const RING_TEX_CACHE = new Map<string, THREE.Texture>();
 function ringTextureFor(id: string, color: [number, number, number]): THREE.Texture {
   let t = RING_TEX_CACHE.get(id);
   if (!t) {
-    t = makeRingTexture(color);
+    // Pass the body id so Saturn gets the real data-driven ring profile
+    // (plan 044 A4); other ringed bodies use the simple procedural profile.
+    t = makeRingTexture(color, id);
     RING_TEX_CACHE.set(id, t);
   }
   return t;
