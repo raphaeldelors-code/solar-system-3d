@@ -1,8 +1,12 @@
-# CI/CD: test -> build -> deploy to GitHub Pages on every push to main.
+# CI/CD: gate (lint/format/test/build+size-budget/E2E) on every push to main
+# AND every pull request; deploy to GitHub Pages only on push to main.
 #
 # Flow:
-#   1. Install deps, run the test suite and the production build.
-#   2. Publish the Vite `dist/` output to the `gh-pages` branch.
+#   1. Install deps, run the test suite and the production build (the build
+#      includes the D5 bundle-size budget: scripts/size-budget.mjs fails the
+#      build if the entry chunk exceeds the ceiling).
+#   2. On push to main: publish the Vite `dist/` output to the `gh-pages`
+#      branch, then smoke-check the live site (fetch / and /sw.js, assert 200).
 #   3. GitHub Pages (source: `gh-pages` branch) serves the site at
 #      https://raphaeldelors-code.github.io/solar-system-3d/
 #
@@ -13,10 +17,19 @@ name: ci
 on:
   push:
     branches: [main]
+  # D8: run the full gate on pull requests too (not just push-to-main), so a
+  # bad change is caught before merge. The deploy + smoke steps are gated on
+  # `push` to main, so PRs never publish.
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# D8: the deploy + post-deploy smoke only run on a push to main (never on PRs
+# or manual dispatches from a branch).
+env:
+  IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
 jobs:
   test-and-deploy:
@@ -41,10 +54,11 @@ jobs:
       - name: Run tests
         run: npx vitest run
 
-      - name: Build
+      - name: Build (includes the D5 bundle-size budget)
         run: npm run build
 
       - name: Deploy to GitHub Pages
+        if: env.IS_MAIN_PUSH == 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -53,9 +67,29 @@ jobs:
           # Wipe stale files from the previous deploy.
           force_push: true
 
+      # D8: post-deploy smoke check. GitHub Pages can take a few seconds to a
+      # minute to serve a fresh gh-pages push, so retry a handful of times
+      # before failing. Asserts the shell + the service worker both load.
+      - name: Post-deploy smoke check
+        if: env.IS_MAIN_PUSH == 'true'
+        run: |
+          SITE="https://raphaeldelors-code.github.io/solar-system-3d"
+          for i in 1 2 3 4 5 6; do
+            code_index=$(curl -s -o /dev/null -w "%{http_code}" "$SITE/")
+            code_sw=$(curl -s -o /dev/null -w "%{http_code}" "$SITE/sw.js")
+            if [ "$code_index" = "200" ] && [ "$code_sw" = "200" ]; then
+              echo "✅ Deploy smoke: / -> $code_index, /sw.js -> $code_sw"
+              exit 0
+            fi
+            echo "attempt $i/6: / -> $code_index, /sw.js -> $code_sw (retrying in 15s)"
+            sleep 15
+          done
+          echo "❌ Deploy smoke failed after 6 attempts"
+          exit 1
+
   # Browser E2E smoke (plan 044 D3). Runs in parallel with the deploy job:
   # it builds the production bundle, previews it, and drives headless Chromium
-  # (SwiftShader software WebGL) through the five user-facing flows. A failure
+  # (SwiftShader software WebGL) through the user-facing flows. A failure
   # turns the run red; it does not block the Pages deploy (the unit-test +
   # build gate above is the deploy's correctness gate).
   e2e:
