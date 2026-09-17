@@ -17,7 +17,7 @@
  * un-built copy it stays the literal string, which is fine — the cache is
  * only used in production.
  */
-const BUILD_VERSION = 'a1f67e176f';
+const BUILD_VERSION = '5109d1947e';
 const CACHE = 'orrery-' + BUILD_VERSION;
 // Max entries kept in the runtime cache before LRU eviction kicks in. The
 // shell itself is a handful of entries; this headroom is for optional
