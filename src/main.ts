@@ -86,6 +86,7 @@ import {
 } from './render/intro';
 import { commandForKey, digitToPlanet, paletteEntries, COMMANDS } from './render/commands';
 import { bodyFacts } from './render/bodyFacts';
+import { sbdbFacts } from './sim/sbdb';
 import { sceneIsStatic } from './render/idle';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
 import { parseAppState, encodeAppState, type ViewState } from './state/urlState';
@@ -1242,6 +1243,22 @@ function setInfoFacts(def: BodyDefinition | null, tDays?: number): void {
   infoFactsEl.replaceChildren();
   if (!def) return;
   for (const row of bodyFacts(def)) {
+    const el = document.createElement('div');
+    el.className = 'info-row';
+    const label = document.createElement('span');
+    label.textContent = row.label;
+    const value = document.createElement('span');
+    value.className = 'value';
+    value.textContent = row.value;
+    el.append(label, value);
+    infoFactsEl.appendChild(el);
+  }
+  // Plan 044 B4: for the five small bodies (Pluto, Ceres, Eris, Haumea,
+  // Makemake) append the NASA/JPL SBDB facts — designation, orbit class,
+  // absolute magnitude, discovery, and observation arc. The major planets
+  // are not in the SBDB, so sbdbFacts returns [] for them and nothing is
+  // added. (Baked data: the SBDB API has no CORS headers, see src/sim/sbdb.ts.)
+  for (const row of sbdbFacts(def.id)) {
     const el = document.createElement('div');
     el.className = 'info-row';
     const label = document.createElement('span');
