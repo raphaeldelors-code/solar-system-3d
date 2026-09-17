@@ -6,11 +6,11 @@
     <meta name="theme-color" content="#0a0e18" />
     <meta
       name="description"
-      content="Orrery — travel through 10,000 years of the solar system in your browser. A realistic 3D orrery: sun, planets, moons, Kepler orbits."
+      content="Orrery — travel through 250 years of the solar system in your browser. A realistic 3D orrery: sun, planets, moons, Kepler orbits."
     />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Orrery" />
-    <meta property="og:title" content="Orrery — travel through 10,000 years of the solar system" />
+    <meta property="og:title" content="Orrery — travel through 250 years of the solar system" />
     <meta
       property="og:description"
       content="A realistic 3D orrery: sun, planets, moons, Kepler orbits — with shadows, belts, time-travel scrubbing and shareable camera views."
@@ -27,7 +27,7 @@
       content="Orrery — a glowing sun with planets on concentric orbits"
     />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Orrery — travel through 10,000 years of the solar system" />
+    <meta name="twitter:title" content="Orrery — travel through 250 years of the solar system" />
     <meta
       name="twitter:description"
       content="A realistic 3D orrery: sun, planets, moons, Kepler orbits — with time-travel scrubbing and shareable camera views."
@@ -43,7 +43,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Orrery" />
-    <title>Orrery — travel through 10,000 years of the solar system</title>
+    <title>Orrery — travel through 250 years of the solar system</title>
     <style>
       /* ============================================================
          Plan 044 C1 — design tokens. The single source of truth for the
@@ -2029,7 +2029,7 @@
         color: #7f93b5;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-Dms5eLHJ.js"></script>
+    <script type="module" crossorigin src="./assets/index-CE90lPyZ.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -2073,7 +2073,7 @@
     <div id="intro" hidden aria-hidden="true">
       <div id="intro-title">
         <div class="intro-title-main">ORRERY</div>
-        <div class="intro-title-sub">travel through 10,000 years of the solar system</div>
+        <div class="intro-title-sub">travel through 250 years of the solar system</div>
       </div>
       <button id="intro-skip" type="button" hidden>Skip intro →</button>
     </div>
@@ -2100,7 +2100,16 @@
     <div id="about" hidden role="dialog" aria-modal="true" aria-labelledby="about-title">
       <div id="about-card">
         <div id="about-title">Orrery</div>
-        <div id="about-tag">travel through 10,000 years of the solar system</div>
+        <div id="about-tag">travel through 250 years of the solar system</div>
+
+        <h4>Data &amp; accuracy</h4>
+        <p>
+          Planet positions come from <strong>NASA/JPL</strong> orbital elements (Standish &amp;
+          Williams, 1992), valid <strong>1800–2050</strong> — the same validated ephemeris behind
+          professional tools. The Moon uses a separate JPL Horizons ephemeris. Scrub outside that
+          window and the orrery extrapolates with Kepler's laws, so treat far-future positions as
+          illustrative rather than precise.
+        </p>
 
         <h4>License</h4>
         <p>
