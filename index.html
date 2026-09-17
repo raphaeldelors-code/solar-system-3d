@@ -719,6 +719,21 @@
         box-shadow: 0 0 6px 1px rgba(87, 199, 133, 0.7);
         transform: translateX(-50%);
       }
+      /* Plan 044 A6: the intro tail's "you are here" pop — a glowing dot
+         centered on the line at the caret. JS drives its left/transform/
+         opacity each frame (it pops in with the strip's glow, then settles);
+         the base state is invisible until the tail positions it. */
+      #hud-timeline-bar #intro-tail-marker {
+        position: absolute;
+        top: 50%;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #bfe6ff 0%, #57c785 55%, rgba(87, 199, 133, 0) 75%);
+        box-shadow: 0 0 10px 3px rgba(120, 200, 255, 0.6);
+        opacity: 0;
+        pointer-events: none;
+      }
       /* Plan 030 F1: the nearest-event indicator. DOCKED at the top-right,
          immediately below the date/speed pane (#hud-mini) — not a track-child
          tracking the cursor, which let the plan-029 magnifier glass (centered
@@ -1422,7 +1437,7 @@
         color: #7f93b5;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-CYPWg1z7.js"></script>
+    <script type="module" crossorigin src="./assets/index-3CQHFo6a.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
