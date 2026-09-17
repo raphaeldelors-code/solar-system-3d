@@ -237,7 +237,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] C5 Name + logo + icon (drop the horse) — b1be2bf (renamed to Orrery, new orrery icon via scripts/gen_icon.py, time-led tagline, OG card)
 - [x] D1 Asset licensing ledger (legal blocker) — cb713ba (GPL-3.0 LICENSE + docs/asset-licensing.md ledger + in-app About dialog; Stellarium figures verified GPL-2.0)
 - [x] D2 Split main.ts god-file — DONE: eventsPanel (205b122) + frameLoop (95ce34d) + scrub (c380a6c) + searchUi (cd8e9be) + contextLoss (bdb1808, main.ts 4200→3133), all 5 sections behind createX(deps) factories
-- [ ] D3 Browser E2E (Playwright)
+- [x] D3 Browser E2E (Playwright) — 667f1ed (5 smoke tests: boot+render, URL round-trip, search pick, context-loss overlay, offline reload via SW; new e2e CI job)
 - [ ] D4 Fix the service worker
 - [ ] D5 Bundle diet + CI size budget
 - [ ] D6 WebGL guard + low-end quality tier
