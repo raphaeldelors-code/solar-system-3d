@@ -91,6 +91,7 @@ import { bodyFacts } from './render/bodyFacts';
 import { sbdbFacts } from './sim/sbdb';
 import { smallBodyFacts } from './sim/smallBodies';
 import { fetchApod } from './sim/apod';
+import { ONBOARD_STEPS, shouldShowOnboarding, markOnboarded } from './sim/onboarding';
 import { parseKpJson, latestKp, gScale, gScaleLabel, type KpSample } from './sim/spaceWeather';
 import { sceneIsStatic } from './render/idle';
 import { orbitReadout, formatPeriod, formatDistanceKm } from './sim/orbitInfo';
@@ -2139,7 +2140,82 @@ function finishIntro(skipped: boolean): void {
   }
   if (introSkipEl) introSkipEl.hidden = true;
   syncUrl();
+  // Plan 044 C2: on a NATURAL completion (not a skip), walk a first-timer
+  // through the three core gestures. A short delay lets the landing settle
+  // and the intro fade finish before the coach card slides up. localStorage
+  // inside showOnboarding() keeps it to once per browser.
+  if (!skipped) {
+    window.setTimeout(showOnboarding, 700);
+  }
 }
+
+// ===== Plan 044 C2: 3-step first-run coach overlay =====
+// Shown once per browser (localStorage) after the intro lands on Earth. The
+// pure step data + persistence live in src/sim/onboarding.ts (unit-tested);
+// this is the thin DOM wiring.
+const onboardEl = document.getElementById('onboard') as HTMLDivElement | null;
+const onboardIcon = document.getElementById('onboard-icon') as HTMLDivElement | null;
+const onboardTitle = document.getElementById('onboard-title') as HTMLDivElement | null;
+const onboardBody = document.getElementById('onboard-body') as HTMLDivElement | null;
+const onboardDots = document.getElementById('onboard-dots') as HTMLDivElement | null;
+const onboardNext = document.getElementById('onboard-next') as HTMLButtonElement | null;
+const onboardSkip = document.getElementById('onboard-skip') as HTMLButtonElement | null;
+let onboardStep = 0;
+
+function renderOnboardStep(): void {
+  if (!onboardEl || !onboardIcon || !onboardTitle || !onboardBody || !onboardDots || !onboardNext)
+    return;
+  const step = ONBOARD_STEPS[onboardStep];
+  onboardIcon.textContent = step.icon;
+  onboardTitle.textContent = step.title;
+  onboardBody.textContent = step.body;
+  // progress dots
+  onboardDots.textContent = '';
+  for (let i = 0; i < ONBOARD_STEPS.length; i++) {
+    const d = document.createElement('span');
+    if (i === onboardStep) d.className = 'on';
+    onboardDots.appendChild(d);
+  }
+  const last = onboardStep === ONBOARD_STEPS.length - 1;
+  onboardNext.textContent = last ? 'Start exploring ✦' : 'Next →';
+}
+
+function dismissOnboarding(): void {
+  if (onboardEl) {
+    onboardEl.hidden = true;
+    onboardEl.setAttribute('aria-hidden', 'true');
+  }
+  markOnboarded();
+}
+
+function showOnboarding(): void {
+  if (!onboardEl || !onboardNext || !onboardSkip) return;
+  if (!shouldShowOnboarding()) return; // already seen
+  onboardStep = 0;
+  renderOnboardStep();
+  onboardEl.hidden = false;
+  onboardEl.setAttribute('aria-hidden', 'false');
+  onboardNext.focus();
+}
+
+if (onboardNext) {
+  onboardNext.addEventListener('click', () => {
+    if (onboardStep < ONBOARD_STEPS.length - 1) {
+      onboardStep++;
+      renderOnboardStep();
+    } else {
+      dismissOnboarding();
+    }
+  });
+}
+if (onboardSkip) {
+  onboardSkip.addEventListener('click', dismissOnboarding);
+}
+// Esc dismisses the tour (the palette also listens for Esc, but the tour is
+// only open when the palette is closed, so there's no conflict).
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && onboardEl && !onboardEl.hidden) dismissOnboarding();
+});
 
 // Any manual input on the 3D view (not the UI panel / palette) skips the
 // intro to the final Earth leg — the user has spoken. The skip button itself
