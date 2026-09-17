@@ -35,6 +35,7 @@ import {
   type FpsWatchdog,
 } from './render/quality';
 import { createTelemetry } from './telemetry/client';
+import { initI18n, t } from './i18n/i18n';
 import { buildExoScene, type ExoScene } from './render/exoScene';
 import { EXO_SYSTEMS } from './sim/exoplanets';
 import { fetchIssTle, FALLBACK_ISS_TLE } from './data/issTle';
@@ -1067,16 +1068,16 @@ function speedValueStr(): string {
   let mag: string, unit: string;
   if (a >= 100) {
     mag = a.toFixed(0);
-    unit = 'd/s';
+    unit = t('unitDaysPerSec');
   } else if (a >= 1) {
     mag = a.toFixed(1);
-    unit = 'd/s';
+    unit = t('unitDaysPerSec');
   } else if (a >= 0.1) {
     mag = a.toFixed(2);
-    unit = 'd/s';
+    unit = t('unitDaysPerSec');
   } else {
     mag = (a * 24).toFixed(2);
-    unit = 'h/s';
+    unit = t('unitHoursPerSec');
   }
   return `${arrow}${mag} ${unit}`;
 }
@@ -1308,9 +1309,9 @@ function updateInfo(): void {
       if (raH < 0) raH += 24;
       infoEl.hidden = false;
       infoNameEl.textContent = `${c.name} — constellation`;
-      infoLabel1El.textContent = 'Center RA';
-      infoLabel2El.textContent = 'Center Dec';
-      infoLabel3El.textContent = 'Stars';
+      infoLabel1El.textContent = t('infoCenterRa');
+      infoLabel2El.textContent = t('infoCenterDec');
+      infoLabel3El.textContent = t('infoStars');
       infoPeriodEl.textContent = `${raH.toFixed(1)}h`;
       infoDistanceEl.textContent = `${decDeg >= 0 ? '+' : ''}${decDeg.toFixed(1)}°`;
       infoRangeEl.textContent = `${c.stars.length} stars`;
@@ -1330,9 +1331,9 @@ function updateInfo(): void {
   }
   infoEl.hidden = false;
   infoNameEl.textContent = def.name;
-  infoLabel1El.textContent = 'Orbit period';
-  infoLabel2El.textContent = 'Distance';
-  infoLabel3El.textContent = 'Peri / Apo';
+  infoLabel1El.textContent = t('infoOrbitPeriod');
+  infoLabel2El.textContent = t('infoDistance');
+  infoLabel3El.textContent = t('infoPeriApo');
   infoPeriodEl.textContent = formatPeriod(r.periodDays);
   infoDistanceEl.textContent =
     def.kind === 'moon'
@@ -1440,7 +1441,7 @@ speedEl.addEventListener('input', () => {
 
 pauseBtn.addEventListener('click', () => {
   clock.setPaused(!clock.isPaused);
-  pauseBtn.textContent = clock.isPaused ? 'Resume' : 'Pause';
+  pauseBtn.textContent = clock.isPaused ? t('resume') : t('pause');
   markSceneDirty(); // F6: pause/resume changes motion state
   syncUrl();
 });
@@ -1615,7 +1616,7 @@ function runCommand(id: string): void {
   switch (id) {
     case 'pause':
       clock.setPaused(!clock.isPaused);
-      pauseBtn.textContent = clock.isPaused ? 'Resume' : 'Pause';
+      pauseBtn.textContent = clock.isPaused ? t('resume') : t('pause');
       syncUrl();
       break;
     case 'speed-up':
@@ -2280,7 +2281,7 @@ if (urlState.figures != null) {
 if (urlState.dof != null) dofEl.checked = urlState.dof;
 if (urlState.paused != null) {
   clock.setPaused(urlState.paused);
-  pauseBtn.textContent = urlState.paused ? 'Resume' : 'Pause';
+  pauseBtn.textContent = urlState.paused ? t('resume') : t('pause');
 }
 if (urlState.eventsOpen != null) {
   eventsRowEl.hidden = !urlState.eventsOpen;
@@ -2506,6 +2507,19 @@ telemetryConsentEl.addEventListener('change', () => {
 // throw during scene build is caught, not just post-boot errors. Local-only
 // until consent is granted.
 telemetry.install();
+
+// D9: detect the locale from navigator.language and stamp the control panel
+// (data-i18n / data-i18n-attr) before it first paints. en is the default;
+// fr is the proof locale. JS-set strings call t() directly.
+initI18n();
+
+// D9: on coarse-pointer (touch) devices the desktop hint is wrong — swap it
+// for the touch hint. Done here (not the inline panel script) so it runs
+// AFTER initI18n() and uses the active locale's string.
+if (window.matchMedia('(pointer: coarse)').matches) {
+  const hintEl = document.getElementById('hint');
+  if (hintEl) hintEl.textContent = t('hintTouch');
+}
 
 // D6: pre-flight WebGL probe. If the browser can't create a WebGL context at
 // all (WebGL disabled, very old browser, or a blocked GPU), `buildScene`'s

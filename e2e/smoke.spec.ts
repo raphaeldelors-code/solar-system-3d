@@ -187,6 +187,33 @@ test('telemetry consent is opt-in + persists (D7)', async ({ page }) => {
   expect(persisted).toBe('granted');
 });
 
+test('i18n: en default + fr via navigator locale (D9)', async ({ browser }) => {
+  // English (default): the panel is stamped from the en catalog.
+  const enPage = await browser.newPage();
+  watchPageErrors(enPage);
+  await enPage.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
+  await waitForRender(enPage);
+  expect(await enPage.evaluate(() => document.documentElement.lang)).toBe('en');
+  expect(await enPage.locator('#pause').textContent()).toBe('Pause');
+  expect(await enPage.locator('[data-i18n="sectionTime"]').textContent()).toBe('Time');
+  await enPage.close();
+
+  // French: navigator.language = fr-FR → the fr catalog is applied.
+  const frContext = await browser.newContext({ locale: 'fr-FR' });
+  const frPage = await frContext.newPage();
+  watchPageErrors(frPage);
+  await frPage.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
+  await waitForRender(frPage);
+  expect(await frPage.evaluate(() => document.documentElement.lang)).toBe('fr');
+  expect(await frPage.locator('#pause').textContent()).toBe('Pause'); // "Pause" in both
+  expect(await frPage.locator('[data-i18n="sectionTime"]').textContent()).toBe('Temps');
+  expect(await frPage.locator('[data-i18n="sectionView"]').textContent()).toBe('Vue');
+  // A JS-set string (speed unit) also follows the locale.
+  const speed = await frPage.locator('#speed-value').textContent();
+  expect(speed).toContain('j/s'); // French "jours/seconde"
+  await frContext.close();
+});
+
 test('app shell reloads offline via the service worker', async ({ page, context }) => {
   watchPageErrors(page);
   // First load (online): the SW installs, precaches the shell, and the
