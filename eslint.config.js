@@ -26,6 +26,46 @@ export default tseslint.config(
     },
   },
   {
+    // D10 (plan 046): enforce the "pure sim/data" invariant. The sim + data
+    // layers must stay free of three.js and the DOM so they run in Node under
+    // vitest and can be unit-tested without a browser. This was previously
+    // convention-only (enforced by review); now it's a lint gate so it can't
+    // silently rot.
+    files: ['src/sim/**/*.ts', 'src/data/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'three',
+              message:
+                'src/sim and src/data must stay pure (no three.js) so they run in Node under vitest. Move three-dependent code to src/render.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'document',
+          message:
+            'src/sim and src/data must stay pure (no DOM) so they run in Node under vitest. Move DOM code to src/app or src/render.',
+        },
+        {
+          name: 'window',
+          message:
+            'src/sim and src/data must stay pure (no DOM) so they run in Node under vitest. Move DOM code to src/app or src/render.',
+        },
+        {
+          name: 'navigator',
+          message:
+            'src/sim and src/data must stay pure (no DOM) so they run in Node under vitest. Move DOM code to src/app or src/render.',
+        },
+      ],
+    },
+  },
+  {
     // public/sw.js + scripts are plain browser/node JS, not TS.
     files: ['public/**/*.js', 'scripts/**/*.js', 'scripts/**/*.mjs', 'vite.config.js'],
     languageOptions: {
