@@ -79,7 +79,7 @@ One feature per commit, gates green before each. Start at A1.
 - [x] B8 feat(web): photo mode + APOD daily panel (plan 044) — `363471d`
 - [x] C1 style(ui): real type system + documented color palette (plan 044) — `18389b5`
 - [x] C2 feat(web): 3-step first-run onboarding (plan 044) — `43cbfca`
-- [ ] C3 feat(web): timeline discoverability + speed-slider tick labels (plan 044)
+- [x] C3 feat(web): timeline discoverability + speed-slider tick labels (plan 044) — `ca4ee39`
 - [ ] C4 fix(a11y): contrast, prefers-reduced-motion, keyboard time-scrub (plan 044)
 - [ ] C5 feat(brand): name + logo + icon (drop the horse) (plan 044)
 - [ ] D1 docs(legal): asset licensing ledger (Stellarium GPL / ESA) — sale blocker (plan 044)
