@@ -231,7 +231,7 @@ phase to re-grade and confirm the score is climbing toward 100.
 - [x] B7 Named asteroids + comets (SBDB/MPC) — ff18c45 (47 bodies: 17 asteroids + 30 comets, real J2000 orbits)
 - [x] B8 Photo mode + APOD daily panel — 363471d (branded PNG watermark + live APOD card)
 - [x] C1 Real type system + documented color palette — 18389b5 (:root tokens, fixed 5 undefined vars, killed green date, display face)
-- [ ] C2 3-step first-run onboarding
+- [x] C2 3-step first-run onboarding — 43cbfca (coach overlay after intro, once per browser)
 - [ ] C3 Timeline discoverability + speed-slider tick labels
 - [ ] C4 Accessibility (contrast, reduced-motion, keyboard scrub)
 - [ ] C5 Name + logo + icon (drop the horse)
