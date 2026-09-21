@@ -443,7 +443,7 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     // Pulsing highlight on the picked body — a planet or a moon (plan 015 P6) —
     // driven by wall-clock time so the pulse is smooth and independent of the
     // sim speed / direction.
-    updateBodyHighlight(deps.built, deps.selectedBodyId, nowMs / 1000);
+    updateBodyHighlight(deps.built, deps.selectedBodyId, nowMs / 1000, deps.built.camera);
 
     // Sun surface shader (plan 044 A1): advance the granulation animation with
     // wall-clock time (smooth, independent of sim speed/direction). One uniform

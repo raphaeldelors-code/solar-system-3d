@@ -2403,7 +2403,16 @@ export function bodyHighlightTargets(
  * a wall-clock `tSeconds` to drive the pulse (phase is absolute, so the
  * pulse never jumps). State per body comes from `bodyHighlightTargets`.
  */
-export function updateBodyHighlight(built: BuiltScene, pickedId: string, tSeconds: number): void {
+export function updateBodyHighlight(
+  built: BuiltScene,
+  pickedId: string,
+  tSeconds: number,
+  camera?: THREE.Camera,
+): void {
+  // Plan 047: depth fade — far orbits dim toward ~0.03 so the tilted wide
+  // view stops reading as a mesh. The picked orbit is exempt (it is the
+  // subject). Distances are measured from the camera to each body's pivot.
+  const camPos = camera ? built.camera.position : null;
   for (const entry of built.bodies.values()) {
     const t = bodyHighlightTargets(entry.def.id, pickedId, entry.orbit !== null, tSeconds);
     entry.orbitEmphasis.visible = t.ringVisible;
@@ -2415,7 +2424,14 @@ export function updateBodyHighlight(built: BuiltScene, pickedId: string, tSecond
     }
     if (entry.orbit && t.orbitOpacity !== null && t.orbitColor !== null) {
       const om = entry.orbit.material as THREE.LineBasicMaterial;
-      om.opacity = t.orbitOpacity;
+      let op = t.orbitOpacity;
+      if (camPos && pickedId !== entry.def.id) {
+        const d = camPos.distanceTo(entry.pivot.position);
+        // 0 at 200 units (full base) -> 1 at 4000+ (faded to ~0.03).
+        const f = THREE.MathUtils.clamp((d - 200) / 3800, 0, 1);
+        op = t.orbitOpacity * (1 - f) + 0.03 * f;
+      }
+      om.opacity = op;
       om.color.set(t.orbitColor);
     }
   }
