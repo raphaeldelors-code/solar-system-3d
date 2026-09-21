@@ -26,7 +26,7 @@
 import * as THREE from 'three';
 
 /** Constant on-screen cap height (CSS px) for every body name. */
-export const PLANET_LABEL_SCREEN_PX = 22;
+export const PLANET_LABEL_SCREEN_PX = 13; // plan 047: 22 -> 13px
 /** Skip drawing below this opacity (invisible either way). */
 export const PLANET_LABEL_MIN_OPACITY = 0.04;
 /** Skip labels whose anchor projects this far (CSS px) outside the viewport. */
@@ -35,7 +35,7 @@ export const PLANET_LABEL_SCREEN_PAD_PX = 220;
  * Hard cap on how many body names a single frame may draw (the same rule the
  * constellation names use). The picked body always counts as one of the slots.
  */
-export const PLANET_LABEL_MAX_VISIBLE = 8;
+export const PLANET_LABEL_MAX_VISIBLE = 4; // plan 047: 8 -> 4
 /** Extra margin (CSS px) around each ink box for the de-collision test. */
 export const PLANET_LABEL_BOX_PAD_PX = 5;
 /**
@@ -281,22 +281,27 @@ export function drawPlanetLabels(
     // Start at the disc edge (not the center) so the line doesn't cross the body.
     const sx = s.bx + ux * s.discR;
     const sy = s.by + uy * s.discR;
-    ctx.strokeStyle = s.emphasized ? 'rgba(120,220,160,0.7)' : 'rgba(180,200,230,0.45)';
+    // Plan 047: one quiet label language — no backdrop box (the "wireframe"
+    // tell), a soft shadow for legibility, and the accent (not neon green)
+    // for the picked body.
+    ctx.strokeStyle = s.emphasized ? 'rgba(122,162,255,0.8)' : 'rgba(255,255,255,0.25)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.lineTo(s.x - ux * (s.w / 2), s.y - uy * (s.h / 2));
     ctx.stroke();
     // Name text.
-    ctx.font = '600 15px system-ui, sans-serif';
+    ctx.font = (s.emphasized ? '600 ' : '500 ') + '13px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Subtle backdrop for legibility over bright bodies.
-    const tw = ctx.measureText(s.name).width;
-    ctx.fillStyle = 'rgba(10,14,24,0.5)';
-    ctx.fillRect(s.x - tw / 2 - 6, s.y - 10, tw + 12, 20);
-    ctx.fillStyle = s.emphasized ? '#7ddba8' : '#dbe6f5';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 1;
+    ctx.fillStyle = s.emphasized ? '#a9c4ff' : '#f5f7fa';
     ctx.fillText(s.name, s.x, s.y);
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
   }
   ctx.globalAlpha = 1;
 }

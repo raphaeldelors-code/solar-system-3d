@@ -289,9 +289,10 @@ export function drawConstellationName(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const text = name.toUpperCase();
-  const { fontSize, inkStartX, inkWidthPx, charWidths } = layoutConstellationName(name);
+  const { fontSize, inkStartX, charWidths } = layoutConstellationName(name); // plan 047: inkWidthPx unused (flourish removed)
   const sp = fontSize * NAME_LETTER_SPACING_EM;
-  ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
+  // Plan 047: quiet spaced sans caps (was ornate serif + flourish + diamond).
+  ctx.font = `400 ${fontSize}px system-ui, sans-serif`;
   const drawText = (): void => {
     let x = inkStartX;
     for (let i = 0; i < text.length; i++) {
@@ -317,32 +318,15 @@ export function drawConstellationName(
         };
   // Two glow passes (wide soft halo), then a crisp shadow-free core so the
   // letterforms stay sharp on top of the halo.
+  // Plan 047: one soft glow pass (was two) — subtle, not a neon halo.
   ctx.shadowColor = base.glow;
-  ctx.shadowBlur = 14;
+  ctx.shadowBlur = 8;
   ctx.fillStyle = base.halo;
-  drawText();
   drawText();
   ctx.shadowBlur = 0;
   ctx.fillStyle = base.core;
   drawText();
-  // Hairline flourish: two strokes broken by a small diamond under the name.
-  const y = 90;
-  ctx.strokeStyle = base.flourish;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(inkStartX - 16, y);
-  ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2 - 10, y);
-  ctx.moveTo(CONSTELLATION_NAME_CANVAS_W / 2 + 10, y);
-  ctx.lineTo(inkStartX + inkWidthPx + 16, y);
-  ctx.stroke();
-  ctx.fillStyle = base.diamond;
-  ctx.beginPath();
-  ctx.moveTo(CONSTELLATION_NAME_CANVAS_W / 2, y - 5);
-  ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2 + 5, y);
-  ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2, y + 5);
-  ctx.lineTo(CONSTELLATION_NAME_CANVAS_W / 2 - 5, y);
-  ctx.closePath();
-  ctx.fill();
+  // Plan 047: no flourish / diamond — the name is quiet sky furniture.
 }
 
 /**
