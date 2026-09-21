@@ -630,7 +630,11 @@ export function buildScene(
     // Orbit line. Per-point radius mapping (same one the body positions
     // use) so eccentric ellipses stay on their drawn path.
     let orbit: THREE.Line | null = null;
-    if (def.elements) {
+    // Plan 047: only the 8 major planets + the Moon draw a default orbit line.
+    // Dwarfs, asteroids, comets and the other moons stay fly-to-able but no
+    // longer add to the wide-view line mesh (the user's core complaint).
+    const drawOrbit = def.kind === 'planet' || def.id === 'moon';
+    if (def.elements && drawOrbit) {
       const distMap = (r: number): number =>
         isMoon ? scale.moonDistance(r, def.id) : scale.planetDistance(r);
       if (def.id === 'moon') {

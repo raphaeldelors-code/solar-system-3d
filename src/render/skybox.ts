@@ -190,7 +190,10 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
     // the Milky-Way band competed with the Sun for attention, so it is tinted
     // down ~half (2026-09-12 user feedback: "the huge one … I think it's the
     // milky way"). toneMapped off keeps the tint a plain linear multiply.
-    color: new THREE.Color(MILKYWAY_TINT, MILKYWAY_TINT, MILKYWAY_TINT),
+    // Plan 047: the bake is authored with a warm magenta band (a 3rd hue in
+    // an otherwise blue+warm-sun palette). A cool-blue tint suppresses the
+    // magenta so the sky reads as one calm blue family, not a purple band.
+    color: new THREE.Color(MILKYWAY_TINT * 0.85, MILKYWAY_TINT * 0.95, MILKYWAY_TINT * 1.25),
     side: THREE.BackSide,
     depthWrite: false, // never occlude in the depth buffer
     toneMapped: false, // keep authored brightness (no ACES dip)
