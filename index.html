@@ -58,7 +58,12 @@
         /* -- surfaces (deep-space, blue-black) -- */
         --bg: #000;
         --surface: rgba(10, 14, 24, 0.84); /* panel card */
-        --surface-hud: rgba(12, 16, 26, 0.55); /* HUD + intro chips — identical to --glass-bg (plan 047) */
+        --surface-hud: rgba(
+          12,
+          16,
+          26,
+          0.55
+        ); /* HUD + intro chips — identical to --glass-bg (plan 047) */
         --line: rgba(120, 150, 200, 0.18); /* hairline borders */
         --line-strong: rgba(120, 150, 200, 0.35); /* focus / hover borders */
 
@@ -2443,15 +2448,21 @@
               ><input id="figures" type="checkbox" />
               <span data-i18n="figures">Figures</span></label
             >
-            <label hidden><input id="dso" type="checkbox" /> <span data-i18n="dso">DSO</span></label>
-            <label hidden><input id="dof" type="checkbox" /> <span data-i18n="dof">DOF</span></label>
+            <label hidden
+              ><input id="dso" type="checkbox" /> <span data-i18n="dso">DSO</span></label
+            >
+            <label hidden
+              ><input id="dof" type="checkbox" /> <span data-i18n="dof">DOF</span></label
+            >
           </div>
           <div class="section-head" data-i18n="sectionShare">Share</div>
           <div class="row"><button id="share" data-i18n="share">Copy share link</button></div>
           <div class="row">
             <button id="screenshot" data-i18n="screenshot">Save screenshot</button>
           </div>
-          <div class="row" hidden><button id="apod" data-i18n="apod">Today in space (APOD)</button></div>
+          <div class="row" hidden>
+            <button id="apod" data-i18n="apod">Today in space (APOD)</button>
+          </div>
           <div class="row">
             <button id="about-btn" type="button" data-i18n="about">About &amp; credits</button>
           </div>

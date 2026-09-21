@@ -2962,7 +2962,14 @@ function updateConstellationScreenLabelFrame(): void {
   built.constellations.visible = Boolean(skyTour || selectedConstellation);
   if (!labelLayer || !labelsEl.checked) return;
   if (!skyTour && !selectedConstellation) {
-    updateConstellationScreenLabels(labelLayer, built.camera, [], 0, window.innerWidth, window.innerHeight);
+    updateConstellationScreenLabels(
+      labelLayer,
+      built.camera,
+      [],
+      0,
+      window.innerWidth,
+      window.innerHeight,
+    );
     return;
   }
   const camera = built.camera;

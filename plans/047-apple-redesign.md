@@ -12,6 +12,7 @@ with headless-Chrome screenshots + vision after every phase; if <95, implement t
 judge's single highest-ROI gap and re-score. Loop until pass.
 
 ## Why the current app looks bad (consensus of 3 subagents)
+
 1. **Orbit tangle** — every orbit is a flat full-opacity steel-blue line; in the
    tilted wide view they cross into a gray mesh. The #1 clutter signal.
 2. **"+" star spikes** — ~200 brightest stars get 4-point diffraction crosses that
@@ -31,8 +32,10 @@ judge's single highest-ROI gap and re-score. Loop until pass.
 10. **Competing micro-animations** — several simultaneous pulses, no easing language.
 
 ## Phase 0 — Revert the low-value noise (UX removal list)
+
 Remove or hide the features that add noise with low ROI. Keep the code reachable
 but OFF by default; delete the truly dead ones.
+
 - **CUT** (delete UI + wiring): NEO "Next Asteroid" feed, Space-Weather Kp row,
   APOD row, exoplanet "Systems" second-app (Sky/System/**Systems** → Sky/System),
   ISS satellite + orbit, DSO/Messier markers, DOF toggle.
@@ -43,6 +46,7 @@ but OFF by default; delete the truly dead ones.
 - Net: the default frame shows **≤6 UI elements** and one subject.
 
 ## Phase 1 — Scene de-clutter (biggest visual wins, in this order)
+
 1. **Orbit lines: faint + depth-fade + selection emphasis** — `render/scene.ts`
    (`makeOrbitLine`, `updateOrbitLines`) + `main.ts` per-frame opacity by camera
    distance + picked/hovered id. Base 0.45→0.10, color→accent rgba(122,162,255,·);
@@ -63,6 +67,7 @@ but OFF by default; delete the truly dead ones.
    the ~300 brightest, ±15%, 3–6s). Milky Way desaturate toward blue.
 
 ## Phase 2 — UI / material / type (Apple system)
+
 6. **Unify glass + palette tokens** — `index.html` `:root` new tokens
    (see `plans/047-tokens.md`); apply the SAME glass to `#panel`, `#hud-mini`,
    `#date-cal`, `#tooltip`, `#palette`, `#about-card`, `#onboard-card`:
@@ -80,6 +85,7 @@ but OFF by default; delete the truly dead ones.
     rocky lit limbs.
 
 ## Phase 3 — Gate & loop
+
 - Screenshot the 3 canonical views (boot 1280×800, wide, mobile 390×844) with
   headless Chrome (SwiftShader flags) + vision.
 - Score against `plans/047-rubric.md` (judge) + the UX & visual rubrics.
@@ -87,6 +93,7 @@ but OFF by default; delete the truly dead ones.
 - Repeat until all three judges ≥95. Record each score next to its commit.
 
 ## Files touched (primary)
+
 `index.html` (CSS tokens, panel, icons, motion), `src/main.ts` (removals, mode
 gating, per-frame orbit opacity, "More" disclosure), `src/render/scene.ts`,
 `src/render/post.ts`, `src/render/skybox.ts`, `src/render/planetScreenLabels.ts`,
@@ -94,6 +101,7 @@ gating, per-frame orbit opacity, "More" disclosure), `src/render/scene.ts`,
 `src/render/atmosphere.ts`, `src/sim/starfield.ts`.
 
 ## Guardrails
+
 - `npm test` green before every commit; `npm run build` (tsc strict) green.
 - Bundle stays under the 1.3 MB CI budget.
 - Do NOT reintroduce removed features as visible UI.
