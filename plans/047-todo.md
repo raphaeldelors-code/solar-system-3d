@@ -1,13 +1,13 @@
 # Plan 047 — Todo (check off as each lands green)
 
 ## Phase 0 — Revert low-value noise
-- [ ] P0.1 CUT: NEO "Next Asteroid" feed (UI row + applyNeo wiring)
-- [ ] P0.2 CUT: Space-Weather Kp row
-- [ ] P0.3 CUT: APOD row
-- [ ] P0.4 CUT: exoplanet "Systems" second-app (Sky/System/Systems -> Sky/System)
-- [ ] P0.5 CUT: ISS satellite + orbit line
-- [ ] P0.6 CUT: DSO/Messier markers + toggle
-- [ ] P0.7 CUT: DOF toggle
+- [x] P0.1 CUT: NEO "Next Asteroid" feed (UI row + applyNeo wiring)
+- [x] P0.2 CUT: Space-Weather Kp row
+- [x] P0.3 CUT: APOD row
+- [x] P0.4 CUT: exoplanet "Systems" second-app (Sky/System/Systems -> Sky/System)
+- [x] P0.5 CUT: ISS satellite + orbit line
+- [x] P0.6 CUT: DSO/Messier markers + toggle
+- [x] P0.7 CUT: DOF toggle
 - [ ] P0.8 HIDE: Events/Share/About/scale/belts/figures into one "More" disclosure
 - [ ] P0.9 Panel default = collapsed pill; <=6 visible rows when open
 
@@ -15,7 +15,7 @@
 - [x] P1.1 Orbit lines: faint + depth-fade + picked/hover emphasis (scene.ts, main.ts)
 - [x] P1.2 Sun: remove anamorphic streak + shrink corona (post.ts)
 - [x] P1.3 Kill "+" star spikes (skybox.ts)
-- [ ] P1.4 Labels: one language, cap 4, mode-gated (planet/constellation labels, textures.ts, main.ts)
+- [x] P1.4 Labels: one language, cap 4, mode-gated (planet/constellation labels, textures.ts, main.ts)
 - [ ] P1.5 Starfield: 9000->3500, dim tail, subtle twinkle, MW desaturate (skybox.ts, starfield.ts)
 
 ## Phase 2 — UI / material / type
