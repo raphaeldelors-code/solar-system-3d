@@ -58,7 +58,12 @@
         /* -- surfaces (deep-space, blue-black) -- */
         --bg: #000;
         --surface: rgba(10, 14, 24, 0.84); /* panel card */
-        --surface-hud: rgba(10, 16, 28, 0.6); /* HUD + intro chips */
+        --surface-hud: rgba(
+          12,
+          16,
+          26,
+          0.55
+        ); /* HUD + intro chips — identical to --glass-bg (plan 047) */
         --line: rgba(120, 150, 200, 0.18); /* hairline borders */
         --line-strong: rgba(120, 150, 200, 0.35); /* focus / hover borders */
 
@@ -72,6 +77,13 @@
         --accent: #6ea8ff;
         --accent-soft: #9cc0f0; /* panel h1, soft headings */
         --accent-glow: rgba(110, 168, 255, 0.55);
+
+        /* -- plan 047: unified glass + motion language -- */
+        --glass-blur: blur(20px) saturate(1.2);
+        --glass-bg: rgba(12, 16, 26, 0.55);
+        --glass-line: rgba(255, 255, 255, 0.14);
+        --radius-card: 16px;
+        --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
 
         /* -- semantic -- */
         --danger: #ff4d4d;
@@ -102,28 +114,6 @@
         display: block;
         touch-action: none;
       }
-      /* Plan 044 B6: exoplanet-mode planet labels. A full-viewport,
-         pointer-transparent overlay (z-index 6, above the canvas at 0, below
-         the panel at 10). Each .exo-label is absolutely positioned per frame. */
-      #exo-labels {
-        position: fixed;
-        inset: 0;
-        z-index: 6;
-        pointer-events: none;
-        overflow: hidden;
-      }
-      .exo-label {
-        position: absolute;
-        top: 0;
-        left: 0;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        color: var(--text-bright);
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-        white-space: nowrap;
-        will-change: transform;
-      }
       #panel {
         position: fixed;
         /* Plan 025 F3 (v2): below the permanent top strip — the calm event
@@ -133,20 +123,21 @@
         top: calc(44px + env(safe-area-inset-top));
         left: calc(12px + env(safe-area-inset-left));
         z-index: 10;
-        background: rgba(10, 14, 24, 0.84);
+        background: var(--glass-bg);
         color: var(--text);
-        /* Plan 041: reworked panel chrome — softer radius, fainter border,
-           real elevation so it reads as a card above the starfield. */
-        border: 1px solid rgba(120, 150, 200, 0.18);
-        border-radius: 12px;
+        /* Plan 047: unified Apple glass — 20px blur + saturate, white
+           hairline, 16px radius, deep soft shadow. */
+        border: 1px solid var(--glass-line);
+        border-radius: var(--radius-card);
         padding: 14px 16px;
         font:
           13px/1.5 system-ui,
           sans-serif;
-        backdrop-filter: blur(8px);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
         box-shadow:
-          0 4px 24px rgba(0, 0, 0, 0.4),
-          0 1px 4px rgba(0, 0, 0, 0.25);
+          0 12px 40px rgba(0, 0, 0, 0.5),
+          0 2px 8px rgba(0, 0, 0, 0.3);
         min-width: 220px;
         user-select: none;
         /* Plan 043 F1: cap the panel to the viewport so a picked body's info
@@ -232,6 +223,13 @@
         align-items: center;
         gap: 8px;
         margin: 8px 0; /* plan 041: 8px base-grid rhythm (was 6px) */
+      }
+      /* Plan 047: the UA [hidden]{display:none} loses to #panel .row's
+         display:flex (specificity), so hidden rows were still showing.
+         Re-assert it explicitly. */
+      #panel .row[hidden],
+      #panel label[hidden] {
+        display: none !important;
       }
       /* ---- Plan 041: control-panel design rework ----
          The flat wall of identical rows is split into logical groups. Plan 043
@@ -425,6 +423,8 @@
          On phones the panel's collapsed toggle bar is full-width, so the
          strip drops further clear of it (media query below). */
       #hud-mini {
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
         position: fixed;
         top: calc(44px + env(safe-area-inset-top));
         right: calc(12px + env(safe-area-inset-right));
@@ -2029,13 +2029,10 @@
         color: #7f93b5;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-BGTiymly.js"></script>
+    <script type="module" crossorigin src="./assets/index-leeVVNhT.js"></script>
   </head>
   <body>
     <canvas id="app"></canvas>
-    <!-- Plan 044 B6: exoplanet-mode planet labels (2D overlay, z-index 6,
-         pointer-events none). Only populated while exoplanet mode is active. -->
-    <div id="exo-labels"></div>
     <div id="gl-lost" role="alert" hidden>
       <div class="box">
         <h2>3D view paused</h2>
@@ -2139,7 +2136,6 @@
           </li>
           <li>Star positions — Yale Bright Star Catalogue 5th ed. (public domain).</li>
           <li>Orbital elements &amp; moon ephemeris — NASA/JPL Horizons (public domain).</li>
-          <li>Exoplanet systems — NASA Exoplanet Archive (public domain).</li>
           <li>Satellite propagation (live ISS) — satellite.js (MIT), a port of Vallado's SGP4.</li>
           <li>
             Milky Way skybox, app icon and all code — original work by the Orrery authors (GPL-3.0).
@@ -2294,8 +2290,7 @@
     <div id="panel">
       <h1 id="panel-toggle">Solar System</h1>
       <div class="panel-body">
-        <!-- Plan 044 B6: the solar-system controls live in #solar-controls so
-             exoplanet mode can hide them and show #exo-controls instead. -->
+        <!-- The solar-system controls live in #solar-controls. -->
         <div id="solar-controls">
           <div class="section-head" data-i18n="sectionTime">Time</div>
           <div class="row">
@@ -2304,14 +2299,14 @@
           <!-- Plan 044 B5: live NOAA/SWPC planetary Kp (space weather). Filled by
                applyKp() at startup + every 15 min; the dot colour tracks the
                G-scale (calm green → storm red). -->
-          <div class="row" id="space-weather-row">
+          <div class="row" id="space-weather-row" hidden>
             <label data-i18n="spaceWeather">Space weather</label
             ><span id="space-weather" class="value">Kp —</span>
           </div>
           <!-- B5 (plan 046): live NASA CNEOS near-Earth-object feed. Shows the
                soonest close approach in the next 7 days; the dot turns amber
                when the object is flagged potentially hazardous. -->
-          <div class="row" id="neo-row">
+          <div class="row" id="neo-row" hidden>
             <label data-i18n="neo">Next asteroid</label><span id="neo" class="value">—</span>
           </div>
           <div class="row">
@@ -2360,7 +2355,7 @@
               data-i18n-attr="title:skyTitle"
               title="Zoom out until only the constellations fill the view"
             >
-              🌌 Sky
+              Sky
             </button>
             <button
               data-fly="system"
@@ -2368,17 +2363,7 @@
               data-i18n-attr="title:systemTitle"
               title="Fit the whole solar system in frame"
             >
-              🪐 System
-            </button>
-            <!-- Plan 044 B6: exoplanet mode — render a confirmed exoplanet system
-               as a mini solar system. -->
-            <button
-              id="exo-enter"
-              data-i18n="systems"
-              data-i18n-attr="title:systemsTitle"
-              title="View confirmed exoplanet systems (NASA Exoplanet Archive)"
-            >
-              ✨ Systems
+              System
             </button>
           </div>
           <div class="row">
@@ -2389,7 +2374,7 @@
               data-i18n-attr="title:eventsTitle"
               title="Eclipses, transits, conjunctions, oppositions, Saturn ring edge-on"
             >
-              ✨ Events
+              Events
             </button>
             <select id="events-range">
               <option value="1" data-i18n="eventsRange1">±1 yr</option>
@@ -2464,15 +2449,21 @@
               ><input id="figures" type="checkbox" />
               <span data-i18n="figures">Figures</span></label
             >
-            <label><input id="dso" type="checkbox" /> <span data-i18n="dso">DSO</span></label>
-            <label><input id="dof" type="checkbox" /> <span data-i18n="dof">DOF</span></label>
+            <label hidden
+              ><input id="dso" type="checkbox" /> <span data-i18n="dso">DSO</span></label
+            >
+            <label hidden
+              ><input id="dof" type="checkbox" /> <span data-i18n="dof">DOF</span></label
+            >
           </div>
           <div class="section-head" data-i18n="sectionShare">Share</div>
           <div class="row"><button id="share" data-i18n="share">Copy share link</button></div>
           <div class="row">
             <button id="screenshot" data-i18n="screenshot">Save screenshot</button>
           </div>
-          <div class="row"><button id="apod" data-i18n="apod">Today in space (APOD)</button></div>
+          <div class="row" hidden>
+            <button id="apod" data-i18n="apod">Today in space (APOD)</button>
+          </div>
           <div class="row">
             <button id="about-btn" type="button" data-i18n="about">About &amp; credits</button>
           </div>
@@ -2516,34 +2507,16 @@
           </div>
         </div>
         <!-- /#solar-controls -->
-        <!-- Plan 044 B6: exoplanet mode controls (hidden until "Systems" is
-             chosen). A system picker + a back button; the exo scene renders
-             the chosen system as a mini solar system. -->
-        <div id="exo-controls" style="display: none">
-          <div class="section-head">Exoplanet systems</div>
-          <div class="row">
-            <label for="exo-system">System</label>
-            <select id="exo-system" aria-label="Choose an exoplanet system to view"></select>
-          </div>
-          <div class="row"><label>Info</label><span id="exo-info" class="value">—</span></div>
-          <div class="row">
-            <button id="exo-back" type="button" title="Return to the solar system">
-              ← Back to solar system
-            </button>
-          </div>
-          <div class="hint">
-            13 confirmed multi-planet systems · NASA Exoplanet Archive · orbits at real Keplerian
-            elements
-          </div>
-        </div>
       </div>
     </div>
     <script>
-      // Panel collapse (mobile-first); start collapsed on narrow screens.
+      // Plan 047: the panel starts COLLAPSED to a pill on every screen size
+      // (the scene is the hero; the menu is one tap away). Tapping the pill
+      // expands it. (Was: collapsed only under 560px.)
       (function () {
         var panel = document.getElementById('panel');
         var toggle = document.getElementById('panel-toggle');
-        if (window.innerWidth < 560) panel.classList.add('collapsed');
+        panel.classList.add('collapsed');
         toggle.addEventListener('click', function () {
           panel.classList.toggle('collapsed');
         });
