@@ -58,7 +58,7 @@
         /* -- surfaces (deep-space, blue-black) -- */
         --bg: #000;
         --surface: rgba(10, 14, 24, 0.84); /* panel card */
-        --surface-hud: rgba(12, 16, 26, 0.55); /* HUD + intro chips (plan 047 glass) */
+        --surface-hud: rgba(12, 16, 26, 0.55); /* HUD + intro chips — identical to --glass-bg (plan 047) */
         --line: rgba(120, 150, 200, 0.18); /* hairline borders */
         --line-strong: rgba(120, 150, 200, 0.35); /* focus / hover borders */
 
@@ -75,7 +75,7 @@
 
         /* -- plan 047: unified glass + motion language -- */
         --glass-blur: blur(20px) saturate(1.2);
-        --glass-bg: rgba(12, 16, 26, 0.62);
+        --glass-bg: rgba(12, 16, 26, 0.55);
         --glass-line: rgba(255, 255, 255, 0.14);
         --radius-card: 16px;
         --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
@@ -2376,7 +2376,7 @@
               data-i18n-attr="title:skyTitle"
               title="Zoom out until only the constellations fill the view"
             >
-              🌌 Sky
+              Sky
             </button>
             <button
               data-fly="system"
@@ -2384,7 +2384,7 @@
               data-i18n-attr="title:systemTitle"
               title="Fit the whole solar system in frame"
             >
-              🪐 System
+              System
             </button>
             <!-- Plan 044 B6: exoplanet mode — render a confirmed exoplanet system
                as a mini solar system. -->
@@ -2395,7 +2395,7 @@
               data-i18n-attr="title:systemsTitle"
               title="View confirmed exoplanet systems (NASA Exoplanet Archive)"
             >
-              ✨ Systems
+              Systems
             </button>
           </div>
           <div class="row">
@@ -2406,7 +2406,7 @@
               data-i18n-attr="title:eventsTitle"
               title="Eclipses, transits, conjunctions, oppositions, Saturn ring edge-on"
             >
-              ✨ Events
+              Events
             </button>
             <select id="events-range">
               <option value="1" data-i18n="eventsRange1">±1 yr</option>

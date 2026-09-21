@@ -2427,8 +2427,9 @@ export function updateBodyHighlight(
       let op = t.orbitOpacity;
       if (camPos && pickedId !== entry.def.id) {
         const d = camPos.distanceTo(entry.pivot.position);
-        // 0 at 200 units (full base) -> 1 at 4000+ (faded to ~0.03).
-        const f = THREE.MathUtils.clamp((d - 200) / 3800, 0, 1);
+        // Plan 047: calibrated to the real scene scale (camera ~23, planets
+        // 18-120 units). 0 at 40 (full base) -> 1 at 110+ (faded to ~0.03).
+        const f = THREE.MathUtils.clamp((d - 40) / 70, 0, 1);
         op = t.orbitOpacity * (1 - f) + 0.03 * f;
       }
       om.opacity = op;
