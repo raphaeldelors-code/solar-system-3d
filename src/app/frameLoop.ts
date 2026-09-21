@@ -35,7 +35,6 @@ import {
 } from '../render/cameraFlight';
 import { sceneIsStatic } from '../render/idle';
 import type { SimClock } from '../sim/clock';
-import type { ExoScene } from '../render/exoScene';
 import type { ScaleMorph } from '../main';
 import type { ScrubState, ThreeFingerScrub } from './scrubTypes';
 
@@ -82,8 +81,6 @@ export interface FrameLoopDeps {
   calOpen: boolean;
   calYear: number;
   contextLost: boolean;
-  exoMode: boolean;
-  exoScene: ExoScene | null;
   followId: string;
   intro: IntroState | null;
   morph: ScaleMorph | null;
@@ -141,15 +138,6 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     // the sim clock from drifting while the tab is backgrounded).
     if (deps.hidden) {
       deps.lastMs = performance.now();
-      return;
-    }
-
-    // Plan 044 B6: exoplanet mode runs on its OWN scene/renderer over the same
-    // canvas. While active, drive the exo scene and skip the main solar-system
-    // sim/render entirely (two renderers on one canvas would fight). The exo
-    // scene advances on the same sim clock, so time keeps flowing.
-    if (deps.exoMode && deps.exoScene) {
-      deps.exoScene.tick(deps.clock.t, performance.now());
       return;
     }
 

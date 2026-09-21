@@ -46,7 +46,6 @@ export interface Messages {
   events: string;
   skyTitle: string;
   systemTitle: string;
-  systemsTitle: string;
   eventsTitle: string;
   eventsRange1: string;
   eventsRange5: string;
@@ -114,7 +113,6 @@ export const en: Messages = {
   events: 'Events',
   skyTitle: 'Zoom out until only the constellations fill the view',
   systemTitle: 'Fit the whole solar system in frame',
-  systemsTitle: 'View confirmed exoplanet systems (NASA Exoplanet Archive)',
   eventsTitle: 'Eclipses, transits, conjunctions, oppositions, Saturn ring edge-on',
   eventsRange1: '±1 yr',
   eventsRange5: '±5 yr',
@@ -178,7 +176,6 @@ export const fr: Messages = {
   events: 'Événements',
   skyTitle: "Zoom arrière jusqu'à ce que seules les constellations remplissent l'écran",
   systemTitle: 'Ajuster tout le système solaire dans le cadre',
-  systemsTitle: 'Voir les systèmes d’exoplanètes confirmés (NASA Exoplanet Archive)',
   eventsTitle: 'Éclipses, transits, conjonctions, oppositions, anneau de Saturne de profil',
   eventsRange1: '±1 an',
   eventsRange5: '±5 ans',

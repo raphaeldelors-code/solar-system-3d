@@ -36,8 +36,6 @@ import {
 } from './render/quality';
 import { createTelemetry } from './telemetry/client';
 import { initI18n, t } from './i18n/i18n';
-import { buildExoScene, type ExoScene } from './render/exoScene';
-import { EXO_SYSTEMS } from './sim/exoplanets';
 import { fetchIssTle, FALLBACK_ISS_TLE } from './data/issTle';
 import { parseTle, type Satellite } from './sim/sgp4';
 import { isSunOccluded } from './render/post';
@@ -700,70 +698,6 @@ function rebuildScene(newScale: VisualScale): BuiltScene {
   return built;
 }
 
-// --- Plan 044 B6: exoplanet mode -------------------------------------------
-// A separate "Systems" view renders a chosen exoplanet system as a mini solar
-// system (host star + planets on their real Keplerian orbits). It runs on its
-// OWN scene/camera/renderer (render/exoScene.ts) over the same canvas, so the
-// main solar-system scene is paused while it's active. The exo scene is
-// created lazily on first entry and reused across system switches.
-let exoMode = false;
-let exoScene: ExoScene | null = null;
-let exoSystemIdx = 0;
-const exoSysSel = document.getElementById('exo-system') as HTMLSelectElement | null;
-const exoInfoEl = document.getElementById('exo-info') as HTMLDivElement | null;
-const exoBackBtn = document.getElementById('exo-back') as HTMLButtonElement | null;
-// The exo scene renders its planet labels into the #exo-labels overlay.
-const exoLabelLayer = document.getElementById('exo-labels') as HTMLDivElement | null;
-
-function setExoMode(on: boolean): void {
-  if (on === exoMode) return;
-  exoMode = on;
-  // Toggle the two view sections: the solar-system controls hide in exo mode,
-  // the exo controls (system picker + back) show.
-  const solarSections = document.getElementById('solar-controls');
-  const exoSection = document.getElementById('exo-controls');
-  if (solarSections) solarSections.style.display = on ? 'none' : '';
-  if (exoSection) exoSection.style.display = on ? '' : 'none';
-  // The main scene's 2D label overlays (planet names + constellation names)
-  // would bleed through the exo scene — hide them while exo mode is active
-  // (the exo scene draws its own labels into #exo-labels).
-  if (planetLabelLayer) planetLabelLayer.canvas.style.display = on ? 'none' : '';
-  if (labelLayer) labelLayer.canvas.style.display = on ? 'none' : '';
-  if (on) {
-    if (!exoScene && exoLabelLayer) exoScene = buildExoScene(built.renderer, exoLabelLayer);
-    // Populate the system picker once.
-    if (exoSysSel && exoSysSel.options.length === 0) {
-      for (const s of EXO_SYSTEMS) {
-        const opt = document.createElement('option');
-        opt.value = String(EXO_SYSTEMS.indexOf(s));
-        opt.textContent = `${s.star} (${s.planets.length})`;
-        exoSysSel.appendChild(opt);
-      }
-    }
-    if (exoSysSel) exoSysSel.value = String(exoSystemIdx);
-    exoScene?.selectSystem(exoSystemIdx);
-    updateExoInfo();
-  } else {
-    exoScene?.hide();
-  }
-}
-
-function selectExoSystem(idx: number): void {
-  if (idx < 0 || idx >= EXO_SYSTEMS.length) return;
-  exoSystemIdx = idx;
-  if (exoMode && exoScene) {
-    exoScene.selectSystem(idx);
-    updateExoInfo();
-  }
-}
-
-function updateExoInfo(): void {
-  if (!exoInfoEl) return;
-  const s = EXO_SYSTEMS[exoSystemIdx];
-  const known = s.planets.filter((p) => p.M != null).length;
-  exoInfoEl.textContent = `${s.planets.length} planets · ${known} with mass`;
-}
-
 // --- Camera anchors & flight ----------------------------------------------
 // Three "Visible" mode anchors + a smooth eased fly-to between them. The
 // framing math lives in render/cameraFlight.ts (pure & unit-tested); here we
@@ -959,14 +893,6 @@ function wireAnchorButtons(): void {
   // clicking the lit one is a no-op.
   scaleRealEl?.addEventListener('click', () => requestScale('real'));
   scaleVisibleEl?.addEventListener('click', () => requestScale('visible'));
-
-  // Plan 044 B6: exoplanet mode. "Systems" enters it; the picker switches
-  // systems; "Back" returns to the solar system.
-  document.getElementById('exo-enter')?.addEventListener('click', () => setExoMode(true));
-  exoBackBtn?.addEventListener('click', () => setExoMode(false));
-  exoSysSel?.addEventListener('change', (ev) =>
-    selectExoSystem(parseInt((ev.target as HTMLSelectElement).value, 10)),
-  );
 }
 
 function applyToggles(): void {
@@ -3275,12 +3201,6 @@ const frameLoop = createFrameLoop({
   },
   get contextLost() {
     return contextLost;
-  },
-  get exoMode() {
-    return exoMode;
-  },
-  get exoScene() {
-    return exoScene;
   },
   get followId() {
     return followId;

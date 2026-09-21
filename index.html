@@ -109,28 +109,6 @@
         display: block;
         touch-action: none;
       }
-      /* Plan 044 B6: exoplanet-mode planet labels. A full-viewport,
-         pointer-transparent overlay (z-index 6, above the canvas at 0, below
-         the panel at 10). Each .exo-label is absolutely positioned per frame. */
-      #exo-labels {
-        position: fixed;
-        inset: 0;
-        z-index: 6;
-        pointer-events: none;
-        overflow: hidden;
-      }
-      .exo-label {
-        position: absolute;
-        top: 0;
-        left: 0;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        color: var(--text-bright);
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-        white-space: nowrap;
-        will-change: transform;
-      }
       #panel {
         position: fixed;
         /* Plan 025 F3 (v2): below the permanent top strip — the calm event
@@ -2049,9 +2027,6 @@
   </head>
   <body>
     <canvas id="app"></canvas>
-    <!-- Plan 044 B6: exoplanet-mode planet labels (2D overlay, z-index 6,
-         pointer-events none). Only populated while exoplanet mode is active. -->
-    <div id="exo-labels"></div>
     <div id="gl-lost" role="alert" hidden>
       <div class="box">
         <h2>3D view paused</h2>
@@ -2155,7 +2130,6 @@
           </li>
           <li>Star positions — Yale Bright Star Catalogue 5th ed. (public domain).</li>
           <li>Orbital elements &amp; moon ephemeris — NASA/JPL Horizons (public domain).</li>
-          <li>Exoplanet systems — NASA Exoplanet Archive (public domain).</li>
           <li>Satellite propagation (live ISS) — satellite.js (MIT), a port of Vallado's SGP4.</li>
           <li>
             Milky Way skybox, app icon and all code — original work by the Orrery authors (GPL-3.0).
@@ -2310,8 +2284,7 @@
     <div id="panel">
       <h1 id="panel-toggle">Solar System</h1>
       <div class="panel-body">
-        <!-- Plan 044 B6: the solar-system controls live in #solar-controls so
-             exoplanet mode can hide them and show #exo-controls instead. -->
+        <!-- The solar-system controls live in #solar-controls. -->
         <div id="solar-controls">
           <div class="section-head" data-i18n="sectionTime">Time</div>
           <div class="row">
@@ -2385,17 +2358,6 @@
               title="Fit the whole solar system in frame"
             >
               System
-            </button>
-            <!-- Plan 044 B6: exoplanet mode — render a confirmed exoplanet system
-               as a mini solar system. -->
-            <button
-              id="exo-enter"
-              hidden
-              data-i18n="systems"
-              data-i18n-attr="title:systemsTitle"
-              title="View confirmed exoplanet systems (NASA Exoplanet Archive)"
-            >
-              Systems
             </button>
           </div>
           <div class="row">
@@ -2533,26 +2495,6 @@
           </div>
         </div>
         <!-- /#solar-controls -->
-        <!-- Plan 044 B6: exoplanet mode controls (hidden until "Systems" is
-             chosen). A system picker + a back button; the exo scene renders
-             the chosen system as a mini solar system. -->
-        <div id="exo-controls" style="display: none">
-          <div class="section-head">Exoplanet systems</div>
-          <div class="row">
-            <label for="exo-system">System</label>
-            <select id="exo-system" aria-label="Choose an exoplanet system to view"></select>
-          </div>
-          <div class="row"><label>Info</label><span id="exo-info" class="value">—</span></div>
-          <div class="row">
-            <button id="exo-back" type="button" title="Return to the solar system">
-              ← Back to solar system
-            </button>
-          </div>
-          <div class="hint">
-            13 confirmed multi-planet systems · NASA Exoplanet Archive · orbits at real Keplerian
-            elements
-          </div>
-        </div>
       </div>
     </div>
     <script>
