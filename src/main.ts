@@ -240,11 +240,6 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
   // close and back to 1.0× by the Sky-anchor distance — smooth in both
   // directions, never fully off.
   const presence = constellationPresence(built.camera.position.length());
-  // Plan 047: the constellation LINE WEB is a second competing system in the
-  // System view — it crisscrosses the orbits and reads as clutter. Show the
-  // whole constellation sky (lines + dots + names) only in Sky mode or when a
-  // constellation is explicitly picked.
-  built.constellations.visible = Boolean(skyTour || selectedConstellation);
   updateConstellationHighlight(
     built.constellations,
     CONSTELLATION_EMPHASES,
@@ -3032,10 +3027,14 @@ const { tlShow, tlRefresh, tlSetCaret, tlCurrentYear, tlFrame } = scrubApi;
  * computed only for labels already above the draw threshold.
  */
 function updateConstellationScreenLabelFrame(): void {
+  // Plan 047: the constellation LINE WEB + NAMES are a second competing
+  // system in the System view — they crisscross the orbits and read as
+  // clutter. Show the whole constellation sky only in Sky mode (the sky
+  // tour) or when a constellation is explicitly picked. Set every frame
+  // (this runs at display rate, unlike the pose-gated highlight pass), and
+  // BEFORE the labels early-return so it holds even when labels are off.
+  built.constellations.visible = Boolean(skyTour || selectedConstellation);
   if (!labelLayer || !labelsEl.checked) return;
-  // Plan 047: constellation NAMES are Sky-view furniture — in the System view
-  // they are a second, competing label system over the orbits. Show them only
-  // in Sky mode (the sky tour) or when a constellation is explicitly picked.
   if (!skyTour && !selectedConstellation) {
     updateConstellationScreenLabels(labelLayer, built.camera, [], 0, window.innerWidth, window.innerHeight);
     return;
