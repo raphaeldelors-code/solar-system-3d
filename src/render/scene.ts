@@ -2429,8 +2429,8 @@ export function updateBodyHighlight(
         const d = camPos.distanceTo(entry.pivot.position);
         // Plan 047: calibrated to the real scene scale (camera ~23, planets
         // 18-120 units). 0 at 40 (full base) -> 1 at 110+ (faded to ~0.03).
-        const f = THREE.MathUtils.clamp((d - 40) / 70, 0, 1);
-        op = t.orbitOpacity * (1 - f) + 0.03 * f;
+        const f = THREE.MathUtils.clamp((d - 35) / 60, 0, 1);
+        op = t.orbitOpacity * (1 - f) + 0.015 * f;
       }
       om.opacity = op;
       om.color.set(t.orbitColor);

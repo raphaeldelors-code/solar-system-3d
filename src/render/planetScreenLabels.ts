@@ -54,7 +54,7 @@ export const PLANET_LABEL_FADE_FAR = 120;
  */
 export const PLANET_LABEL_FADE_FLOOR = 0.55;
 /** Leader-line length (CSS px) from the body disc edge to the label. */
-export const PLANET_LABEL_LEADER_PX = 14;
+export const PLANET_LABEL_LEADER_PX = 26; // plan 047 R4: 14 -> 26px (label clears the bright Sun core)
 
 export interface ProjectedPoint {
   /** CSS px from the viewport left. */
@@ -222,8 +222,11 @@ export function selectPlanetLabels(
     // vertical direction if the body is in the top half (so the label stays
     // on-screen). The leader line connects (bx,by) → (x,y).
     const up = c.by > hCss / 2; // body in bottom half → label goes up
-    const dy = (up ? -1 : 1) * (c.discR + PLANET_LABEL_LEADER_PX + c.h / 2);
-    const dx = c.discR + PLANET_LABEL_LEADER_PX * 0.5;
+    // Plan 047 R4: scale the leader with disc size so big discs (the Sun)
+    // get a proportionally longer throw — the label never sits on the core.
+    const throwPx = PLANET_LABEL_LEADER_PX + c.discR * 0.6;
+    const dy = (up ? -1 : 1) * (c.discR + throwPx + c.h / 2);
+    const dx = c.discR + throwPx * 0.5;
     let x = c.bx + dx;
     let y = c.by + dy;
     // Clamp to the viewport (keep the label box fully on-screen).
