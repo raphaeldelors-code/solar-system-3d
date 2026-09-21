@@ -82,6 +82,9 @@ test('Find combobox filters and picks a body', async ({ page }) => {
   await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
   await waitForRender(page);
 
+  // Plan 047: the panel starts collapsed to a pill — expand it before the
+  // Find box is reachable.
+  await page.click('#panel-toggle');
   const input = page.locator('#find');
   await input.click();
   await input.fill('mars');
@@ -167,6 +170,8 @@ test('telemetry consent is opt-in + persists (D7)', async ({ page }) => {
   );
   expect(initial).toBe('unset');
 
+  // Plan 047: panel starts collapsed — expand it to reach the About button.
+  await page.click('#panel-toggle');
   // Open the About dialog and grant consent.
   await page.click('#about-btn');
   await expect(page.locator('#about')).toBeVisible();
@@ -310,9 +315,11 @@ test('app shell reloads offline via the service worker', async ({ page, context 
   // Go offline and reload: the SW serves the cached shell.
   await context.setOffline(true);
   await page.reload({ waitUntil: 'domcontentloaded' });
-  // The app shell comes back from cache (canvas present, no crash).
+  // The app shell comes back from cache (canvas present, no crash). Plan 047:
+  // the panel starts collapsed, so the default-visible chrome is the pill
+  // (#panel-toggle), not the Find box.
   await expect(page.locator('#app')).toBeVisible();
-  await expect(page.locator('#find')).toBeVisible();
+  await expect(page.locator('#panel-toggle')).toBeVisible();
   await context.setOffline(false);
 });
 
