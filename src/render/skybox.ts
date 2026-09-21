@@ -193,7 +193,7 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
     // Plan 047: the bake is authored with a warm magenta band (a 3rd hue in
     // an otherwise blue+warm-sun palette). A cool-blue tint suppresses the
     // magenta so the sky reads as one calm blue family, not a purple band.
-    color: new THREE.Color(MILKYWAY_TINT * 0.85, MILKYWAY_TINT * 0.95, MILKYWAY_TINT * 1.25),
+    color: new THREE.Color(MILKYWAY_TINT * 0.6, MILKYWAY_TINT * 0.8, MILKYWAY_TINT * 1.5),
     side: THREE.BackSide,
     depthWrite: false, // never occlude in the depth buffer
     toneMapped: false, // keep authored brightness (no ACES dip)
