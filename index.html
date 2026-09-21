@@ -2303,14 +2303,14 @@
           <!-- Plan 044 B5: live NOAA/SWPC planetary Kp (space weather). Filled by
                applyKp() at startup + every 15 min; the dot colour tracks the
                G-scale (calm green → storm red). -->
-          <div class="row" id="space-weather-row">
+          <div class="row" id="space-weather-row" hidden>
             <label data-i18n="spaceWeather">Space weather</label
             ><span id="space-weather" class="value">Kp —</span>
           </div>
           <!-- B5 (plan 046): live NASA CNEOS near-Earth-object feed. Shows the
                soonest close approach in the next 7 days; the dot turns amber
                when the object is flagged potentially hazardous. -->
-          <div class="row" id="neo-row">
+          <div class="row" id="neo-row" hidden>
             <label data-i18n="neo">Next asteroid</label><span id="neo" class="value">—</span>
           </div>
           <div class="row">
@@ -2373,6 +2373,7 @@
                as a mini solar system. -->
             <button
               id="exo-enter"
+              hidden
               data-i18n="systems"
               data-i18n-attr="title:systemsTitle"
               title="View confirmed exoplanet systems (NASA Exoplanet Archive)"
@@ -2463,15 +2464,15 @@
               ><input id="figures" type="checkbox" />
               <span data-i18n="figures">Figures</span></label
             >
-            <label><input id="dso" type="checkbox" /> <span data-i18n="dso">DSO</span></label>
-            <label><input id="dof" type="checkbox" /> <span data-i18n="dof">DOF</span></label>
+            <label hidden><input id="dso" type="checkbox" /> <span data-i18n="dso">DSO</span></label>
+            <label hidden><input id="dof" type="checkbox" /> <span data-i18n="dof">DOF</span></label>
           </div>
           <div class="section-head" data-i18n="sectionShare">Share</div>
           <div class="row"><button id="share" data-i18n="share">Copy share link</button></div>
           <div class="row">
             <button id="screenshot" data-i18n="screenshot">Save screenshot</button>
           </div>
-          <div class="row"><button id="apod" data-i18n="apod">Today in space (APOD)</button></div>
+          <div class="row" hidden><button id="apod" data-i18n="apod">Today in space (APOD)</button></div>
           <div class="row">
             <button id="about-btn" type="button" data-i18n="about">About &amp; credits</button>
           </div>

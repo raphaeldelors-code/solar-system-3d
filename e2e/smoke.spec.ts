@@ -214,51 +214,38 @@ test('i18n: en default + fr via navigator locale (D9)', async ({ browser }) => {
   await frContext.close();
 });
 
-test('NEO row: next-asteroid indicator present (B5)', async ({ page }) => {
+test('NEO row: hidden by default (plan 047 — low-ROI feed demoted)', async ({ page }) => {
   watchPageErrors(page);
   await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
   await waitForRender(page);
 
-  // The "Next asteroid" row + value span exist (the live CNEOS fetch is
-  // network-dependent in headless, so we assert the UI is wired, not the value).
+  // Plan 047: the live CNEOS feed is hidden from the default panel (noise).
+  // The row stays in the DOM (shareable state + future "More" destination)
+  // but is not visible at rest.
   const row = await page.evaluate(() => {
-    const label = document.querySelector('#neo-row label');
-    const val = document.getElementById('neo');
-    return { hasRow: !!label, hasValue: !!val, labelText: label?.textContent ?? '' };
+    const el = document.getElementById('neo-row');
+    return { hasRow: !!el, hidden: el?.hidden ?? false };
   });
   expect(row.hasRow).toBe(true);
-  expect(row.hasValue).toBe(true);
-  expect(row.labelText).toBe('Next asteroid');
+  expect(row.hidden).toBe(true);
 });
 
-test('DSO toggle: Messier markers group exists + toggles visibility (B4)', async ({ page }) => {
+test('DSO toggle: hidden by default (plan 047 — low-ROI markers demoted)', async ({ page }) => {
   watchPageErrors(page); // fails the test on any uncaught error (e.g. building 109 sprites)
   await page.goto('/?intro=0', { waitUntil: 'domcontentloaded' });
   await waitForRender(page);
 
-  // The DSO toggle exists and is off by default.
+  // Plan 047: the Messier DSO markers + toggle are hidden from the default
+  // panel (noise). The control stays in the DOM (shareable state) but is not
+  // visible at rest.
   const before = await page.evaluate(() => {
     const el = document.getElementById('dso') as HTMLInputElement | null;
-    return { hasToggle: !!el, checked: el?.checked ?? false };
+    const label = el?.closest('label');
+    return { hasToggle: !!el, checked: el?.checked ?? false, hidden: label?.hidden ?? false };
   });
   expect(before.hasToggle).toBe(true);
   expect(before.checked).toBe(false); // off by default
-
-  // Let init fully settle (its trailing syncUrl writes dso=0) before we click,
-  // so our click's syncUrl isn't clobbered. A fixed settle wait mirrors the
-  // proven-working manual check (click → checked=true, URL dso=1).
-  await page.waitForTimeout(2500);
-
-  // Toggle on → the checkbox flips and the URL gains ?dso=1 (shareable state).
-  await page.click('#dso');
-  await expect
-    .poll(
-      async () =>
-        await page.evaluate(() => (document.getElementById('dso') as HTMLInputElement).checked),
-      { timeout: 3000 },
-    )
-    .toBe(true);
-  await expect.poll(async () => page.url(), { timeout: 3000 }).toContain('dso=1');
+  expect(before.hidden).toBe(true); // hidden by default (plan 047)
 });
 
 test('pause-on-visibilitychange: hidden flag tracks the tab (D10)', async ({ page }) => {
