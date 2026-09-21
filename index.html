@@ -241,6 +241,13 @@
         gap: 8px;
         margin: 8px 0; /* plan 041: 8px base-grid rhythm (was 6px) */
       }
+      /* Plan 047: the UA [hidden]{display:none} loses to #panel .row's
+         display:flex (specificity), so hidden rows were still showing.
+         Re-assert it explicitly. */
+      #panel .row[hidden],
+      #panel label[hidden] {
+        display: none !important;
+      }
       /* ---- Plan 041: control-panel design rework ----
          The flat wall of identical rows is split into logical groups. Plan 043
          F4 replaced the :has()-anchored divider rules with explicit
@@ -2549,11 +2556,13 @@
       </div>
     </div>
     <script>
-      // Panel collapse (mobile-first); start collapsed on narrow screens.
+      // Plan 047: the panel starts COLLAPSED to a pill on every screen size
+      // (the scene is the hero; the menu is one tap away). Tapping the pill
+      // expands it. (Was: collapsed only under 560px.)
       (function () {
         var panel = document.getElementById('panel');
         var toggle = document.getElementById('panel-toggle');
-        if (window.innerWidth < 560) panel.classList.add('collapsed');
+        panel.classList.add('collapsed');
         toggle.addEventListener('click', function () {
           panel.classList.toggle('collapsed');
         });
