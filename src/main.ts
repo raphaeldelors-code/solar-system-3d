@@ -240,6 +240,11 @@ function updateConstellationHighlightThrottled(nowMs: number): void {
   // close and back to 1.0× by the Sky-anchor distance — smooth in both
   // directions, never fully off.
   const presence = constellationPresence(built.camera.position.length());
+  // Plan 047: the constellation LINE WEB is a second competing system in the
+  // System view — it crisscrosses the orbits and reads as clutter. Show the
+  // whole constellation sky (lines + dots + names) only in Sky mode or when a
+  // constellation is explicitly picked.
+  built.constellations.visible = Boolean(skyTour || selectedConstellation);
   updateConstellationHighlight(
     built.constellations,
     CONSTELLATION_EMPHASES,
