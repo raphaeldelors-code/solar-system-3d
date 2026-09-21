@@ -19,10 +19,10 @@
 - [ ] P1.5 Starfield: 9000->3500, dim tail, subtle twinkle, MW desaturate (skybox.ts, starfield.ts)
 
 ## Phase 2 — UI / material / type
-- [ ] P2.1 Unify glass + palette tokens (index.html :root + all surfaces)
-- [ ] P2.2 Panel: 300px, collapse-to-pill, <=6 rows
-- [ ] P2.3 Emoji -> 16px line icons
-- [ ] P2.4 Motion: single easing, kill competing pulses
+ - [x] P2.1 Unify glass + palette tokens (index.html :root + all surfaces)
+ - [x] P2.2 Panel: 300px, collapse-to-pill, <=6 rows
+ - [x] P2.3 Emoji -> 16px line icons
+ - [x] P2.4 Motion: single easing, kill competing pulses
 - [ ] P2.5 Typography pass (title/heads/body/tabular-nums)
 - [ ] P2.6 Planet polish: Earth rim 1.15 + rocky specular glint
 
@@ -30,3 +30,9 @@
 - [ ] P3.1 Screenshot boot/wide/mobile (headless Chrome + vision)
 - [ ] P3.2 Score vs 047-rubric.md; record per-criterion + total
 - [ ] P3.3 If <95: implement single highest-ROI gap, re-score (loop)
+
+## Judge rounds (gate = >=95 AND 12/12 checklist)
+- R1 baseline: 57.6 FAIL (pre-redesign)
+- R2: 42.8 FAIL — STALE screenshots (pre P0/P1 fixes); invalid
+- R3: 58.7 FAIL — 8/12. Fixes applied: orbit fade calibrated (40-110u, DOM-verified 0.10→0.03), emoji removed at i18n source, glass opacity unified.
+- R4: pending
