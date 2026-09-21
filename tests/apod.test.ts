@@ -35,7 +35,7 @@ describe('apodUrl', () => {
   it('defaults to today (UTC) and DEMO_KEY', () => {
     const url = apodUrl(undefined, undefined);
     expect(url).toContain('api_key=DEMO_KEY');
-    expect(url).toContain(`date=${new Date(NOW).toISOString().slice(0, 10)}`);
+    expect(url).toContain(`date=${new Date().toISOString().slice(0, 10)}`);
   });
 });
 
