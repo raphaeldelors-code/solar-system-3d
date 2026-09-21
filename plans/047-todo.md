@@ -12,9 +12,9 @@
 - [ ] P0.9 Panel default = collapsed pill; <=6 visible rows when open
 
 ## Phase 1 — Scene de-clutter
-- [ ] P1.1 Orbit lines: faint + depth-fade + picked/hover emphasis (scene.ts, main.ts)
-- [ ] P1.2 Sun: remove anamorphic streak + shrink corona (post.ts)
-- [ ] P1.3 Kill "+" star spikes (skybox.ts)
+- [x] P1.1 Orbit lines: faint + depth-fade + picked/hover emphasis (scene.ts, main.ts)
+- [x] P1.2 Sun: remove anamorphic streak + shrink corona (post.ts)
+- [x] P1.3 Kill "+" star spikes (skybox.ts)
 - [ ] P1.4 Labels: one language, cap 4, mode-gated (planet/constellation labels, textures.ts, main.ts)
 - [ ] P1.5 Starfield: 9000->3500, dim tail, subtle twinkle, MW desaturate (skybox.ts, starfield.ts)
 
