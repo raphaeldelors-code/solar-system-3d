@@ -9,8 +9,8 @@ import { bodyHighlightTargets } from '../src/render/scene';
 
 const T0 = 0; // sin(0)=0 -> phase 0.5, deterministic
 const PHASE05 = 0.5;
-const GOLD = 0x7fd8ff;
-const BASE = 0x5570a0;
+const GOLD = 0x7aa2ff; // plan 047: accent
+const BASE = 0x7aa2ff; // plan 047: faint accent base
 
 describe('bodyHighlightTargets (plan 015 P6)', () => {
   it('arms only the picked body; every other body stays idle', () => {
@@ -21,12 +21,12 @@ describe('bodyHighlightTargets (plan 015 P6)', () => {
         expect(t.ringVisible).toBe(true);
         expect(t.ringOpacity).toBeCloseTo(0.35 + 0.55 * PHASE05, 6);
         expect(t.ringBreath).toBeCloseTo(1 + 0.12 * PHASE05, 6);
-        expect(t.orbitOpacity).toBeCloseTo(0.95, 6);
+        expect(t.orbitOpacity).toBeCloseTo(0.55, 6); // plan 047
         expect(t.orbitColor).toBe(GOLD);
       } else {
         expect(t.ringVisible).toBe(false);
         expect(t.ringOpacity).toBe(0);
-        expect(t.orbitOpacity).toBeCloseTo(0.45, 6);
+        expect(t.orbitOpacity).toBeCloseTo(0.1, 6); // plan 047
         expect(t.orbitColor).toBe(BASE);
       }
     }
@@ -38,14 +38,14 @@ describe('bodyHighlightTargets (plan 015 P6)', () => {
     const t = bodyHighlightTargets('Moon', 'Moon', true, T0);
     expect(t.ringVisible).toBe(true);
     expect(t.ringOpacity).toBeCloseTo(0.625, 3); // 0.35 + 0.55*0.5
-    expect(t.orbitOpacity).toBeCloseTo(0.95, 3);
+    expect(t.orbitOpacity).toBeCloseTo(0.55, 3); // plan 047
     expect(t.orbitColor).toBe(GOLD);
   });
 
   it('a planet pick lights the SAME ring and its own heliocentric orbit', () => {
     const t = bodyHighlightTargets('Earth', 'Earth', true, T0);
     expect(t.ringVisible).toBe(true);
-    expect(t.orbitOpacity).toBeCloseTo(0.95, 3);
+    expect(t.orbitOpacity).toBeCloseTo(0.55, 3); // plan 047
     expect(t.orbitColor).toBe(GOLD);
   });
 
@@ -61,7 +61,7 @@ describe('bodyHighlightTargets (plan 015 P6)', () => {
       const t = bodyHighlightTargets('Mars', '', hasOrbit, T0);
       expect(t.ringVisible).toBe(false);
       if (hasOrbit) {
-        expect(t.orbitOpacity).toBeCloseTo(0.45, 3);
+        expect(t.orbitOpacity).toBeCloseTo(0.1, 3); // plan 047
         expect(t.orbitColor).toBe(BASE);
       } else {
         expect(t.orbitOpacity).toBeNull();

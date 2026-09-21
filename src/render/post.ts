@@ -204,10 +204,10 @@ export function buildSunGlow(radius: number): SunGlow {
     // The sun shader (buildSunShaderMaterial) now carries the bright core +
     // granulation; the sprite is the wide halo only. 0.6 keeps the halo from
     // washing the sky (the shader's HDR core + bloom do the "bright" work).
-    opacity: 0.6,
+    opacity: 0.45, // plan 047: softer halo, bloom does the bright work
   });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(radius * 4.5, radius * 4.5, 1);
+  sprite.scale.set(radius * 3.2, radius * 3.2, 1); // plan 047: 4.5x -> 3.2x
   sprite.name = 'sun-glow';
   sprite.renderOrder = 2;
   return {
@@ -467,6 +467,9 @@ export function buildLensFlare(): LensFlare {
   );
   streak.renderOrder = 3;
   streak.userData.isStreak = true;
+  // Plan 047: the anamorphic streak read as a camera artifact, not a star.
+  // Keep the object (update/dispose still reference it) but never show it.
+  streak.visible = false;
   group.add(streak);
 
   // Ghost specs: fraction along the sun→centre line (t>1 = past the centre),

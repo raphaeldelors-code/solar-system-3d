@@ -254,7 +254,14 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
   // "glint" that makes a night sky read as real). A second Points layer holds
   // only the spike stars; the fragment shader draws a soft cross instead of a
   // disc. Additive, so it layers over the disc without darkening it.
-  const spikeIdx = spikeIndices(STARFIELD);
+  // Plan 047: only the ~20 BRIGHTEST stars get a glint, and it is subtle —
+  // the old ~200-star 4.5x cross layer read as literal "+" signs (the most
+  // "not Apple" element). Sort the flagged stars by brightness (magnitude)
+  // and keep just the top 20; the fragment alpha is cut to 0.12 below.
+  const spikeIdx = spikeIndices(STARFIELD)
+    .slice()
+    .sort((a, b) => STARFIELD[a].mag - STARFIELD[b].mag)
+    .slice(0, 20);
   if (spikeIdx.length > 0) {
     const sn = spikeIdx.length;
     const sPos = new Float32Array(sn * 3);
@@ -268,8 +275,8 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
       sCol[k * 3] = color[i * 3];
       sCol[k * 3 + 1] = color[i * 3 + 1];
       sCol[k * 3 + 2] = color[i * 3 + 2];
-      // Spikes are a few px wider than the disc so the cross extends past it.
-      sSize[k] = size[i] * 4.5;
+      // Subtle glint: a touch wider than the disc, not a hard cross.
+      sSize[k] = size[i] * 2.2;
     }
     const spikeGeo = new THREE.BufferGeometry();
     spikeGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
@@ -305,7 +312,7 @@ export function buildSkybox(loader: THREE.TextureLoader, milkywayUrl: string): S
           // Thin the arms: only the narrow core of each axis contributes.
           float armX = 1.0 - smoothstep(0.0, 0.06, abs(p.y));
           float armY = 1.0 - smoothstep(0.0, 0.06, abs(p.x));
-          float alpha = cross * max(armX, armY) * 0.5;
+          float alpha = cross * max(armX, armY) * 0.12; // plan 047: subtle glint
           if (alpha < 0.01) discard;
           gl_FragColor = vec4(vColor, alpha);
         }

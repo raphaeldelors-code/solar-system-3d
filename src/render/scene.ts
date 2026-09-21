@@ -311,10 +311,12 @@ function makeOrbitLine(
     return eclipticToScene(s).multiplyScalar(distMap(r) / Math.max(1e-9, r));
   });
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  // Plan 047: orbits are ambient context, not the subject — faint accent,
+  // depth-faded per frame in main.ts. One bright orbit at a time (picked).
   const mat = new THREE.LineBasicMaterial({
-    color: 0x5570a0,
+    color: 0x7aa2ff,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.1,
   });
   const line = new THREE.Line(geo, mat);
   // True-scale tour (B3) morphs orbit lines live: store each sample's
@@ -672,7 +674,7 @@ export function buildScene(
         const mat = new THREE.LineBasicMaterial({
           color: 0x5570a0,
           transparent: true,
-          opacity: 0.45,
+          opacity: 0.1, // plan 047: faint base, depth-faded per frame
         });
         orbit = new THREE.Line(geo, mat);
         orbit.userData.geo = geo;
@@ -2389,8 +2391,8 @@ export function bodyHighlightTargets(
     ringVisible: isSel,
     ringOpacity: isSel ? 0.35 + 0.55 * phase : 0,
     ringBreath: 1 + 0.12 * phase,
-    orbitOpacity: hasOrbit ? (isSel ? 0.95 : 0.45) : null,
-    orbitColor: hasOrbit ? (isSel ? 0x7fd8ff : 0x5570a0) : null,
+    orbitOpacity: hasOrbit ? (isSel ? 0.55 : 0.1) : null, // plan 047
+    orbitColor: hasOrbit ? (isSel ? 0x7aa2ff : 0x7aa2ff) : null,
   };
 }
 
