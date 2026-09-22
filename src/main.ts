@@ -131,6 +131,11 @@ function setSkyMode(on: boolean): void {
 
 function stopSkyTour(): void {
   if (!skyTour) return;
+  // The panorama ends on any manual input (drag/wheel/key) or when the tour
+  // moves on — the same hand-back the normal Sky view uses. During the tour's
+  // Sky step the panorama is the background of the establishing shot: it runs
+  // continuously until the user clicks Next (or drags to take over, per the
+  // card's "Drag to look around").
   skyTour = null;
   built.controls.enabled = true;
   built.controls.update();
@@ -1871,10 +1876,20 @@ function popIntroTailMarker(glow: number, frac: number): void {
 function onIntroLegDone(): void {
   if (!intro) return;
   intro.waiting = true;
-  built.controls.enabled = true;
-  built.controls.update();
-  const e = built.bodies.get(followId);
-  if (e) built.controls.target.copy(e.worldPos);
+  const step = TOUR_STEPS[intro.step];
+  if (step.anchor === 'constellations') {
+    // The Sky step: start the panorama (the "nice sky view rotation" with the
+    // constellations sweeping by) BEHIND the tour card. It runs until the user
+    // interacts (the input listeners stop it and hand back free rotation) or
+    // clicks Next (the next step's flight takes over).
+    startSkyTour();
+  } else {
+    stopSkyTour();
+    built.controls.enabled = true;
+    built.controls.update();
+    const e = built.bodies.get(followId);
+    if (e) built.controls.target.copy(e.worldPos);
+  }
   renderTourStep();
   // The final gesture step: the camera is settled (no flight), so start the
   // tail — the strip glows + time ramps + marker pops until INTRO_TAIL_DURATION
@@ -1892,7 +1907,10 @@ function finishTour(skipped: boolean): void {
   const el = intro.titleEl;
   intro = null;
   // The tour ends in the System view (on Earth) — clear skyMode so the
-  // constellation web disappears (it only belongs to the Sky establishing shot).
+  // constellation web disappears (it only belongs to the Sky establishing
+  // shot), and stop the Sky-step panorama (it must not resume after the
+  // skip-flight lands).
+  stopSkyTour();
   setSkyMode(false);
   // Mark the tour seen for this session so a plain reload does not replay it.
   // sessionStorage may throw (private mode) — ignore.
@@ -3137,7 +3155,6 @@ function updateConstellationScreenLabelFrame(): void {
 // picked body always shown). Reuses the same architecture as the constellation
 // overlay (render/planetScreenLabels.ts).
 const _PL_W = new THREE.Vector3();
-const _PL_EDGE = new THREE.Vector3();
 function updatePlanetScreenLabelFrame(): void {
   if (!planetLabelLayer || !labelsEl.checked) return;
   const camera = built.camera;
@@ -3152,16 +3169,18 @@ function updatePlanetScreenLabelFrame(): void {
     if (!entry.mesh.visible) continue;
     const wp = entry.worldPos;
     const dist = camPos.distanceTo(wp);
-    // On-screen disc radius (CSS px): project the body center and a point one
-    // scene-radius toward the camera; the pixel gap is the disc's screen size.
-    // (Compute the direction into _PL_EDGE first — _PL_W must stay the center.)
-    _PL_EDGE.copy(wp).sub(camPos).normalize();
-    _PL_W.copy(wp);
+    // On-screen disc radius (CSS px): the sphere's ANGULAR radius × the
+    // projection scale — discR = sceneRadius · (hCss/2) / (tan(fov/2) · dist).
+    // (Plan 047 R9: the old method projected a point one sceneRadius toward
+    // the camera and measured the pixel gap — that is the sphere's screen-
+    // space DEPTH extent, which inflates to 100–170px for outer planets and
+    // threw their labels 300–380px away from the body. The angular formula
+    // gives the true disc size: a few px in the wide System view.)
     const c = projectWorldToScreen(_PL_W, camera, wCss, hCss);
     if (!c.ok) continue;
-    _PL_EDGE.copy(wp).addScaledVector(_PL_EDGE, -entry.sceneRadius);
-    const e = projectWorldToScreen(_PL_EDGE, camera, wCss, hCss);
-    const discR = e.ok ? Math.hypot(e.x - c.x, e.y - c.y) : 0;
+    const discR =
+      (entry.sceneRadius * (hCss / 2)) /
+      (Math.tan((camera.fov * Math.PI) / 360) * Math.max(1e-6, dist));
     // Tier: 0 = picked (always shown), 1 = sun + planets, 2 = moons/dwarfs.
     const tier: 0 | 1 | 2 =
       entry.def.id === selectedBodyId

@@ -30,13 +30,6 @@ export const PLANET_LABEL_SCREEN_PX = 13; // plan 047: 22 -> 13px
 /** Skip drawing below this opacity (invisible either way). */
 export const PLANET_LABEL_MIN_OPACITY = 0.04;
 /**
- * Skip labels whose anchor projects this far (CSS px) outside the viewport.
- * Plan 047 R8: restored to the cedd36d value (220) — the generous pad lets
- * near-edge bodies through and the on-screen clamp pins their labels to the
- * frame edge (the "beautified" look the user asked to restore).
- */
-export const PLANET_LABEL_SCREEN_PAD_PX = 220;
-/**
  * Hard cap on how many body names a single frame may draw (the same rule the
  * constellation names use). The picked body always counts as one of the slots.
  */
@@ -146,7 +139,9 @@ export interface SelectedPlanetLabel {
  * three simple, testable rules:
  *
  *   1. PROJECT + CULL — each body's world position is projected to screen;
- *      bodies behind the camera or off-viewport (beyond the pad) are dropped.
+ *      bodies behind the camera or whose disc is fully off-viewport are
+ *      dropped (plan 047 R9: disc-based cull — every label is pinned to a
+ *      body that is actually on the screen).
  *   2. RANK — picked body first (tier 0), then sun + planets (tier 1) by
  *      distance ascending (nearest = most important), then moons/dwarfs
  *      (tier 2). The picked body is ALWAYS a candidate.
@@ -166,7 +161,6 @@ export function selectPlanetLabels(
   hCss: number,
   maxVisible: number = PLANET_LABEL_MAX_VISIBLE,
 ): SelectedPlanetLabel[] {
-  const pad = PLANET_LABEL_SCREEN_PAD_PX;
   const boxPad = PLANET_LABEL_BOX_PAD_PX;
   // Approximate ink width: ~0.55× the cap height per character (system-ui
   // 600 weight). Good enough for the collision box; the renderer draws the
@@ -191,13 +185,17 @@ export function selectPlanetLabels(
   for (const inp of inputs) {
     const p = projectWorldToScreen(inp.world, camera, wCss, hCss);
     if (!p.ok) continue;
-    // Plan 047 R8: restore the cedd36d "beautified" cull — a generous pad lets
-    // near-edge bodies through, and the on-screen clamp below pins their
-    // labels to the frame edge (the premium look the user liked). The R7
-    // strict disc cull + min-disc gate + focus-planet cull are removed: they
-    // made System view show only a handful of labels (read as "broken") and
-    // the user asked to restore the earlier behavior.
-    if (p.x < -pad || p.x > wCss + pad || p.y < -pad || p.y > hCss + pad) continue;
+    // Plan 047 R9: DISC-BASED on-screen cull — a body only earns a label if its
+    // disc (center ± discRadiusPx) actually touches the viewport. The R8 220px
+    // pad let bodies up to 220px OFF-SCREEN through, and the on-screen clamp
+    // below then pinned their labels to the frame edge with no visible body —
+    // the "labels too present / not pinned properly" report. Now every label is
+    // pinned to a body that is genuinely on (or touching) the screen. No pad,
+    // no min-disc gate, no focus cull: in the wide System view every on-screen
+    // planet + moon still labels (the premium look), but nothing floats at the
+    // edge for an off-screen body.
+    const r = inp.discRadiusPx;
+    if (p.x + r < 0 || p.x - r > wCss || p.y + r < 0 || p.y - r > hCss) continue;
     // The picked body + the Sun bypass the distance fade (they are what the
     // user is looking at / the system's anchor).
     const noFade = inp.tier === 0 || inp.id === 'sun';
