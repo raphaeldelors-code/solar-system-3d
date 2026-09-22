@@ -60,12 +60,13 @@ describe('bodyFacts', () => {
 // ---- intro -----------------------------------------------------------------
 
 describe('intro', () => {
-  it('totals a duration of ~5.8 s (≤ 6 s)', () => {
-    expect(INTRO_DURATION).toBeCloseTo(5.8, 2);
-    expect(INTRO_DURATION).toBeLessThan(6);
+  it('totals a duration of ~9.6 s (Sky + System establishing + original Sun→Earth)', () => {
+    expect(INTRO_DURATION).toBeCloseTo(9.6, 2);
+    expect(INTRO_DURATION).toBeLessThan(12);
   });
 
-  it('ends on Earth', () => {
+  it('opens on the Sky establishing shot and ends on Earth', () => {
+    expect(INTRO_LEGS[0].anchor).toBe('constellations');
     expect(INTRO_LEGS[INTRO_LEGS.length - 1].bodyId).toBe('earth');
   });
 

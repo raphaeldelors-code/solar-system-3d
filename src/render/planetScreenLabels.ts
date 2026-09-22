@@ -62,6 +62,14 @@ export const PLANET_LABEL_FADE_FAR = 120;
 export const PLANET_LABEL_FADE_FLOOR = 0.55;
 /** Leader-line length (CSS px) from the body disc edge to the label. */
 export const PLANET_LABEL_LEADER_PX = 26; // plan 047 R4: 14 -> 26px (label clears the bright Sun core)
+/**
+ * Plan 047 R7: a body's on-screen disc must be at least this radius (CSS px)
+ * to earn a label. Below this the disc is sub-pixel — invisible — so its label
+ * would float over empty space with nothing to point at (the "Mars floating
+ * with no dot" report when zoomed on Jupiter). The picked body + the Sun
+ * bypass this (they are the focus / the system's anchor and always read).
+ */
+export const PLANET_LABEL_MIN_DISC_PX = 1.5;
 
 export interface ProjectedPoint {
   /** CSS px from the viewport left. */
@@ -168,7 +176,6 @@ export function selectPlanetLabels(
   hCss: number,
   maxVisible: number = PLANET_LABEL_MAX_VISIBLE,
 ): SelectedPlanetLabel[] {
-  const pad = PLANET_LABEL_SCREEN_PAD_PX;
   const boxPad = PLANET_LABEL_BOX_PAD_PX;
   // Approximate ink width: ~0.55× the cap height per character (system-ui
   // 600 weight). Good enough for the collision box; the renderer draws the
@@ -193,10 +200,24 @@ export function selectPlanetLabels(
   for (const inp of inputs) {
     const p = projectWorldToScreen(inp.world, camera, wCss, hCss);
     if (!p.ok) continue;
-    if (p.x < -pad || p.x > wCss + pad || p.y < -pad || p.y > hCss + pad) continue;
+    // Plan 047 R7: STRICT on-screen cull. A body only gets a label if its disc
+    // (center ± discRadiusPx) actually intersects the viewport. The old
+    // pad-based cull (220px, then 40px) let OFF-SCREEN bodies through, and the
+    // on-screen clamp below then pinned their labels to the frame edge as
+    // floating text with no visible body — the "labels all over the place, even
+    // when the planet/satellite is not in view" report. Now an off-screen
+    // planet/satellite gets NO label at all; only bodies whose disc is on (or
+    // touching) the viewport are candidates.
+    const r = inp.discRadiusPx;
+    if (p.x + r < 0 || p.x - r > wCss || p.y + r < 0 || p.y - r > hCss) continue;
+    // Plan 047 R7: a sub-pixel disc is invisible — its label would float over
+    // empty space with nothing to point at. Only the picked body (the focus)
+    // and the Sun (the system's anchor) may be labelled below the min disc.
+    const isFocus = inp.tier === 0 || inp.id === 'sun';
+    if (!isFocus && r < PLANET_LABEL_MIN_DISC_PX) continue;
     // The picked body + the Sun bypass the distance fade (they are what the
     // user is looking at / the system's anchor).
-    const noFade = inp.tier === 0 || inp.id === 'sun';
+    const noFade = isFocus;
     const op = noFade ? 1 : planetLabelFade(inp.dist);
     if (op <= PLANET_LABEL_MIN_OPACITY) continue;
     const h = PLANET_LABEL_SCREEN_PX;

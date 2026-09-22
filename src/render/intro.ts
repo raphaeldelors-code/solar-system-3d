@@ -21,15 +21,36 @@ export interface IntroLeg {
   duration: number;
   /** Camera offset multiplier for this leg (1 = default framing, <1 closer). */
   zoom: number;
+  /**
+   * Plan 047 R7: optional GLOBAL anchor override. When set, the leg flies to
+   * `camAnchorFor(anchor)` (the Sky / System view) instead of framing a body —
+   * and does NOT arm a body follow. Used by the new Sky + System establishing
+   * legs that open the tour before the Sun→Earth dolly.
+   */
+  anchor?: 'system' | 'constellations';
 }
 
-/** The three intro legs, in order. Total ≈ 5.8 s (≤ 6 s per spec). */
+/**
+ * The intro legs, in order. Plan 047 R7: the tour now OPENS with a quick
+ * Sky-view establishing shot (the constellation dome), then settles to the
+ * System view, then runs the ORIGINAL Sun→Earth dolly + A6 tail unchanged.
+ * Total ≈ 12.2 s.
+ */
 export const INTRO_LEGS: IntroLeg[] = [
-  { bodyId: 'sun', duration: 2.0, zoom: 3.0 }, // far-out establishing pull
-  { bodyId: 'sun', duration: 1.6, zoom: 1.0 }, // settle / orbit the Sun
-  // Push to Earth (landing). The target eases Sun→Earth over the whole leg
-  // (see stepFlight's liveTarget) so it reads as a deliberate sweep, not a
-  // jump — the leg is deliberately the longest to keep that sweep graceful.
+  // NEW: quick SKY establishing shot — the constellation dome fills the frame
+  // (the "we're deep in space" opening, now showing the sky).
+  { bodyId: 'sun', duration: 2.4, zoom: 1.0, anchor: 'constellations' },
+  // NEW: switch to the SYSTEM view (planets + orbits) — the hand-off the user
+  // asked for before the original tour continues.
+  { bodyId: 'sun', duration: 1.4, zoom: 1.0, anchor: 'system' },
+  // ORIGINAL leg 1: far-out establishing pull into the Sun.
+  { bodyId: 'sun', duration: 2.0, zoom: 3.0 },
+  // ORIGINAL leg 2: settle / orbit the Sun.
+  { bodyId: 'sun', duration: 1.6, zoom: 1.0 },
+  // ORIGINAL leg 3: push to Earth (landing). The target eases Sun→Earth over
+  // the whole leg (see stepFlight's liveTarget) so it reads as a deliberate
+  // sweep, not a jump — the leg is deliberately the longest to keep that
+  // sweep graceful.
   { bodyId: 'earth', duration: 2.2, zoom: 1.0 },
 ];
 

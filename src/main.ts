@@ -1706,6 +1706,10 @@ function startIntro(): void {
   built.controls.target.set(0, 0, 0);
   intro = { leg: 0, titleEl: introTitleEl, tail: false, tailT: 0, tailFromSpeed: 0 };
   built.controls.enabled = false;
+  // Plan 047 R7: the tour opens on the Sky establishing shot — arm skyMode so
+  // the constellation web is visible from the first frame (leg 0's anchor
+  // re-arms it; this covers the gap before the first leg's flight starts).
+  setSkyMode(true);
   lastIntroTotal = 0; // the title clock spans the WHOLE intro (0..INTRO_DURATION)
   beginIntroLeg(0);
 }
@@ -1714,18 +1718,39 @@ function startIntro(): void {
 function beginIntroLeg(i: number): void {
   if (!intro) return;
   const leg = INTRO_LEGS[i];
-  const dest = camAnchorForBody(leg.bodyId) ?? camAnchorFor('system');
-  // Leg 0 is the far-out establishing pull: start from 3× and pull IN to the
-  // Sun (zoom multiplier applied to the destination so the camera closes in).
-  if (i === 0) {
-    dest.pos = [dest.pos[0] * leg.zoom, dest.pos[1] * leg.zoom, dest.pos[2] * leg.zoom];
+  // Plan 047 R7: an anchor leg flies to a GLOBAL view (Sky / System) instead of
+  // framing a body. The deep-space START pose is set once in startIntro (3× the
+  // System anchor); leg 0 then pulls IN from there to its destination.
+  let dest: CamAnchor;
+  if (leg.anchor) {
+    dest = camAnchorFor(leg.anchor);
+  } else {
+    dest = camAnchorForBody(leg.bodyId) ?? camAnchorFor('system');
   }
-  followId = leg.bodyId;
-  setFindValue(leg.bodyId);
-  selectedBodyId = leg.bodyId;
-  selectedConstellation = '';
+  if (leg.anchor) {
+    // A global anchor leg: no body follow, and the Sky anchor arms skyMode so
+    // the constellation web is visible for the establishing shot (the System
+    // anchor clears it).
+    followId = '';
+    setFindValue('');
+    selectedBodyId = '';
+    setSkyMode(leg.anchor === 'constellations');
+  } else {
+    followId = leg.bodyId;
+    setFindValue(leg.bodyId);
+    selectedBodyId = leg.bodyId;
+    selectedConstellation = '';
+  }
   intro.leg = i;
   built.controls.enabled = false;
+  // Plan 047 R7: the Sky anchor widens the FOV to 120° (the dome needs it).
+  // Each leg must EASE from the previous leg's ending FOV, not the live camera
+  // FOV — otherwise after the Sky leg the System/Sun legs would start at 120°
+  // and never ease back to the default. Compute the prior leg's end FOV.
+  const prevLeg = i > 0 ? INTRO_LEGS[i - 1] : null;
+  const fromFov = prevLeg?.anchor
+    ? (camAnchorFor(prevLeg.anchor).fov ?? FOV_DEG)
+    : built.camera.fov;
   // Plan 044 A6: the intro legs use the smoother quintic `cineEase` (the
   // "cinematic" fly-to) instead of the cubic normal flights use.
   flight = makeFlight(
@@ -1733,8 +1758,8 @@ function beginIntroLeg(i: number): void {
     [built.controls.target.x, built.controls.target.y, built.controls.target.z],
     dest,
     leg.duration,
-    leg.bodyId,
-    built.camera.fov,
+    leg.anchor ? null : leg.bodyId,
+    fromFov,
     FOV_DEG,
     true,
   );
@@ -1853,6 +1878,11 @@ function finishIntro(skipped: boolean): void {
   if (!intro) return;
   const el = intro.titleEl;
   intro = null;
+  // Plan 047 R7: the tour ends in the System view (on Earth) — clear skyMode so
+  // the constellation web disappears (it only belongs to the Sky establishing
+  // shot). Without this, a skip during the Sky leg would leave the web up in
+  // the System view.
+  setSkyMode(false);
   // Plan 037: mark the intro seen for this session so a plain reload does not
   // replay the dolly. Safe to call unconditionally — finishIntro only runs once
   // per intro (guarded above). sessionStorage may throw (private mode) — ignore.
@@ -3120,8 +3150,33 @@ function updatePlanetScreenLabelFrame(): void {
   const wCss = window.innerWidth;
   const hCss = window.innerHeight;
   const inputs: PlanetLabelInput[] = [];
+  // Plan 047 R7: FOCUS-PLANET CULL — the "Apple hero view". When a specific
+  // planet is the SELECTION (picked, or the parent of a picked moon), the frame
+  // is a hero shot of THAT planet: label only it + its satellites. The other
+  // planets (Mars, Earth, Uranus…) and the Sun drift around the frame with
+  // their own labels and read as clutter — the "labels all over the place"
+  // report. In the wide System view the selection is the Sun (not a planet), so
+  // no focus is found and every on-screen body labels normally.
+  //
+  // Focus is by SELECTION, not by disc size: in the tight System framing the
+  // outer planets legitimately have large on-screen discs (Neptune ~270px), so
+  // a disc-size test would misfire and cull the whole system's labels.
+  const focusPlanetId = (() => {
+    if (!selectedBodyId) return '';
+    const sel = built.bodies.get(selectedBodyId);
+    if (sel?.def.kind === 'planet') return selectedBodyId;
+    const parent = moonParent.get(selectedBodyId);
+    return parent && built.bodies.get(parent)?.def.kind === 'planet' ? parent : '';
+  })();
   for (const entry of built.bodies.values()) {
     if (!entry.mesh.visible) continue;
+    if (
+      focusPlanetId &&
+      (entry.def.kind === 'planet' || entry.def.kind === 'star') &&
+      entry.def.id !== focusPlanetId
+    ) {
+      continue; // a non-focus planet (or the Sun) in a planet hero view — no label
+    }
     const wp = entry.worldPos;
     const dist = camPos.distanceTo(wp);
     // On-screen disc radius (CSS px): project the body center and a point one
