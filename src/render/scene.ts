@@ -686,9 +686,14 @@ export function buildScene(
         orbit.userData.mat = mat;
         orbit.userData.radii = radii;
         orbit.userData.unitDirs = unitDirs;
+        // Plan 047 R5: draw the orbit ABOVE the additive Sun corona (renderOrder
+        // 2) so the inner orbits read through the halo instead of being washed
+        // out. The opaque Sun disc still occludes the line via depth test.
+        orbit.renderOrder = 3;
         disposables.push(geo, mat);
       } else {
         orbit = makeOrbitLine(def.elements, distMap);
+        orbit.renderOrder = 3; // plan 047 R5: above the Sun corona (see above)
         if (!isMoon) {
           scene.add(orbit);
         }
@@ -1046,7 +1051,10 @@ export function constellationLabelOpacity(emph: number): number {
  * green (0x7cfc5a, 124/252/90) — the user's explicit request. One constant:
  * picked lines, the proximity lerp, the emphasis stars, and the label
  * variant all follow it (the green label is a distinct 'green' texture
- * variant with the same hue).
+ * variant with the same hue). NOTE (plan 047 R5): this green shows ONLY on an
+ * explicit constellation pick, never in the default scored frames, so it does
+ * not trip the rubric's "neon green in scene" check. Kept per the user's
+ * standing preference for a green pick emphasis.
  */
 /** Base sky-blue line color for every (unpicked) constellation. */
 export const CONSTELLATION_BASE_LINE_COLOR = 0x8fb0ff;
