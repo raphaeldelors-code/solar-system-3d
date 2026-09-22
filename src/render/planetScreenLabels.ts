@@ -35,7 +35,7 @@ export const PLANET_LABEL_SCREEN_PAD_PX = 220;
  * Hard cap on how many body names a single frame may draw (the same rule the
  * constellation names use). The picked body always counts as one of the slots.
  */
-export const PLANET_LABEL_MAX_VISIBLE = 4; // plan 047: 8 -> 4
+export const PLANET_LABEL_MAX_VISIBLE = 10; // plan 047 R5: 4 -> 10 (8 planets + Sun + Moon; de-collision drops overlaps)
 /** Extra margin (CSS px) around each ink box for the de-collision test. */
 export const PLANET_LABEL_BOX_PAD_PX = 5;
 /**
@@ -284,27 +284,54 @@ export function drawPlanetLabels(
     // Start at the disc edge (not the center) so the line doesn't cross the body.
     const sx = s.bx + ux * s.discR;
     const sy = s.by + uy * s.discR;
-    // Plan 047: one quiet label language — no backdrop box (the "wireframe"
-    // tell), a soft shadow for legibility, and the accent (not neon green)
-    // for the picked body.
-    ctx.strokeStyle = s.emphasized ? 'rgba(122,162,255,0.8)' : 'rgba(255,255,255,0.25)';
+    const ex = s.x - ux * (s.w / 2);
+    const ey = s.y - uy * (s.h / 2);
+    // Plan 047 R5: premium label language — a hairline leader that fades out
+    // toward the text, a small anchor dot on the body, and tracked type with
+    // a soft two-layer shadow. No boxes, no neon.
+    const accent = s.emphasized;
+    const lineCol = accent ? '122,162,255' : '255,255,255';
+    const grad = ctx.createLinearGradient(sx, sy, ex, ey);
+    grad.addColorStop(0, `rgba(${lineCol},${accent ? 0.55 : 0.35})`);
+    grad.addColorStop(1, `rgba(${lineCol},0.05)`);
+    ctx.strokeStyle = grad;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
-    ctx.lineTo(s.x - ux * (s.w / 2), s.y - uy * (s.h / 2));
+    ctx.lineTo(ex, ey);
     ctx.stroke();
-    // Name text.
-    ctx.font = (s.emphasized ? '600 ' : '500 ') + '13px system-ui, sans-serif';
+    // Anchor dot on the body disc edge — the "pin" that ties label to object.
+    ctx.fillStyle = `rgba(${lineCol},${accent ? 0.9 : 0.6})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, accent ? 2.5 : 2, 0, Math.PI * 2);
+    ctx.fill();
+    // Name text: tracked, near-white (accent for the picked body), soft
+    // two-layer shadow for legibility over bright and dark regions alike.
+    ctx.font = (accent ? '600 ' : '500 ') + '13px system-ui, -apple-system, sans-serif';
+    try {
+      (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0.03em';
+    } catch {
+      /* letterSpacing unsupported — fine without tracking */
+    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-    ctx.shadowBlur = 6;
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 10;
     ctx.shadowOffsetY = 1;
-    ctx.fillStyle = s.emphasized ? '#a9c4ff' : '#f5f7fa';
+    ctx.fillStyle = accent ? '#bcd2ff' : 'rgba(245,247,250,0.96)';
+    ctx.fillText(s.name, s.x, s.y);
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetY = 0;
     ctx.fillText(s.name, s.x, s.y);
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
+    try {
+      (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0px';
+    } catch {
+      /* noop */
+    }
   }
   ctx.globalAlpha = 1;
 }

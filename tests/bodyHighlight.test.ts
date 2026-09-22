@@ -26,7 +26,7 @@ describe('bodyHighlightTargets (plan 015 P6)', () => {
       } else {
         expect(t.ringVisible).toBe(false);
         expect(t.ringOpacity).toBe(0);
-        expect(t.orbitOpacity).toBeCloseTo(0.1, 6); // plan 047
+        expect(t.orbitOpacity).toBeCloseTo(0.13, 6); // plan 047 R5
         expect(t.orbitColor).toBe(BASE);
       }
     }
@@ -61,7 +61,7 @@ describe('bodyHighlightTargets (plan 015 P6)', () => {
       const t = bodyHighlightTargets('Mars', '', hasOrbit, T0);
       expect(t.ringVisible).toBe(false);
       if (hasOrbit) {
-        expect(t.orbitOpacity).toBeCloseTo(0.1, 3); // plan 047
+        expect(t.orbitOpacity).toBeCloseTo(0.13, 3); // plan 047 R5
         expect(t.orbitColor).toBe(BASE);
       } else {
         expect(t.orbitOpacity).toBeNull();

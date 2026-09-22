@@ -202,12 +202,13 @@ export function buildSunGlow(radius: number): SunGlow {
     depthTest: true,
     transparent: true,
     // The sun shader (buildSunShaderMaterial) now carries the bright core +
-    // granulation; the sprite is the wide halo only. 0.6 keeps the halo from
-    // washing the sky (the shader's HDR core + bloom do the "bright" work).
-    opacity: 0.45, // plan 047: softer halo, bloom does the bright work
+    // granulation; the sprite is the wide halo only. 0.35 keeps the halo from
+    // washing the inner orbits (Mercury/Venus pass through it in the System
+    // view — the halo must stay tight enough to clear them).
+    opacity: 0.3, // plan 047 R5: 0.35 -> 0.3 (inner orbits must clear the halo)
   });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(radius * 3.2, radius * 3.2, 1); // plan 047: 4.5x -> 3.2x
+  sprite.scale.set(radius * 2.2, radius * 2.2, 1); // plan 047 R5: 2.6x -> 2.2x
   sprite.name = 'sun-glow';
   sprite.renderOrder = 2;
   return {

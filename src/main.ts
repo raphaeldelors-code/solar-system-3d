@@ -662,7 +662,14 @@ function resampleMoonNow(): void {
 
 function rebuildScene(newScale: VisualScale): BuiltScene {
   if (built) built.dispose();
-  built = buildScene(canvas, ALL_BODIES, newScale, qualityTier);
+  // Plan 047 (user-mandated): the scene shows ONLY the Sun, the 8 planets and
+  // their natural satellites. ISS ("stuff we built"), dwarf planets and the
+  // named asteroids/comets (the "weird names") are excluded from the scene.
+  // They stay in ALL_BODIES so search/URL state keep resolving.
+  const sceneBodies = ALL_BODIES.filter(
+    (b) => b.kind === 'star' || b.kind === 'planet' || (b.kind === 'moon' && b.id !== 'iss'),
+  );
+  built = buildScene(canvas, sceneBodies, newScale, qualityTier);
   // keep the shareable URL in sync as the user moves the camera
   built.controls.addEventListener('change', syncUrl);
   // re-attach moon orbits to parent pivots

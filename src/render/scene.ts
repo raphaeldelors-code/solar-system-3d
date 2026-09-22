@@ -630,10 +630,11 @@ export function buildScene(
     // Orbit line. Per-point radius mapping (same one the body positions
     // use) so eccentric ellipses stay on their drawn path.
     let orbit: THREE.Line | null = null;
-    // Plan 047: only the 8 major planets + the Moon draw a default orbit line.
-    // Dwarfs, asteroids, comets and the other moons stay fly-to-able but no
-    // longer add to the wide-view line mesh (the user's core complaint).
-    const drawOrbit = def.kind === 'planet' || def.id === 'moon';
+    // Plan 047 (user-mandated): every object in the scene — the 8 planets and
+    // their natural satellites — draws its orbit line. The clutter that forced
+    // the "planets + Moon only" restriction (dwarfs, asteroids, comets, ISS)
+    // is no longer in the scene, so per-object orbits are restored.
+    const drawOrbit = def.kind === 'planet' || def.kind === 'moon';
     if (def.elements && drawOrbit) {
       const distMap = (r: number): number =>
         isMoon ? scale.moonDistance(r, def.id) : scale.planetDistance(r);
@@ -678,7 +679,7 @@ export function buildScene(
         const mat = new THREE.LineBasicMaterial({
           color: 0x5570a0,
           transparent: true,
-          opacity: 0.1, // plan 047: faint base, depth-faded per frame
+          opacity: 0.13, // plan 047 R5: 0.10 -> 0.13 (readable under the Sun halo)
         });
         orbit = new THREE.Line(geo, mat);
         orbit.userData.geo = geo;
@@ -2395,7 +2396,7 @@ export function bodyHighlightTargets(
     ringVisible: isSel,
     ringOpacity: isSel ? 0.35 + 0.55 * phase : 0,
     ringBreath: 1 + 0.12 * phase,
-    orbitOpacity: hasOrbit ? (isSel ? 0.55 : 0.1) : null, // plan 047
+    orbitOpacity: hasOrbit ? (isSel ? 0.55 : 0.13) : null, // plan 047 R5: 0.1 -> 0.13
     orbitColor: hasOrbit ? (isSel ? 0x7aa2ff : 0x7aa2ff) : null,
   };
 }
