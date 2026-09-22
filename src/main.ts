@@ -68,22 +68,13 @@ import { attachRealTextures } from './render/realTextures';
 // Plan 035 F5 — cinematic intro, keyboard/palette commands, and the info-card
 // "facts" rows. All three are pure modules (unit-tested in tests/f5Commands.
 // test.ts); main.ts only wires their results to the DOM + scene.
-import {
-  INTRO_LEGS,
-  INTRO_DURATION,
-  INTRO_TAIL_DURATION,
-  INTRO_SEEN_KEY,
-  titleOpacity,
-  introShouldPlay,
-  introTailSpeed,
-  introTailGlow,
-} from './render/intro';
+import { INTRO_TAIL_DURATION, introTailSpeed, introTailGlow } from './render/intro';
+import { TOUR_STEPS, TOUR_SEEN_KEY, tourShouldPlay } from './render/tour';
 import { commandForKey, digitToPlanet, paletteEntries, COMMANDS } from './render/commands';
 import { bodyFacts } from './render/bodyFacts';
 import { sbdbFacts } from './sim/sbdb';
 import { smallBodyFacts } from './sim/smallBodies';
 import { fetchApod } from './sim/apod';
-import { ONBOARD_STEPS, shouldShowOnboarding, markOnboarded } from './sim/onboarding';
 import { parseKpJson, latestKp, gScale, gScaleLabel, type KpSample } from './sim/spaceWeather';
 import { parseNeoFeed, formatNeoLabel } from './sim/neo';
 
@@ -323,22 +314,21 @@ const glLostEl = document.getElementById('gl-lost') as HTMLDivElement;
 // Cinematic intro: a one-shot, skippable dolly on first load (far-out → Sun
 // → Earth) with the title fading in/out. Skipped for reduced-motion, `?intro=0`,
 // and shared links that pin a view (a restore must not get overridden).
+// Plan 047 R8: the intro is now a CLICK-THROUGH guided tour (see
+// src/render/tour.ts). `step` is the index into TOUR_STEPS; `waiting` is true
+// once the current step's camera flight has landed and the tour is waiting for
+// the user's "Next" click (the card is up, the camera is free to rotate).
+// `waitT` / `waitFromSpeed` are the tail's elapsed seconds + start speed (the
+// A6 timeline tail still runs after the final gesture step).
 let intro: {
-  leg: number; // index into INTRO_LEGS
+  step: number;
   titleEl: HTMLDivElement | null;
-  // Plan 044 A6: the TAIL — after the last camera leg lands on Earth, the
-  // intro does NOT end immediately. Instead the camera settles, the timeline
-  // strip glows into view, time visibly accelerates, and an event marker pops
-  // at "you are here". `tail` is true once the legs are done and the tail is
-  // running; `tailT` is the tail's elapsed seconds; `tailFromSpeed` is the
-  // speed at the moment the tail started (the ramp's start point).
-  tail: boolean;
-  tailT: number;
-  tailFromSpeed: number;
+  waiting: boolean;
+  waitT: number;
+  waitFromSpeed: number;
 } | null = null;
 const introWrapEl = document.getElementById('intro') as HTMLDivElement | null;
 const introTitleEl = document.getElementById('intro-title') as HTMLDivElement | null;
-const introSkipEl = document.getElementById('intro-skip') as HTMLButtonElement | null;
 // Command palette (Ctrl/Cmd+K or `?`): a searchable list of every command +
 // jump-to-body. `palette` holds its live filter query.
 const paletteEl = document.getElementById('palette') as HTMLDivElement | null;
@@ -1394,6 +1384,10 @@ function setInfoFacts(def: BodyDefinition | null, tDays?: number): void {
  * diverge.
  */
 function applySliderSpeed(logValue: number): void {
+  // Plan 047 R8: while the guided tour is up, clamp the sim speed so the
+  // moons (and their labels) don't whip around like insects while the user
+  // reads a step. 1.5 (≈ a few days/sec) is the tour's "time is flowing" cap.
+  if (intro) logValue = Math.min(logValue, 1.5);
   speedEl.value = String(logValue);
   clock.setLogSpeed(logValue);
   markSceneDirty(); // F6: speed change alters motion
@@ -1687,16 +1681,14 @@ function runCommand(id: string): void {
 // render loop tracks the live body (no whirling on the moving Earth). The
 // title fades in over the first legs and out near the end. Any user input
 // (drag / wheel / key / click a body) skips to the final Earth leg.
-function startIntro(): void {
+function startTour(): void {
   if (intro || !introTitleEl || !introWrapEl) return;
   introWrapEl.hidden = false;
   introWrapEl.setAttribute('aria-hidden', 'false');
   introTitleEl.hidden = false;
   introTitleEl.style.opacity = '0';
-  if (introSkipEl) introSkipEl.hidden = false; // Plan 037: hidden in the DOM now
-  // Leg 1 starts from a far-out system anchor (3× the system fit) so the pull
-  // reads as "we're deep in space". We park the camera there, then arm the
-  // first leg (a flight to the Sun) so the dolly begins moving immediately.
+  // Park the camera far out (3× the System anchor) so the first step reads as
+  // "we're deep in space", then fly to the opening Sky establishing shot.
   const sys = camAnchorFor('system');
   const far: CamAnchor = {
     pos: [sys.pos[0] * 3, sys.pos[1] * 3, sys.pos[2] * 3],
@@ -1704,102 +1696,123 @@ function startIntro(): void {
   };
   built.camera.position.set(far.pos[0], far.pos[1], far.pos[2]);
   built.controls.target.set(0, 0, 0);
-  intro = { leg: 0, titleEl: introTitleEl, tail: false, tailT: 0, tailFromSpeed: 0 };
+  intro = { step: 0, titleEl: introTitleEl, waiting: false, waitT: 0, waitFromSpeed: 0 };
   built.controls.enabled = false;
-  // Plan 047 R7: the tour opens on the Sky establishing shot — arm skyMode so
-  // the constellation web is visible from the first frame (leg 0's anchor
-  // re-arms it; this covers the gap before the first leg's flight starts).
-  setSkyMode(true);
-  lastIntroTotal = 0; // the title clock spans the WHOLE intro (0..INTRO_DURATION)
-  beginIntroLeg(0);
+  lastTourTotal = 0;
+  beginTourStep(0);
 }
 
-/** Start a specific intro leg as a flight (armed to its body). */
-function beginIntroLeg(i: number): void {
+/** Start a specific tour step: fly the camera to its stop (or, for a gesture
+ *  step, just show the card with the camera where the previous stop left it). */
+function beginTourStep(i: number): void {
   if (!intro) return;
-  const leg = INTRO_LEGS[i];
-  // Plan 047 R7: an anchor leg flies to a GLOBAL view (Sky / System) instead of
-  // framing a body. The deep-space START pose is set once in startIntro (3× the
-  // System anchor); leg 0 then pulls IN from there to its destination.
-  let dest: CamAnchor;
-  if (leg.anchor) {
-    dest = camAnchorFor(leg.anchor);
-  } else {
-    dest = camAnchorForBody(leg.bodyId) ?? camAnchorFor('system');
-  }
-  if (leg.anchor) {
-    // A global anchor leg: no body follow, and the Sky anchor arms skyMode so
-    // the constellation web is visible for the establishing shot (the System
-    // anchor clears it).
+  const step = TOUR_STEPS[i];
+  intro.step = i;
+  intro.waiting = false;
+  if (step.anchor) {
+    // A global anchor stop (Sky / System): no body follow; the Sky anchor arms
+    // skyMode so the constellation web is visible for the establishing shot.
     followId = '';
     setFindValue('');
     selectedBodyId = '';
-    setSkyMode(leg.anchor === 'constellations');
-  } else {
-    followId = leg.bodyId;
-    setFindValue(leg.bodyId);
-    selectedBodyId = leg.bodyId;
     selectedConstellation = '';
+    setSkyMode(step.anchor === 'constellations');
+    const dest = camAnchorFor(step.anchor);
+    flight = makeFlight(
+      [built.camera.position.x, built.camera.position.y, built.camera.position.z],
+      [built.controls.target.x, built.controls.target.y, built.controls.target.z],
+      dest,
+      step.duration,
+      null,
+      built.camera.fov,
+      FOV_DEG,
+      true,
+    );
+    built.controls.enabled = false;
+  } else if (step.bodyId) {
+    // A body stop (Sun / Earth): arm the follow + fly to it.
+    followId = step.bodyId;
+    setFindValue(step.bodyId);
+    selectedBodyId = step.bodyId;
+    selectedConstellation = '';
+    setSkyMode(false);
+    const dest = camAnchorForBody(step.bodyId) ?? camAnchorFor('system');
+    flight = makeFlight(
+      [built.camera.position.x, built.camera.position.y, built.camera.position.z],
+      [built.controls.target.x, built.controls.target.y, built.controls.target.z],
+      dest,
+      step.duration,
+      step.bodyId,
+      built.camera.fov,
+      FOV_DEG,
+      true,
+    );
+    built.controls.enabled = false;
+  } else {
+    // A gesture step: no flight — the camera stays where the previous stop
+    // left it. Hand back the controls (free orbit) and show the card.
+    intro.waiting = true;
+    built.controls.enabled = true;
+    built.controls.update();
+    const e = built.bodies.get(followId);
+    if (e) built.controls.target.copy(e.worldPos);
   }
-  intro.leg = i;
-  built.controls.enabled = false;
-  // Plan 047 R7: the Sky anchor widens the FOV to 120° (the dome needs it).
-  // Each leg must EASE from the previous leg's ending FOV, not the live camera
-  // FOV — otherwise after the Sky leg the System/Sun legs would start at 120°
-  // and never ease back to the default. Compute the prior leg's end FOV.
-  const prevLeg = i > 0 ? INTRO_LEGS[i - 1] : null;
-  const fromFov = prevLeg?.anchor
-    ? (camAnchorFor(prevLeg.anchor).fov ?? FOV_DEG)
-    : built.camera.fov;
-  // Plan 044 A6: the intro legs use the smoother quintic `cineEase` (the
-  // "cinematic" fly-to) instead of the cubic normal flights use.
-  flight = makeFlight(
-    [built.camera.position.x, built.camera.position.y, built.camera.position.z],
-    [built.controls.target.x, built.controls.target.y, built.controls.target.z],
-    dest,
-    leg.duration,
-    leg.anchor ? null : leg.bodyId,
-    fromFov,
-    FOV_DEG,
-    true,
-  );
+  // Show the card as soon as the step starts (the user reads it while the
+  // camera glides in) — not only when the flight lands. This also keeps the
+  // card visible on slow devices where the flight takes a while.
+  renderTourStep();
 }
 
-let lastIntroTotal = 0;
+let lastTourTotal = 0;
 
-/**
- * Per-frame intro tick (called from the render loop while `intro` is active).
- * `dtReal` is the real elapsed seconds. Drives the title fade on the whole
- * intro clock (legs + tail), and — once the legs are done — the A6 TAIL: the
- * timeline strip glows into view, time visibly accelerates, and an event
- * marker pops at "you are here".
- */
+/** Per-frame tour tick (called from the render loop while `intro` is active).
+ *  Drives the title fade on the whole tour clock and, once the final gesture
+ *  step is done, the A6 TAIL (the timeline strip glows into view, time ramps,
+ *  and an event marker pops at "you are here"). */
 function tickIntroTitle(dtReal: number): void {
   if (!intro) return;
-  lastIntroTotal += dtReal;
-  if (intro.titleEl) intro.titleEl.style.opacity = String(titleOpacity(lastIntroTotal));
-  // Plan 044 A6: the TAIL runs after the last leg lands on Earth. The camera
-  // is settled (no flight), so this is pure UI: glow the strip, ramp the time
-  // speed, and pop the event marker. When the tail elapses, finish the intro.
-  if (intro.tail) {
-    intro.tailT += dtReal;
-    tickIntroTail(intro.tailT);
-    if (intro.tailT >= INTRO_TAIL_DURATION) finishIntro(false);
+  lastTourTotal += dtReal;
+  if (intro.titleEl) intro.titleEl.style.opacity = String(tourTitleOpacity(lastTourTotal));
+  if (intro.waiting) {
+    // Waiting on a NON-final step: the camera is settled and the card is up —
+    // just wait for the user's "Next" click. Do NOT run the tail (that would
+    // auto-finish the tour 2.5 s after the first step).
+    if (intro.step < TOUR_STEPS.length - 1) return;
+    // Final step: the A6 tail runs while the last card is up. When it elapses,
+    // finish the tour.
+    intro.waitT += dtReal;
+    tickIntroTail(intro.waitT);
+    if (intro.waitT >= INTRO_TAIL_DURATION) finishTour(false);
     return;
   }
-  // Safety: if a leg's flight never reports "done" (e.g. a stalled device),
-  // end the intro once the whole intro (legs + tail) has elapsed rather than
-  // locking the controls forever.
-  if (lastIntroTotal > INTRO_DURATION + INTRO_TAIL_DURATION + 1.5) {
-    finishIntro(false);
+  // Safety: if a step's flight never reports "done" (a stalled device), end
+  // the tour rather than locking the controls forever.
+  if (lastTourTotal > 60) finishTour(false);
+}
+
+/** Title opacity for the click-through tour: fade in over the first ~0.6 s,
+ *  hold, then fade out over the last ~0.8 s of the final step's tail. The tour
+ *  has no fixed duration (it waits for clicks), so this is a simple in/out
+ *  ramp on the elapsed clock. */
+function tourTitleOpacity(t: number): number {
+  const IN = 0.6;
+  const OUT = 0.8;
+  if (t < 0.2) return 0;
+  if (t < IN) return (t - 0.2) / (IN - 0.2);
+  // Hold at 1 until the tail is running (the fade-out is driven by the tail).
+  if (intro && intro.waiting) {
+    const rem = INTRO_TAIL_DURATION - intro.waitT;
+    if (rem < OUT) return Math.max(0, rem / OUT);
+    return 1;
   }
+  return 1;
 }
 
 /**
  * Plan 044 A6: one frame of the intro tail. `t` is the tail's elapsed seconds.
  * Reveals + glows the timeline strip, ramps the sim speed from the tail's
  * start speed to a pleasant "time is flowing" default, and pops the "you are
- * here" event marker. The strip is left visible (the intro hands back to the
+ * here" event marker. The strip is left visible (the tour hands back to the
  * user on the timeline, which is the whole point of the tail).
  */
 function tickIntroTail(t: number): void {
@@ -1820,7 +1833,7 @@ function tickIntroTail(t: number): void {
     glow > 0.01 ? `0 0 ${18 * glow}px ${6 * glow}px rgba(120, 200, 255, ${0.55 * glow})` : '';
   // 4. Time visibly accelerates: ramp the speed slider from where it was to a
   // pleasant default (1.5 ≈ a few days per second — motion you can see).
-  const from = intro?.tailFromSpeed ?? 0;
+  const from = intro?.waitFromSpeed ?? 0;
   const to = 1.5;
   applySliderSpeed(introTailSpeed(t, from, to));
   // 5. Pop the "you are here" event marker at the caret (the tail's payoff:
@@ -1850,50 +1863,46 @@ function popIntroTailMarker(glow: number, frac: number): void {
 }
 
 /**
- * A leg's flight just completed (the render loop's flight-done branch calls
- * this while `intro` is active). Advance to the next leg, or — on the final
- * leg — start the A6 TAIL (the intro now ENDS on the time-scrub, not the
- * moment the camera lands).
+ * A step's flight just completed (the render loop's flight-done branch calls
+ * this while `intro` is active). The camera has landed on the current stop —
+ * show the card and wait for the user's "Next" click. On the final gesture
+ * step, start the A6 TAIL (the tour now ENDS on the time-scrub).
  */
 function onIntroLegDone(): void {
   if (!intro) return;
-  if (intro.leg < INTRO_LEGS.length - 1) {
-    beginIntroLeg(intro.leg + 1);
-  } else {
-    // Plan 044 A6: landed on Earth — do NOT finish yet. Start the tail: the
-    // camera is settled (no flight), so the render loop's idle-skip won't
-    // stall it, and tickIntroTitle drives the strip glow + speed ramp + marker
-    // pop until INTRO_TAIL_DURATION elapses.
-    intro.tail = true;
-    intro.tailT = 0;
-    intro.tailFromSpeed = parseFloat(speedEl.value) || 0;
-    // The tail's first frame reveals the strip; make sure the idle-skip
-    // renders it (the strip is DOM, but the speed ramp moves the sim).
+  intro.waiting = true;
+  built.controls.enabled = true;
+  built.controls.update();
+  const e = built.bodies.get(followId);
+  if (e) built.controls.target.copy(e.worldPos);
+  renderTourStep();
+  // The final gesture step: the camera is settled (no flight), so start the
+  // tail — the strip glows + time ramps + marker pops until INTRO_TAIL_DURATION
+  // elapses, then finishTour hands back to the free follow.
+  if (intro.step === TOUR_STEPS.length - 1) {
+    intro.waitT = 0;
+    intro.waitFromSpeed = parseFloat(speedEl.value) || 0;
     markSceneDirty();
   }
 }
 
-/** End the intro, optionally immediately (skipped). Lands on Earth + arms follow. */
-function finishIntro(skipped: boolean): void {
+/** End the tour, optionally immediately (skipped). Lands on Earth + arms follow. */
+function finishTour(skipped: boolean): void {
   if (!intro) return;
   const el = intro.titleEl;
   intro = null;
-  // Plan 047 R7: the tour ends in the System view (on Earth) — clear skyMode so
-  // the constellation web disappears (it only belongs to the Sky establishing
-  // shot). Without this, a skip during the Sky leg would leave the web up in
-  // the System view.
+  // The tour ends in the System view (on Earth) — clear skyMode so the
+  // constellation web disappears (it only belongs to the Sky establishing shot).
   setSkyMode(false);
-  // Plan 037: mark the intro seen for this session so a plain reload does not
-  // replay the dolly. Safe to call unconditionally — finishIntro only runs once
-  // per intro (guarded above). sessionStorage may throw (private mode) — ignore.
+  // Mark the tour seen for this session so a plain reload does not replay it.
+  // sessionStorage may throw (private mode) — ignore.
   try {
-    sessionStorage.setItem(INTRO_SEEN_KEY, '1');
+    sessionStorage.setItem(TOUR_SEEN_KEY, '1');
   } catch {
-    /* ignore — intro simply replays next load */
+    /* ignore — tour simply replays next load */
   }
-  // Plan 044 A6: clear the tail's glow + "you are here" marker. On a natural
-  // completion the strip is LEFT visible (the intro ends ON the timeline — the
-  // user lands on it); on a skip we hide it again (the user jumped ahead).
+  // Clear the tail's glow + "you are here" marker. On a natural completion the
+  // strip is LEFT visible (the tour ends ON the timeline); on a skip we hide it.
   hudTimelineEl.style.boxShadow = '';
   const tailMarker = document.getElementById('intro-tail-marker');
   if (tailMarker) tailMarker.remove();
@@ -1902,9 +1911,14 @@ function finishIntro(skipped: boolean): void {
     introWrapEl.hidden = true;
     introWrapEl.setAttribute('aria-hidden', 'true');
   }
-  // If the last leg already landed us on Earth (natural completion), there is
+  // Hide the tour card.
+  if (onboardEl) {
+    onboardEl.hidden = true;
+    onboardEl.setAttribute('aria-hidden', 'true');
+  }
+  // If the last step already landed us on Earth (natural completion), there is
   // nothing left to fly — just arm the follow and hand back the controls. A
-  // SKIP from an earlier leg (Sun) still needs the short Earth fly.
+  // SKIP from an earlier stop (Sun / System) still needs the short Earth fly.
   const alreadyEarth = followId === 'earth';
   if (!alreadyEarth) {
     const dest = camAnchorForBody('earth');
@@ -1927,7 +1941,6 @@ function finishIntro(skipped: boolean): void {
         el.style.opacity = '0';
         el.hidden = true;
       }
-      if (introSkipEl) introSkipEl.hidden = true;
       syncUrl();
       return;
     }
@@ -1942,25 +1955,18 @@ function finishIntro(skipped: boolean): void {
     el.style.opacity = '0';
     el.hidden = true;
   }
-  if (introSkipEl) introSkipEl.hidden = true;
   syncUrl();
-  // Plan 044 C2: on a NATURAL completion (not a skip), walk a first-timer
-  // through the three core gestures. A short delay lets the landing settle
-  // and the intro fade finish before the coach card slides up. localStorage
-  // inside showOnboarding() keeps it to once per browser.
+  // C3: the timeline nudge fires a touch after the tour ends so it doesn't
+  // compete with the landing.
   if (!skipped) {
-    window.setTimeout(showOnboarding, 700);
-    // C3: the timeline nudge fires a touch later so it doesn't compete with
-    // the coach card sliding up (the card is bottom-center, the hint is
-    // top-center — but two simultaneous first-run prompts is too much).
-    window.setTimeout(showTimelineHint, 1400);
+    window.setTimeout(showTimelineHint, 700);
   }
 }
 
-// ===== Plan 044 C2: 3-step first-run coach overlay =====
-// Shown once per browser (localStorage) after the intro lands on Earth. The
-// pure step data + persistence live in src/sim/onboarding.ts (unit-tested);
-// this is the thin DOM wiring.
+// ===== Plan 047 R8: the tour card (reuses the #onboard coach card) =====
+// The click-through tour's overlay. The card elements (icon/title/body/dots/
+// Next/Skip) are the same #onboard card from plan 044 C2; the tour now drives
+// them step-by-step (camera stops + the three core gestures).
 const onboardEl = document.getElementById('onboard') as HTMLDivElement | null;
 const onboardIcon = document.getElementById('onboard-icon') as HTMLDivElement | null;
 const onboardTitle = document.getElementById('onboard-title') as HTMLDivElement | null;
@@ -1968,39 +1974,31 @@ const onboardBody = document.getElementById('onboard-body') as HTMLDivElement | 
 const onboardDots = document.getElementById('onboard-dots') as HTMLDivElement | null;
 const onboardNext = document.getElementById('onboard-next') as HTMLButtonElement | null;
 const onboardSkip = document.getElementById('onboard-skip') as HTMLButtonElement | null;
-let onboardStep = 0;
 
-function renderOnboardStep(): void {
-  if (!onboardEl || !onboardIcon || !onboardTitle || !onboardBody || !onboardDots || !onboardNext)
+/** Show the card for the current tour step (icon/title/body + progress dots). */
+function renderTourStep(): void {
+  if (
+    !intro ||
+    !onboardEl ||
+    !onboardIcon ||
+    !onboardTitle ||
+    !onboardBody ||
+    !onboardDots ||
+    !onboardNext
+  )
     return;
-  const step = ONBOARD_STEPS[onboardStep];
+  const step = TOUR_STEPS[intro.step];
   onboardIcon.textContent = step.icon;
   onboardTitle.textContent = step.title;
   onboardBody.textContent = step.body;
-  // progress dots
   onboardDots.textContent = '';
-  for (let i = 0; i < ONBOARD_STEPS.length; i++) {
+  for (let i = 0; i < TOUR_STEPS.length; i++) {
     const d = document.createElement('span');
-    if (i === onboardStep) d.className = 'on';
+    if (i === intro.step) d.className = 'on';
     onboardDots.appendChild(d);
   }
-  const last = onboardStep === ONBOARD_STEPS.length - 1;
+  const last = intro.step === TOUR_STEPS.length - 1;
   onboardNext.textContent = last ? 'Start exploring ✦' : 'Next →';
-}
-
-function dismissOnboarding(): void {
-  if (onboardEl) {
-    onboardEl.hidden = true;
-    onboardEl.setAttribute('aria-hidden', 'true');
-  }
-  markOnboarded();
-}
-
-function showOnboarding(): void {
-  if (!onboardEl || !onboardNext || !onboardSkip) return;
-  if (!shouldShowOnboarding()) return; // already seen
-  onboardStep = 0;
-  renderOnboardStep();
   onboardEl.hidden = false;
   onboardEl.setAttribute('aria-hidden', 'false');
   onboardNext.focus();
@@ -2008,21 +2006,21 @@ function showOnboarding(): void {
 
 if (onboardNext) {
   onboardNext.addEventListener('click', () => {
-    if (onboardStep < ONBOARD_STEPS.length - 1) {
-      onboardStep++;
-      renderOnboardStep();
+    if (!intro) return;
+    if (intro.step < TOUR_STEPS.length - 1) {
+      beginTourStep(intro.step + 1);
     } else {
-      dismissOnboarding();
+      finishTour(false);
     }
   });
 }
 if (onboardSkip) {
-  onboardSkip.addEventListener('click', dismissOnboarding);
+  onboardSkip.addEventListener('click', () => finishTour(true));
 }
-// Esc dismisses the tour (the palette also listens for Esc, but the tour is
-// only open when the palette is closed, so there's no conflict).
+// Esc ends the tour (the palette also listens for Esc, but the tour is only
+// open when the palette is closed, so there's no conflict).
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && onboardEl && !onboardEl.hidden) dismissOnboarding();
+  if (e.key === 'Escape' && intro) finishTour(true);
 });
 
 // ===== Plan 044 C3: one-time "drag to travel through time" nudge =====
@@ -2047,27 +2045,24 @@ function showTimelineHint(): void {
   }, 4200);
 }
 
-// Any manual input on the 3D view (not the UI panel / palette) skips the
-// intro to the final Earth leg — the user has spoken. The skip button itself
-// and the palette input are excluded so they can do their own thing.
-for (const ev of ['pointerdown', 'wheel', 'touchstart'] as const) {
-  canvas.addEventListener(ev, () => {
-    if (intro) finishIntro(true);
-  });
-}
+// Plan 047 R8: the tour is CLICK-THROUGH — the user must be able to freely
+// ROTATE (drag / wheel) while a step is up, so we no longer skip the tour on
+// canvas input. The tour ends only via the Skip button, the "Next" button on
+// the final step, or Esc (see the tour-card wiring above). A genuine
+// click-to-pick on a body still works (it flies there), which is fine — the
+// user has spoken and the tour's camera is free.
 // A keypress that the command palette intercepts (typing / or ?) must NOT
-// also skip the intro — that keydown belongs to the palette.
+// also skip the tour — that keydown belongs to the palette.
 window.addEventListener('keydown', (ev) => {
   if (!intro || ev.key === '/' || ev.key === '?' || ev.ctrlKey || ev.metaKey || ev.altKey) return;
   // Ignore keys aimed at a text input (the find box) — those are typing, not
   // a command.
   const tag = (ev.target as HTMLElement | null)?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  finishIntro(true);
+  finishTour(true);
 });
 // The skip button ends the intro cleanly (no fly-from-current; just park on
 // Earth like a normal skip).
-if (introSkipEl) introSkipEl.addEventListener('click', () => finishIntro(true));
 
 // --- Keyboard command dispatch (F5) ----------------------------------------
 // One global handler routes printable command keys to runCommand (see the
@@ -2761,12 +2756,12 @@ if (cmdParam && cmdIsKnown) {
   // must not replay on a plain reload.
   let introSeen = false;
   try {
-    introSeen = sessionStorage.getItem(INTRO_SEEN_KEY) === '1';
+    introSeen = sessionStorage.getItem(TOUR_SEEN_KEY) === '1';
   } catch {
     /* private mode / storage disabled — treat as unseen */
   }
-  if (introShouldPlay(reduced, introParam, urlPinsView, introSeen)) {
-    startIntro();
+  if (tourShouldPlay(reduced, introParam, urlPinsView, introSeen)) {
+    startTour();
   }
 }
 
@@ -3150,33 +3145,11 @@ function updatePlanetScreenLabelFrame(): void {
   const wCss = window.innerWidth;
   const hCss = window.innerHeight;
   const inputs: PlanetLabelInput[] = [];
-  // Plan 047 R7: FOCUS-PLANET CULL — the "Apple hero view". When a specific
-  // planet is the SELECTION (picked, or the parent of a picked moon), the frame
-  // is a hero shot of THAT planet: label only it + its satellites. The other
-  // planets (Mars, Earth, Uranus…) and the Sun drift around the frame with
-  // their own labels and read as clutter — the "labels all over the place"
-  // report. In the wide System view the selection is the Sun (not a planet), so
-  // no focus is found and every on-screen body labels normally.
-  //
-  // Focus is by SELECTION, not by disc size: in the tight System framing the
-  // outer planets legitimately have large on-screen discs (Neptune ~270px), so
-  // a disc-size test would misfire and cull the whole system's labels.
-  const focusPlanetId = (() => {
-    if (!selectedBodyId) return '';
-    const sel = built.bodies.get(selectedBodyId);
-    if (sel?.def.kind === 'planet') return selectedBodyId;
-    const parent = moonParent.get(selectedBodyId);
-    return parent && built.bodies.get(parent)?.def.kind === 'planet' ? parent : '';
-  })();
+  // Plan 047 R8: the R7 focus-planet cull is removed — the user asked to
+  // restore the cedd36d label behavior (every on-screen body labels, the
+  // premium clamp-to-edge look). No per-view culling here anymore.
   for (const entry of built.bodies.values()) {
     if (!entry.mesh.visible) continue;
-    if (
-      focusPlanetId &&
-      (entry.def.kind === 'planet' || entry.def.kind === 'star') &&
-      entry.def.id !== focusPlanetId
-    ) {
-      continue; // a non-focus planet (or the Sun) in a planet hero view — no label
-    }
     const wp = entry.worldPos;
     const dist = camPos.distanceTo(wp);
     // On-screen disc radius (CSS px): project the body center and a point one

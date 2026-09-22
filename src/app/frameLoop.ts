@@ -39,16 +39,16 @@ import type { ScaleMorph } from '../main';
 import type { ScrubState, ThreeFingerScrub } from './scrubTypes';
 
 /**
- * The cinematic intro state (plan 035 F5 / 044 A6). Mirrors the `intro`
- * shape in main.ts; the frame loop only reads `leg`/`tail`/`tailT`/
- * `tailFromSpeed` and calls tickIntroTitle/onIntroLegDone.
+ * The guided-tour state (plan 035 F5 / 044 A6 / 047 R8). Mirrors the `intro`
+ * shape in main.ts; the frame loop only reads `step`/`waiting`/`waitT`/
+ * `waitFromSpeed` and calls tickIntroTitle/onIntroLegDone.
  */
 interface IntroState {
-  leg: number;
+  step: number;
   titleEl: HTMLDivElement | null;
-  tail: boolean;
-  tailT: number;
-  tailFromSpeed: number;
+  waiting: boolean;
+  waitT: number;
+  waitFromSpeed: number;
 }
 
 export interface FrameLoopDeps {

@@ -1,16 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { bodyFacts, formatDayLength, FUN_FACTS } from '../src/render/bodyFacts';
 import {
-  INTRO_LEGS,
-  INTRO_DURATION,
-  INTRO_TAIL_DURATION,
-  TITLE_FADE_IN_START,
-  TITLE_FADE_IN_END,
-  introShouldPlay,
-  titleOpacity,
-  introTailSpeed,
-  introTailGlow,
-} from '../src/render/intro';
+  TOUR_STEPS,
+  TOUR_LENGTH,
+  TOUR_SEEN_KEY,
+  tourShouldPlay,
+  tourStepCamera,
+} from '../src/render/tour';
+import { INTRO_TAIL_DURATION, introTailSpeed, introTailGlow } from '../src/render/intro';
 import { cineEase } from '../src/render/cameraFlight';
 import {
   COMMANDS,
@@ -57,45 +54,47 @@ describe('bodyFacts', () => {
   });
 });
 
-// ---- intro -----------------------------------------------------------------
+// ---- tour (plan 047 R8: click-through guided tour) -------------------------
 
-describe('intro', () => {
-  it('totals a duration of ~9.6 s (Sky + System establishing + original Sun→Earth)', () => {
-    expect(INTRO_DURATION).toBeCloseTo(9.6, 2);
-    expect(INTRO_DURATION).toBeLessThan(12);
+describe('tour', () => {
+  it('has 7 stops: Sky → System → Sun → Earth → 3 gestures', () => {
+    expect(TOUR_LENGTH).toBe(7);
+    expect(TOUR_STEPS[0].anchor).toBe('constellations');
+    expect(TOUR_STEPS[0].sky).toBe(true);
+    expect(TOUR_STEPS[1].anchor).toBe('system');
+    expect(TOUR_STEPS[2].bodyId).toBe('sun');
+    expect(TOUR_STEPS[3].bodyId).toBe('earth');
+    // the last three are gesture stops (no camera flight)
+    expect(TOUR_STEPS[4].duration).toBe(0);
+    expect(TOUR_STEPS[5].duration).toBe(0);
+    expect(TOUR_STEPS[6].duration).toBe(0);
   });
 
-  it('opens on the Sky establishing shot and ends on Earth', () => {
-    expect(INTRO_LEGS[0].anchor).toBe('constellations');
-    expect(INTRO_LEGS[INTRO_LEGS.length - 1].bodyId).toBe('earth');
+  it('every stop has card content (icon + title + body)', () => {
+    for (const s of TOUR_STEPS) {
+      expect(s.icon.length).toBeGreaterThan(0);
+      expect(s.title.length).toBeGreaterThan(0);
+      expect(s.body.length).toBeGreaterThan(0);
+    }
   });
 
-  it('respects reduced-motion, ?intro=0, a pinned URL, and a prior intro', () => {
-    expect(introShouldPlay(true, null, false, false)).toBe(false);
-    expect(introShouldPlay(false, '0', false, false)).toBe(false);
-    expect(introShouldPlay(false, null, true, false)).toBe(false);
+  it('tourStepCamera resolves anchors, bodies, and null for gestures', () => {
+    expect(tourStepCamera(TOUR_STEPS[0])).toEqual({ anchor: 'constellations' });
+    expect(tourStepCamera(TOUR_STEPS[2])).toEqual({ bodyId: 'sun' });
+    expect(tourStepCamera(TOUR_STEPS[4])).toBeNull();
+  });
+
+  it('respects reduced-motion, ?intro=0, a pinned URL, and a prior tour', () => {
+    expect(tourShouldPlay(true, null, false, false)).toBe(false);
+    expect(tourShouldPlay(false, '0', false, false)).toBe(false);
+    expect(tourShouldPlay(false, null, true, false)).toBe(false);
     // already played in this session (sessionStorage seen-flag) — no replay
-    expect(introShouldPlay(false, null, false, true)).toBe(false);
-    expect(introShouldPlay(false, '1', false, true)).toBe(false);
-    expect(introShouldPlay(false, null, false, false)).toBe(true);
-    expect(introShouldPlay(false, '1', false, false)).toBe(true);
+    expect(tourShouldPlay(false, null, false, true)).toBe(false);
+    expect(tourShouldPlay(false, null, false, false)).toBe(true);
   });
 
-  it('fades the title in then out (spanning the A6 tail), clamped to [0,1]', () => {
-    const total = INTRO_DURATION + INTRO_TAIL_DURATION;
-    expect(titleOpacity(0)).toBe(0);
-    expect(titleOpacity(TITLE_FADE_IN_START)).toBe(0);
-    expect(titleOpacity(TITLE_FADE_IN_END)).toBe(1);
-    // mid-intro (well before the tail) is fully opaque
-    expect(titleOpacity(INTRO_DURATION * 0.5)).toBe(1);
-    // the title is still up at the start of the tail, then fades out over the
-    // last ~1.6 s of the whole intro (legs + tail)
-    expect(titleOpacity(INTRO_DURATION)).toBeGreaterThan(0);
-    expect(titleOpacity(total)).toBe(0);
-    expect(titleOpacity(total + 5)).toBe(0);
-    // mid-fade-in is a value strictly between 0 and 1
-    expect(titleOpacity((TITLE_FADE_IN_START + TITLE_FADE_IN_END) / 2)).toBeGreaterThan(0);
-    expect(titleOpacity((TITLE_FADE_IN_START + TITLE_FADE_IN_END) / 2)).toBeLessThan(1);
+  it('uses a sessionStorage key distinct from the old intro key', () => {
+    expect(TOUR_SEEN_KEY).toBe('solar_tour_seen');
   });
 
   it('cineEase is a smooth quintic in/out (0→1, symmetric, gentler than cubic)', () => {
