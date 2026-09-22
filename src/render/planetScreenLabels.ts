@@ -29,8 +29,15 @@ import * as THREE from 'three';
 export const PLANET_LABEL_SCREEN_PX = 13; // plan 047: 22 -> 13px
 /** Skip drawing below this opacity (invisible either way). */
 export const PLANET_LABEL_MIN_OPACITY = 0.04;
-/** Skip labels whose anchor projects this far (CSS px) outside the viewport. */
-export const PLANET_LABEL_SCREEN_PAD_PX = 220;
+/**
+ * Skip labels whose anchor projects this far (CSS px) outside the viewport.
+ * Plan 047 R6: 220 -> 40. The old 220px pad let OFF-SCREEN bodies (the Sun,
+ * Mercury, Venus, Earth when zoomed on Neptune) still get a label, which the
+ * on-screen clamp then pinned to the frame edge as floating text with no
+ * visible body — the "labels are bugged" report. A small pad keeps only
+ * labels whose body is actually on (or at the very edge of) the viewport.
+ */
+export const PLANET_LABEL_SCREEN_PAD_PX = 40;
 /**
  * Hard cap on how many body names a single frame may draw (the same rule the
  * constellation names use). The picked body always counts as one of the slots.

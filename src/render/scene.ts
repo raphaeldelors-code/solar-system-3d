@@ -2422,10 +2422,13 @@ export function updateBodyHighlight(
   tSeconds: number,
   camera?: THREE.Camera,
 ): void {
-  // Plan 047: depth fade — far orbits dim toward ~0.03 so the tilted wide
-  // view stops reading as a mesh. The picked orbit is exempt (it is the
-  // subject). Distances are measured from the camera to each body's pivot.
-  const camPos = camera ? built.camera.position : null;
+  // Plan 047 R6: the depth-fade (far orbits dimming to ~0.015) is REMOVED.
+  // With the noise objects gone, the user wants ALL orbits visible at once —
+  // the old fade read as "only a subset of orbits show" because far planets
+  // (Neptune, Uranus) faded to near-invisible. Every orbit now holds its
+  // base opacity (0.13) or the picked-orbit highlight (0.55) at any distance.
+  // `camera` is kept in the signature for call-site compatibility.
+  void camera;
   for (const entry of built.bodies.values()) {
     const t = bodyHighlightTargets(entry.def.id, pickedId, entry.orbit !== null, tSeconds);
     entry.orbitEmphasis.visible = t.ringVisible;
@@ -2437,15 +2440,7 @@ export function updateBodyHighlight(
     }
     if (entry.orbit && t.orbitOpacity !== null && t.orbitColor !== null) {
       const om = entry.orbit.material as THREE.LineBasicMaterial;
-      let op = t.orbitOpacity;
-      if (camPos && pickedId !== entry.def.id) {
-        const d = camPos.distanceTo(entry.pivot.position);
-        // Plan 047: calibrated to the real scene scale (camera ~23, planets
-        // 18-120 units). 0 at 40 (full base) -> 1 at 110+ (faded to ~0.03).
-        const f = THREE.MathUtils.clamp((d - 35) / 60, 0, 1);
-        op = t.orbitOpacity * (1 - f) + 0.015 * f;
-      }
-      om.opacity = op;
+      om.opacity = t.orbitOpacity;
       om.color.set(t.orbitColor);
     }
   }

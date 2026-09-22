@@ -122,6 +122,21 @@ let skyTour: { theta: number; phi: number; radius: number } | null = null;
 // Armed by `flyTo` when the destination is the Sky anchor; the render loop
 // starts the tour from the landed pose once the flight finishes.
 let pendingSkyTour = false;
+// Plan 047 R6: `skyMode` is the PERSISTENT "we are in the sky" state — it
+// survives the user grabbing the camera (unlike `skyTour`, the auto-panorama,
+// which stops on any input). While skyMode is on, the constellation web +
+// names stay visible no matter how the user rotates, and ZOOM is locked
+// (rotate only) so the sky framing holds. It clears when the user flies back
+// to the System anchor or picks a body.
+let skyMode = false;
+
+function setSkyMode(on: boolean): void {
+  if (skyMode === on) return;
+  skyMode = on;
+  // Lock zoom in the sky (rotate is free); restore it when leaving. The
+  // controls object persists across flights, so this holds when they re-enable.
+  built.controls.enableZoom = !on;
+}
 
 function stopSkyTour(): void {
   if (!skyTour) return;
@@ -826,6 +841,11 @@ function flyTo(dest: CamAnchor, duration = 1.4, bodyId: string | null = null, sk
   // A Sky landing kicks off the panoramic tour; any other flight cancels it.
   stopSkyTour();
   pendingSkyTour = sky;
+  // Plan 047 R6: the Sky anchor is the ONLY view where the constellation web
+  // + names belong. Entering it arms skyMode (web stays visible through user
+  // rotation, zoom locks); leaving it (System or a body pick) clears it so the
+  // web disappears again.
+  setSkyMode(sky);
   updateInfo();
   // Build the flight from the live camera pose (pos + orbit target). The
   // offset-lerp form keeps a moving picked body rigidly framed; global
@@ -864,6 +884,9 @@ function flyToConstellation(name: string): void {
   selectedBodyId = '';
   stopSkyTour();
   pendingSkyTour = false;
+  // Plan 047 R6: a constellation pick is a sky view — arm skyMode so the web
+  // stays visible while the user rotates (zoom stays locked to the sky framing).
+  setSkyMode(true);
   lastHighlightPoseKey = ''; // force the highlight pass to refresh on the next frame
   updateInfo();
   flight = makeFlight(
@@ -2960,15 +2983,19 @@ const { tlShow, tlRefresh, tlSetCaret, tlCurrentYear, tlFrame } = scrubApi;
  * computed only for labels already above the draw threshold.
  */
 function updateConstellationScreenLabelFrame(): void {
-  // Plan 047: the constellation LINE WEB + NAMES are a second competing
+  // Plan 047 R6: the constellation LINE WEB + NAMES are a second competing
   // system in the System view — they crisscross the orbits and read as
   // clutter. Show the whole constellation sky only in Sky mode (the sky
-  // tour) or when a constellation is explicitly picked. Set every frame
-  // (this runs at display rate, unlike the pose-gated highlight pass), and
-  // BEFORE the labels early-return so it holds even when labels are off.
-  built.constellations.visible = Boolean(skyTour || selectedConstellation);
+  // anchor / a picked constellation) — driven by the PERSISTENT `skyMode`
+  // flag, NOT the auto-panorama `skyTour` (which stops on any user input).
+  // This is what keeps the web visible while the user rotates in the sky,
+  // and clears it the moment they fly back to System or pick a body.
+  // Set every frame (this runs at display rate, unlike the pose-gated
+  // highlight pass), and BEFORE the labels early-return so it holds even
+  // when labels are off.
+  built.constellations.visible = Boolean(skyMode || selectedConstellation);
   if (!labelLayer || !labelsEl.checked) return;
-  if (!skyTour && !selectedConstellation) {
+  if (!skyMode && !selectedConstellation) {
     updateConstellationScreenLabels(
       labelLayer,
       built.camera,
