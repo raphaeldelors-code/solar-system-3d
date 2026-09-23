@@ -3161,10 +3161,32 @@ function updatePlanetScreenLabelFrame(): void {
   const camPos = camera.position;
   const wCss = window.innerWidth;
   const hCss = window.innerHeight;
+  const tanFov = Math.tan((camera.fov * Math.PI) / 360);
+  // Plan 047 R9: a moon's label is only useful once its parent planet is
+  // resolved as a disc (you're zoomed in). In the wide System view the
+  // planets are ~5px dots and their moons are sub-pixel specks — labelling
+  // every one (Iapetus, Dione, Io, Nereid, Triton, Deimos…) is what made the
+  // view read as "too present / cluttered". So a moon is only a label
+  // candidate when its parent's on-screen disc is at least this big (or the
+  // moon itself is the picked body). Fly to a planet → its disc is large →
+  // its moons label (the hero view).
+  const MOON_LABEL_MIN_PARENT_DISC_PX = 14;
+  // Plan 047 R9: hero-view focus cull — when a planet is selected AND it is
+  // resolved as a large disc (the camera is zoomed in on it), only that planet
+  // + its moons + the Sun label; the other planets are culled (the "no other
+  // planets floating" hero-view preference). In the wide System view (no
+  // selection, or the selected planet is still a small dot) every on-screen
+  // planet labels as before — so this never reintroduces the R7 "only a
+  // handful of labels" look.
+  const HERO_FOCUS_MIN_DISC_PX = 25;
+  const selEntry = selectedBodyId ? built.bodies.get(selectedBodyId) : undefined;
+  let heroFocus = false;
+  if (selEntry && selEntry.def.kind === 'planet') {
+    const sd = camPos.distanceTo(selEntry.worldPos);
+    const selDiscR = (selEntry.sceneRadius * (hCss / 2)) / (tanFov * Math.max(1e-6, sd));
+    heroFocus = selDiscR >= HERO_FOCUS_MIN_DISC_PX;
+  }
   const inputs: PlanetLabelInput[] = [];
-  // Plan 047 R8: the R7 focus-planet cull is removed — the user asked to
-  // restore the cedd36d label behavior (every on-screen body labels, the
-  // premium clamp-to-edge look). No per-view culling here anymore.
   for (const entry of built.bodies.values()) {
     if (!entry.mesh.visible) continue;
     const wp = entry.worldPos;
@@ -3178,16 +3200,34 @@ function updatePlanetScreenLabelFrame(): void {
     // gives the true disc size: a few px in the wide System view.)
     const c = projectWorldToScreen(_PL_W, camera, wCss, hCss);
     if (!c.ok) continue;
-    const discR =
-      (entry.sceneRadius * (hCss / 2)) /
-      (Math.tan((camera.fov * Math.PI) / 360) * Math.max(1e-6, dist));
+    const discR = (entry.sceneRadius * (hCss / 2)) / (tanFov * Math.max(1e-6, dist));
     // Tier: 0 = picked (always shown), 1 = sun + planets, 2 = moons/dwarfs.
-    const tier: 0 | 1 | 2 =
-      entry.def.id === selectedBodyId
-        ? 0
-        : entry.def.kind === 'star' || entry.def.kind === 'planet'
-          ? 1
-          : 2;
+    const isPicked = entry.def.id === selectedBodyId;
+    const tier: 0 | 1 | 2 = isPicked
+      ? 0
+      : entry.def.kind === 'star' || entry.def.kind === 'planet'
+        ? 1
+        : 2;
+    // Hero-view focus cull (R9): zoomed in on a selected planet → only that
+    // planet, its moons, and the Sun label. The other planets (and their
+    // moons) are culled so the hero view stays clean.
+    if (heroFocus && !isPicked) {
+      const isSun = entry.def.kind === 'star';
+      const isHeroMoon = moonParent.get(entry.def.id) === selectedBodyId;
+      if (!isSun && !isHeroMoon) continue;
+    }
+    // Moon cull (R9): a non-picked moon only labels when its parent planet is
+    // resolved as a disc. Compute the parent's on-screen disc with the same
+    // angular formula.
+    if (tier === 2 && !isPicked) {
+      const parentId = moonParent.get(entry.def.id);
+      const parent = parentId ? built.bodies.get(parentId) : undefined;
+      if (parent) {
+        const pd = camPos.distanceTo(parent.worldPos);
+        const parentDiscR = (parent.sceneRadius * (hCss / 2)) / (tanFov * Math.max(1e-6, pd));
+        if (parentDiscR < MOON_LABEL_MIN_PARENT_DISC_PX) continue;
+      }
+    }
     inputs.push({
       id: entry.def.id,
       name: entry.def.name,
